@@ -6,18 +6,18 @@ How the pieces fit, and why each boundary sits where it does.
   +----------------------- DSH host process -------------------------+
   |  lib/index.js                                                    |
   |                                                                  |
-  |  session events --> Pet3DBoundaryHub --> pet3d service ----------+--+
+  |  session events --> VrmPet3DBoundaryHub --> vrmpet3d service ----------+--+
   |                                                                  |  |
-  |  profile config --> buildCatalog(modelDirs)  --> /pet3d/asset ---+--+--+
-  |                 \-> buildCatalog(motionDirs) --> /pet3d/motion --+--+--+
+  |  profile config --> buildCatalog(modelDirs)  --> /vrmpet3d/asset ---+--+--+
+  |                 \-> buildCatalog(motionDirs) --> /vrmpet3d/motion --+--+--+
   +------------------------------------------------------------------+  |  |
                                                                         |  |
   +---------------------- DSH browser page --------------------------+   |  |
-  |  GET /pet3d/catalog ---------------------------------------------+---+  |
-  |  GET /pet3d/motions ---------------------------------------------+---+  |
-  |  GET /pet3d/models   (read, add or drop an imported directory) --+---+  |
-  |  GET /pet3d/asset?m=..&p=..  (model + sibling textures) <--------+------+
-  |  GET /pet3d/motion?m=..      (one motion file) <-----------------+------+
+  |  GET /vrmpet3d/catalog ---------------------------------------------+---+  |
+  |  GET /vrmpet3d/motions ---------------------------------------------+---+  |
+  |  GET /vrmpet3d/models   (read, add or drop an imported directory) --+---+  |
+  |  GET /vrmpet3d/asset?m=..&p=..  (model + sibling textures) <--------+------+
+  |  GET /vrmpet3d/motion?m=..      (one motion file) <-----------------+------+
   |                                                                  |
   |  lib/client.js   React slot "shell.overlay"                      |
   |    |-- session --> pet state (PetMachine, SessionAggregate)       |
@@ -29,10 +29,11 @@ How the pieces fit, and why each boundary sits where it does.
   |                        v                                         |
   |  client.scene.js Scene: renderer, camera, lights, Motion         |
   |    |-- idle motion            procedural, exactly loopable        |
-  |    |-- authored motion        .vmd (MMD) / .vrma (VRM), per state |
+  |    |-- authored motion        .vrma (VRM) only, per state        |
   |    |-- client.scene.js        scene, avatar, gaze                  |
-  |    `-- client.vendor.js       three.js + VRM + MMD loaders        |
+  |    `-- client.vendor.js       three.js + VRM loaders              |
   +------------------------------------------------------------------+
+```
 
 ## The five boundaries
 
@@ -47,7 +48,7 @@ a formality:
 
 Nothing crosses that line except model bytes and turn boundaries.
 
-### 2. Why model bytes go over an HeeP route
+### 2. Why model bytes go over an HTTP route
 
 A plugin's `assets/` folder is **not** served to the browser by DSH. The only
 plugin-owned browser routes are `/plugins/<id>/client.js` and package-local
@@ -55,22 +56,22 @@ plugin-owned browser routes are `/plugins/<id>/client.js` and package-local
 page through a route the plugin registers itself — which is what
 `webServer.register({ kind, path, handler })` is for.
 
-The route is `/pet3d/asset`, and it is allowlisted down to: *the exact file each
+The route is `/vrmpet3d/asset`, and it is allowlisted down to: *the exact file each
 catalog id was scanned from, plus relative paths under that file's directory*. The
 id — path map lives on the server, so the browser never names a path directly. See
 `resolveAssetPath` in `lib/index.js` for the traversal rules and why a
 containment-only check was not enough.
 
-Files are **streamed**, not buffered. VRM and PMX files are routinely tens of
+Files are **streamed**, not buffered. VRM files are routinely tens of
 megabytes, and reading one into memory per reload would spike the host's heap for
 no benefit.
 
 ### 2b. Why there is a second, writable route
 
-`/pet3d/catalog` is read-only on purpose: it is a projection of the directories the
+`/vrmpet3d/catalog` is read-only on purpose: it is a projection of the directories the
 host already knows about. A user whose models live elsewhere can name extra
 directories in the plugin config, but that means editing YAML and restarting, so
-`/pet3d/models` exists as the small mutable counterpart:
+`/vrmpet3d/models` exists as the small mutable counterpart:
 
 * `GET` returns the imported list, the current model count, and the file the list is
   persisted to;
@@ -79,13 +80,22 @@ directories in the plugin config, but that means editing YAML and restarting, so
   a second request against the rebuild.
 
 The list lives in a plugin-owned file in the profile directory
-(`pet3d-model-dirs.json`), deliberately **not** in the profile's `cordis.patch.yml`:
+(`vrmpet3d-model-dirs.json`), deliberately **not** in the profile's `cordis.patch.yml`:
 that file belongs to the user and to DSH's own config editor, and a plugin that
 rewrote it would fight both. A failed write is reported rather than hidden — the
 import is live for the session either way, and the user should know it will not
 survive a restart. Paths are resolved and validated before they are stored, and a
 directory that has gone missing is **kept**, so a drive that comes back comes back as
 itself.
+
+**The rename is a read-only migration, not a move.** The current names are tried first and the pre-rename
+ones second: `vrmpet3d-settings.json` / `vrmpet3d-model-dirs.json` / `vrmpet3d-motion-dirs.json` in the
+profile directory each fall back once to their `pet3d-*.json` twin, a motion directory's own manifest
+(`vrmpet3d-motions.json`) the same way, and the browser's `dsh.vrmpet3d.v1` storage key falls back to
+`dsh.pet3d.v1` on the first read. The old file is then left where it is — it is the user's data, and when to
+delete it is not this plugin's business — and the next write lands under the current name, which is what
+completes the migration. An override (`VRMPET3D_MODEL_DIRS_FILE`, the one the suites use) names a file this
+project never wrote under another name, so it deliberately opts out of the fallback.
 
 ### 3. Why the 3D stack is one committed chunk
 
@@ -94,10 +104,11 @@ The client half is served as a single classic script that calls
 kinds of extra dependency: another installed plugin package, or a package-local
 chunk. npm packages are neither, and a CDN is unreachable inside the app.
 
-So the three.js + `@pixiv/three-vrm` + `@moeru/three-mmd` graph is compiled ahead
+So the three.js + `@pixiv/three-vrm` + `@pixiv/three-vrm-animation` graph is compiled ahead
 of time into `lib/client.vendor.js`. It is loaded lazily, through
 `require.async('./client.vendor.js')`, only when the pet mounts — a session that
-never shows the pet never pays for the 2.5 MB.
+never shows the pet never pays for the 2.17 MB it measures (the MMD stack this graph used to
+carry was removed on 2026-10-12, and the file is smaller for it).
 
 The chunk is committed, and `scripts/vendor-build.mjs --check` fails if it does
 not match a fresh build from the pinned versions in `vendor/package.json`. That
@@ -113,7 +124,7 @@ nothing at all.
 DSH serves a package-local file only when its name matches
 `/^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/`, and only at
 `/plugins/<package>/<name>?rev=<current revision>`. `core.js`, `placeholder.js` and
-`pet3d.js` match neither, so they were never served and the globals
+`scene.js` match neither, so they were never served and the globals
 `lib/client.js` read were always undefined.
 
 `scripts/client-chunks.mjs` therefore generates `lib/client.core.js`,
@@ -122,7 +133,7 @@ file **verbatim** plus a registration block. The originals stay the single sourc
 truth, the generated copies are checked in, and `--check` fails when one has drifted
 — the same contract the vendor chunk has.
 
-ewo details are load-bearing and both were measured against the real loader rather
+Two details are load-bearing and both were measured against the real loader rather
 than inferred:
 
 * **The registration id is the full module key**, `<package>/client.<name>.js`. The
@@ -138,7 +149,7 @@ other globals when it runs, and the menu chunk is the right-click menu BOTH pets
 from (the floating window loads `lib/menu.js` itself, from the host's source whitelist,
 because it is a page of its own) — and keeps a global fallback per chunk, because the
 inline browser harnesses load the sources with plain `<script>` tags and run no
-module system at all. `lib/pet3d.js`'s `loadVendor` takes the resolved vendor from
+module system at all. `lib/scene.js`'s `loadVendor` takes the resolved vendor from
 the client half first and only falls back to injecting a `<script src>`, which cannot
 work in the app: a relative URL drops the `?rev=` the server requires, and the
 plugin's own script is served through a combo URL whose path is `/plugins/`.
@@ -152,17 +163,17 @@ plugin's own script is served through a combo URL whose path is `/plugins/`.
 `lib/core.js` contains the state machine, fall physics, framing maths, idle motion,
 motion-format detection and preference cleaning, and imports neither DOM nor
 three.js. That is not tidiness for its own sake: those are the parts most likely to
-be subtly wrong, and keeping them pure lets 379 checks run in well under a second
-under plain Node instead of needing a browser and a GPU.
+be subtly wrong, and keeping them pure lets the core suite's 1018 checks run in well
+under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
-`globalehis.__PET3D_CORE__`. One implementation, no mirror to drift.
+`globalThis.__VRMPET3D_CORE__`. One implementation, no mirror to drift.
 
 ### 5. Why the scene is split off from the plugin
 
-`lib/pet3d.js` owns WebGL and the model loaders. `lib/client.js` owns React, the
+`lib/scene.js` owns WebGL and the model loaders. `lib/client.js` owns React, the
 slot, pointer events, settings and the session bridge. The seam is:
-`lib/client.js` drives `lib/pet3d.js` through a small imperative API
+`lib/client.js` drives `lib/scene.js` through a small imperative API
 (`initScene`, `loadModel`, `setState`, `tick`, `setPlacement`, `resize`).
 
 This is what makes the widget testable in a real DOM with a stub React, and the
@@ -183,7 +194,7 @@ Eleven states, one `resolve()` with strict precedence. Highest wins:
 | 7 | `working` / `resting` | the ordinary cases |
 | 8 | `sleeping` | idle past the nap timeout |
 
-ewo decisions worth recording:
+Two decisions worth recording:
 
 * **A failure latches; a completion expires.** `error` stays on screen until the
   next turn starts, because a user may not be looking when a turn dies and an
@@ -200,17 +211,22 @@ caller set which field, with no test able to say which was right.
 
 ## Model loading
 
-The format comes from the file's **magic bytes**, never its extension. Users rename
-files, and an incompatible file must fail with a clear message rather than a
-mysterious parse error deep inside a loader.
+**VRM and plain glTF/GLB only, since 2026-10-12.** The format comes from the file's **magic bytes**,
+never its extension. Users rename files, and an incompatible file must fail with a clear message rather
+than a mysterious parse error deep inside a loader — which is why the bytes are still sniffed for the
+formats this build no longer loads.
 
-| Detected | Loader |
+| Detected | What happens |
 |---|---|
 | `glTF` (GLB) / `{` (JSON glTF) | `GLTFLoader` + `VRMLoaderPlugin` — a VRM is a glTF with extensions |
-| `PMX ` / `Pmd\0` | `MMDLoader`, via an object URL |
+| `PMX ` / `Pmd\0` | **refused by name**, with no loader in the chunk: `PMX is not supported: this build loads VRM only (see docs/ASSET-CONTRACT.md).` |
+| anything else | `unrecognised model format (expected VRM/GLB/glTF).` |
 
-A model that fails to load **falls back to the placeholder and reports why** in a
-badge. There is no path that leaves the user with an empty box.
+A model that fails to load **reports why** and leaves the stage as it was — `Scene.loadModel` substitutes
+nothing for it (the built-in avatar was removed on 2026-10-10), and the caller puts the reason on screen.
+`usePlaceholder` survives only as a fixture the geometry probes and the browser suite build a model-free
+avatar with, and it throws unless something has defined `globalThis.__VRMPET3D_PLACEHOLDER__` — which the
+shipped plugin never does.
 
 ### VRM
 
@@ -223,7 +239,15 @@ VRM renders with the duplicated vertex set and visible seams. `rotateVRM0` makes
 Hair and tails are left to three-vrm's SpringBone manager. Hand-animating the same
 bones would fight it.
 
-### MMD (PMX / PMD)
+### MMD (PMX / PMD) — RETIRED 2026-10-12
+
+> **This section describes a capability this build does NOT have.** MMD support was removed on
+> 2026-10-12 (VRM only): `core.MODEL_EXTENSIONS` is `['.vrm', '.glb', '.gltf']`, the `@moeru/three-mmd`
+> and `mmd-parser` packages are out of `vendor/package.json` and out of the committed chunk, and a PMX/PMD
+> file is refused by name. It is kept, rather than deleted, because it is the reasoning behind two things
+> that survive: the magic-byte sniff, and the refusal message.
+
+What the retired path did, and why it was built that way:
 
 `MMDLoader` exposes no public `parse(buffer)` — its `parse` is three's abstract
 no-op, and its internal readers are not exported. So the bytes, already fetched and
@@ -233,9 +257,9 @@ conversion and assembly intact rather than reimplementing them.
 
 The model's sibling textures resolve because `MMDLoader.resourcePath` is set to the
 plugin's own asset route, so `tex/body.png` becomes
-`/pet3d/asset?m=<id>&p=tex%2Fbody.png`.
+`/vrmpet3d/asset?m=<id>&p=tex%2Fbody.png`.
 
-MMD physics is deliberately **not** wired. `@moeru/three-mmd` ships no physics
+MMD physics was deliberately **not** wired. `@moeru/three-mmd` ships no physics
 engine and expects the host to supply one. A desktop pet wants explicit bone
 animation instead: a rigid-body simulation is not deterministic between runs and
 cannot be looped exactly.
@@ -248,7 +272,7 @@ This is the 3D equivalent of the fatfish plugin's "anchor every frame to the sam
 ground line and centre" step.
 
 It is also the single most error-prone piece of maths in the project, because
-three.js composes a node's world matrix as **e · R · S** — translation is applied
+three.js composes a node's world matrix as **T · R · S** — translation is applied
 *after* scale, and a parent's scale does not multiply a child's translation. So an
 offset assigned to the same node as the scale arrives in units that have already
 been scaled, and the pet sinks by `box.min.y * (1 - scale)`. Both correct
@@ -377,14 +401,15 @@ negates a tilt about the right axis — `R_y(π)·R_x(θ)·R_y(π)⁻¹= R_x(−
 about the up axis alone, `R_y(π)·R_y(φ)·R_y(π)⁻¹= R_y(φ)`. Hence pitch inverted and yaw did
 not, on exactly the model that is not flipped. The placeholder's case was simpler and worse: it
 never reached the derived axes at all, because it had no rest *quaternion* and took a separate
-`pet3dRestRot` euler branch — so fixing one model's axes did nothing for it. ewo branches meant
+`vrmpet3dRestRot` euler branch — so fixing one model's axes did nothing for it. Two branches meant
 "general" was only ever true of one of them.
 
 There is now **one algorithm and no per-kind case**:
 
 * `gazeNodeFor(avatar)` is the single answer to "which node looks", used both by the gaze and by
-  installation. VRM goes through the humanoid map, MMD by bone name, glTF and the placeholder
-  through `parts` — the choice of node is the only thing that legitimately differs.
+  installation. VRM goes through the humanoid map, and glTF and the placeholder
+  through `parts` — the choice of node is the only thing that legitimately differs. (The removed MMD
+  avatar went by bone name; that branch is gone with it.)
 * `installAvatar` — the one place every avatar passes through — records that node's rest
   **quaternion** and clears the cached axes. Nothing else has to remember to do it, which is
   exactly why the placeholder cannot be forgotten again.
@@ -425,8 +450,8 @@ that matters is asserted: the application payload is **never** linked — only
 
 The support files (`icudtl.dat`, the `.pak` files, the snapshot, the DLLs, `locales/`) are
 **hard links**, which is why the runtime costs no disk space and why it has to live on the
-installation's volume. A different volume degrades to copying, and says so in the log. ewo
-escapes exist: `PEe3D_DESKeOP_HOSe_DIR` chooses the location, `PEe3D_DESKeOP_RUNeIME` names a
+installation's volume. A different volume degrades to copying, and says so in the log. Two
+escapes exist: `VRMPET3D_DESKTOP_HOST_DIR` chooses the location, `VRMPET3D_DESKTOP_RUNTIME` names a
 standalone Electron and skips the borrowing entirely.
 
 **The shape of the window**, and the two numbers behind it: it covers the display's **work
@@ -436,11 +461,11 @@ the taskbar is a bug; and it is `alwaysOnTop` at the `screen-saver` level, becau
 level still sits below some full-screen-ish windows.
 
 **The settings windows are pages, and the window around them is a choice.** There are TWO of them since
-2026-10-11, on two host routes: {{bt}}/pet3d/config{{bt}} is 模型参数 (模型 / 表情 / 部位 / 弹簧骨, the sections that are
-about one model) and {{bt}}/pet3d/global{{bt}} is 通用设置 (显示与外观 / 视线 / 鼠标互动与物理 / 状态与动作 / 碎碎念 /
+2026-10-11, on two host routes: {{bt}}/vrmpet3d/config{{bt}} is 模型参数 (模型 / 表情 / 部位 / 弹簧骨, the sections that are
+about one model) and {{bt}}/vrmpet3d/global{{bt}} is 通用设置 (显示与外观 / 视线 / 鼠标互动与物理 / 状态与动作 / 碎碎念 /
 模型导入 / 动作导入). They are separate DOCUMENTS, not one page with half of it hidden: the earlier split kept one file and
 toggled sections with {{bt}}?panel={{bt}}, which left a hidden section's ids in the document and made the two windows
-the same page twice. Both read the model through {{bt}}/pet3d/model-info{{bt}}, write the shared preferences, and
+the same page twice. Both read the model through {{bt}}/vrmpet3d/model-info{{bt}}, write the shared preferences, and
 load the SAME {{bt}}lib/config-page.js{{bt}} and {{bt}}lib/pages.css{{bt}} — one script and one stylesheet, guarded per
 lookup, so a section that is not on the page renders nothing rather than throwing. Neither needs anything from a
 renderer, which is what lets the SAME pages be opened two ways. In DSH Desktop the launcher starts a second,
@@ -466,7 +491,7 @@ Two entries are the ones a later pass is most likely to "unify" wrongly, and the
   '关闭独立宠物'功能重复了，移除'切换回窗口内'选项」). The app's pet keeps it, being the only way out of DSH, and a
   surface says it does not offer the row with {{bt}}showSurface: false{{bt}}. The id stays in the shared list so the
   ORDER is still one definition; only its PRESENCE differs. 重启/退出 DeepSeek Harness were the last two entries until the same day, when the operator removed them
-and everything behind them: the `/pet3d/harness` route, the host module that ran {{bt}}ctx.appExit{{bt}} and spawned the
+and everything behind them: the `/vrmpet3d/harness` route, the host module that ran {{bt}}ctx.appExit{{bt}} and spawned the
 detached relauncher, and both surfaces' failure lines.
 
 **重力 is a TOGGLE with two independent keys.** {{bt}}core.DEFAULTS.gravity{{bt}} (the app pet, shipped ON) and
@@ -513,16 +538,16 @@ joints nothing moves, and the renderer and the file would disagree about the sam
 `doubleDurationRatio` (1.5x) as long, so the weight passes through zero between them and the eyes are
 visibly open for an instant. That instant is the whole difference between "two quick blinks" and "one slow
 squint", which is why the suite asserts the number of times the weight rises through the closed half and
-the dip between the two peaks, rather than the duration alone. The kind is chosen at the SeARe of each
+the dip between the two peaks, rather than the duration alone. The kind is chosen at the START of each
 blink (`doubleChance`, 20 %) from the scene's injectable `random`, so a test pins both kinds instead of
 waiting for a one-in-five to come round. The blink also ramps IN from open: the older code set the weight
 to 1 on the starting frame, which snapped the eyes shut for one frame — invisible on a single blink at
 60 fps, and a stutter in the middle of a double.
 
 **Both surfaces play authored motion, and that was not always true.** The app overlay loads a clip for each
-state the user assigned (`/pet3d/motions` for the catalog, `/pet3d/motion?m=<id>` for the bytes, `loadMotion`
+state the user assigned (`/vrmpet3d/motions` for the catalog, `/vrmpet3d/motion?m=<id>` for the bytes, `loadMotion`
 into the scene), and the floating window now runs the same path: filter the catalog by avatar family
-(`vrm` →`.vrma`, `mmd` →`.vmd`), fetch each mapped motion's bytes **once** (they outlive a model switch),
+(`vrm` →`.vrma`; the `mmd` →`.vmd` pairing went with MMD support on 2026-10-12), fetch each mapped motion's bytes **once** (they outlive a model switch),
 build a clip **per avatar** (a clip is fitted to a skeleton, so a model switch drops the clips and keeps the
 bytes), and let `setMotionMap` decide what plays where. Until this round the window had no motion path at all,
 so a correct `.vrma` animated the in-app pet and left the desktop window frozen — the surface a desktop-pet
@@ -530,14 +555,14 @@ user actually watches. The page publishes its own account of it (`motion: {kind,
 available, reason}`) because the four ways a motion can do nothing look identical from outside.
 
 **Motion directories are importable, like model directories.** `config.motionDirs` is the declared list;
-`pet3d-motion-dirs.json` (plugin-owned, beside the settings, `PEe3D_MOeION_DIRS_FILE` to redirect it in tests)
+`vrmpet3d-motion-dirs.json` (plugin-owned, beside the settings, `VRMPET3D_MOTION_DIRS_FILE` to redirect it in tests)
 is the imported one, and the two are unioned when the catalog is rebuilt — which happens on **every request**,
 so an import is live on the next fetch instead of on the next DSH start. This exists because the alternative
 was "edit the profile config and restart the whole application to try one file", which is indistinguishable
 from the feature not working.
 
 **A state draws ONE clip from a LIST, at the moment it is entered.** The persisted map is
-`{ state: [id, ...] }`, and the canonical shape is a list even for one clip. ewo things follow, and both are
+`{ state: [id, ...] }`, and the canonical shape is a list even for one clip. Two things follow, and both are
 contracts rather than conveniences:
 
 * **The draw happens on state ENTRY, never per frame.** `Scene.resolveAuthored` compares the state against
@@ -553,21 +578,22 @@ contracts rather than conveniences:
   `setMotionIds` (the pure write both surfaces share) all read the old shape too.
 
 **`loop` is a property of the CLIP, carried by the catalog.** A motion directory may hold a
-`pet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }`; `buildMotionCatalog`
+`vrmpet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }`; `buildMotionCatalog`
 reads it once per directory and every entry gains `loop` (absent means `true`, which is what every clip did
 before the flag existed). The page passes it to `scene.loadMotion(id, bytes, { loop })`, which is the only
 place that can turn it into `LoopRepeat, Infinity` or `LoopOnce`. A one-shot ends by **handing the pose
-back**: `Scene.motionFinished` checks the action's own clock as well as the mixer's `finished` event — the MMD
-path drives the mixer from inside `updateWithMixer`, so the two signals are not interchangeable — and
+back**: `Scene.motionFinished` checks the action's own clock as well as the mixer's `finished` event — the
+two signals are the mixer's account and the action's, so neither is interchangeable, and the removed MMD
+path was what first made that visible (it drove the mixer from inside `updateWithMixer`) — and
 `pickSpent` latches the state so the clip does not restart on the next frame. Without that latch a one-shot
-becomes a loop with extra steps; without the clock check the pet freezes in the clip's last frame on the MMD
-path, which is the failure the flag exists to prevent.
+becomes a loop with extra steps; without the clock check the pet freezes in the clip's last frame, which is
+the failure the flag exists to prevent.
 
 **A generated VRMA is portable between models when it respects two things.** `scripts/make-vrma-fixtures.mjs`
-emits `pet3d-wave.vrma` as a fixture (2.0 s, 7 channels, 61 keys) and `verify-motion.mjs` plays it on a real
+emits `vrmpet3d-wave.vrma` as a fixture (2.0 s, 7 channels, 61 keys) and `verify-motion.mjs` plays it on a real
 model, which is what makes it a test rather than an example:
 
-* **World-aligned axes.** `VRMHumanoidRig._setuperansforms` builds the normalized rig from the raw bones' world
+* **World-aligned axes.** `VRMHumanoidRig._setupTransforms` builds the normalized rig from the raw bones' world
   positions and leaves every normalized node's rotation at identity, so `rightUpperArm` about **Z** raises the
   arm on any VRM — no per-model bone-axis guessing, and no reference skeleton to ship.
 * **A rest-height hips translation.** `createVRMAnimationClip` scales that track by
@@ -595,12 +621,14 @@ flourish on top of the sway, it is the sway.
 a model's expressions, its spring chains and the licence its author chose — including when no pet is
 running, and including when the previous frame was never rendered because the window is closed. So
 the host half parses the GLB (`lib/vrm-info.js`) and serves a compact projection over
-`GET /pet3d/model-info?m=<id>`. Three consequences are deliberate:
+`GET /vrmpet3d/model-info?m=<id>`. Three consequences are deliberate:
 
 * the answer is the file, so a model replaced on disk shows up on the next request — the cache is
   keyed by (path, size, mtime) rather than by id;
-* a model that is not a GLB/VRM is an ANSWER (`supported: false` with a reason), not an error,
-  because "a PMX has no expressions to list" is something the UI should say rather than blank out;
+* a file that is not a GLB/VRM is an ANSWER (`supported: false` with a reason), not an error,
+  because "this file has no expressions to list" is something the UI should say rather than blank out.
+  (A PMX/PMD no longer gets that far — it is not catalogued, and the renderer refuses it by name — so the
+  answer is now about a GLB whose VRM extension is missing);
 * the CLI (`scripts/vrm-report.mjs`) is a thin renderer over the same module, so there is one
   parser and no chance of the two drifting.
 
@@ -631,7 +659,7 @@ never take focus from what the user is doing. The module also binds its outside-
 rather than during it, which is what makes "the press that opened the menu cannot close it" a structural fact instead
 of a race between two coarsened clocks (it was a `performance.now()` vs `event.timeStamp` comparison until 2026-10-12).
 
-**ehrowing is a switch, not a feature.** `Placement.throwEnabled === false` makes
+**Throwing is a switch, not a feature.** `Placement.throwEnabled === false` makes
 `endDrag` return without creating a fall: the pet is placed where it was released and stays
 there. Each surface sets it from ITS OWN 重力 preference (see above — the window shipped with it off, the app
 pet with it on, and neither can reach the other's key). `stepFall` and the wall and ceiling bounces are
@@ -650,7 +678,7 @@ events **anywhere** for the whole gesture: the pet follows the cursor, so the cu
 painted pixels immediately, and a window that turned click-through mid-drag would lose the pointer
 stream that is dragging it.
 
-ewo consequences worth stating, because both were learned live. The canvas must be the pet's own
+Two consequences worth stating, because both were learned live. The canvas must be the pet's own
 BOX, positioned inside the screen-sized window with CSS: `Scene.setPlacement` ignores x/y and
 frames the model to its canvas, so a screen-sized canvas draws a screen-sized pet — which is what
 the user saw ("too big, it covers most of the screen"). And the drawing buffer must never be
@@ -666,39 +694,40 @@ is polled at frame rate instead and pushed to the page, which feeds it to the sa
 `forward: true` is deliberately not relied upon.
 
 **The page reuses everything.** `lib/desktop-page.html` loads the *same* `client.vendor.js`,
-`core.js`, `placeholder.js`, `pet3d.js` and `client.js` the overlay loads, over the plugin's own
-HeeP origin (so the `/pet3d/asset` fetches are same-origin), plus one small glue
+`core.js`, `placeholder.js`, `scene.js` and `client.js` the overlay loads, over the plugin's own
+HTTP origin (so the `/vrmpet3d/asset` fetches are same-origin), plus one small glue
 (`lib/desktop-page.js`) that adds what is different: the screen as the frame, the launcher's
 cursor as the pointer, and the rectangle report. It applies position through the same
 `Placement` — throw physics, wall and ceiling bounces, the size range — and draws through the
 same `Scene`, so the two windows cannot drift apart in behaviour. Model loading goes through
-`Scene.loadModel`, which already fetches bytes and falls back to the placeholder; the glue's
+`Scene.loadModel`, which already fetches the bytes, parses them and installs the avatar (reporting a
+failure rather than substituting a stand-in); the glue's
 first version reimplemented that and never installed an avatar at all, which is how a pet can
 run 120 error-free frames painting nothing.
 
 **Failure is reported, never swallowed.** The frame loop is guarded and publishes its own state
-(`window.__PEe3D_DESKeOP_SeAeE__`: frames, last error, placement, rectangle); the launcher
+(`window.__VRMPET3D_DESKTOP_STATE__`: frames, last error, placement, rectangle); the launcher
 collects the page's console messages and asks for that state when it self-tests; the host half
 reports the child's state — including a copy that had to happen, a runtime that could not be
-built, and **what the page itself reported** — through `GET /pet3d/desktop`, and the 通用设置 page shows
+built, and **what the page itself reported** — through `GET /vrmpet3d/desktop`, and the 通用设置 page shows
 it. A launcher whose parent dies quits on a watchdog, and the host half kills the window when the
 plugin is disposed.
 
 That last part exists because of a live report: the window opened, the page loaded, the glue never
 ran and the pet was invisible — while the suite was green and the host cheerfully said "running".
-ewo independent mistakes had to line up, so both are closed:
+Two independent mistakes had to line up, so both are closed:
 
 * the page's source prefix was registered **with a trailing slash**, and this server matches a
   prefix as `pathname === prefix || pathname.startsWith(prefix + '/')`, so every source 404'd.
   `verify-model.mjs` now requests the page, all six sources, a non-whitelisted name and a traversal
-  attempt over real HeeP, and asserts the property that no prefix route ends in a slash — the
+  attempt over real HTTP, and asserts the property that no prefix route ends in a slash — the
   requests the desktop suite never made, because it serves the page itself;
 * "the process is alive" was being reported as success. The launcher prints one machine-readable
   status line, the host parses it out of the child's stdout (across chunk boundaries), and the page
   distinguishes **on**, **starting**, and **on but not drawing** with the page's own error text. The
   two halves share that marker deliberately; a suite check keeps the copies identical;
 * a source was served with the **wrong content type**, and the browser refused it silently. The
-  `/pet3d/window/lib` route hard-coded `text/javascript` for every name in its whitelist, so when the
+  `/vrmpet3d/window/lib` route hard-coded `text/javascript` for every name in its whitelist, so when the
   two settings pages began sharing `lib/pages.css` the stylesheet came back as JavaScript: the pages
   loaded, their scripts ran, every request was a 200, and the browser applied none of the CSS — the
   windows were a wall of unstyled text. Nothing in the suite could see it, because the desktop suite
@@ -709,24 +738,25 @@ ewo independent mistakes had to line up, so both are closed:
   on the run that adds it.
 
 A route path is an interface with someone else's matcher, so it is asserted as a shape and
-exercised over real HeeP rather than merely listed.
+exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Ten suites, 1925 checks. The design rule is that **each defect found during
+Nine suites, 1945 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
+figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs` recomputes them. The
+design rule is that **each defect found during
 development got a test that would have caught it**, and several tests carry a
 comment saying which bug they exist for.
 
 | Suite | Runs in | Covers |
 |---|---|---|
 | `core` | Node, 50 ms | state machine (including the event-ended notices: a 任务达成/出错 waits for the user to be back in the session that reported it, 等待确认 waits for the answer, and each is drawn with its own tone), 碎碎念 (the phrase table, the event mapping, the throttle, the silence rule, the user's OWN per-state boxes — cleaned from either a textarea or an array, read through the event→state bridge, replacing the shipped table for that state and falling through to it when empty — and the AI half: the request intent, the AI → box → table fallback chain, `say()`'s flattening and cap, and `pumpAiSpeech`'s one-request-per-intent with a late answer dropped — plus a PRESS reaction: `react()` speaking from the part's own box and then the state's, NEVER from the shipped table, its `reactGapSeconds` floor, and silence for a part nobody configured), the PARTS (the user's own rows: a label, the structures it owns matched by prefix unless pinned exact, an emotion row and a 碎碎念 box each — with the legacy per-region emotion rows migrated into the shipped five, the cap on how many, and the matching order that lets a user part override the name heuristic), the emotion tables (four trigger rows — 空闲 / 拖动时 / 点击时 / 长按时 — and the parts' own rows, all empty by default so a profile that predates body parts behaves identically, plus the `PRESS_LIMITS` bounds both surfaces read and the shared row-patching rules), `structureRegionOf` as a clearly-labelled HEURISTIC whose `null` means "this name says nothing" rather than "body", fall physics with wall AND ceiling bouncing, framing, idle motion, preferences (the two size keys — `size` for the in-app pet and `windowSize` for the floating window — the window's own parked corner `placementX`/`placementY`, 显示位置 `petSurface` including `both`, the DEBUG value that puts the window and the in-app pet on screen at once, the view limits, and the migration that keeps an older profile's single size for both), pointer aim for the gaze, motion-format detection, the VRM stand rotation |
-| `host+model` | Node, 500 ms | model and motion catalogues, path safety, the two byte routes, both catalogues and the imported-directory route over **real HeeP**, boundary hub, the live-state channel with the 碎碎念 line it carries (flattened, capped, cleared) and the PRESS it carries (which gesture, which of the user's own PARTS owns the structure, the model's own name for it, each field capped, and anything without a reason or a region refused as "not a press"), the STRUCTURE list the 部位 editor offers (every node, mesh and material name of the model, deduplicated, kinded and capped), the DESCRIBED MODEL HELD IN MEMORY (a process-wide LRU of four parsed reports, so the settings window stops re-reading and re-parsing the file on every open — asserted by the cache's own counters: a second request for an unchanged file is a HIT and does not parse, a changed one is re-parsed, `forgetModelInfo` forces a re-read, and the cache never grows past its capacity), and the AI 碎碎念 pair over real HTTP against a stub provider that records the request (the persona and the state's own instruction, and nothing else — or, for a request that names a PART, that part's own prompt; or, for one that names only a STRUCTURE, an instruction built from that name VERBATIM, which is how a part with no prompt still gets answered — with a stale id falling back to the state rather than failing the page, and a long or multi-line structure name capped and flattened), the DSH path through a stub stream that speaks the REAL chunk protocol (`{ type: 'finish', reason: { kind, failure } }` — the shape `BlockAssembler` reads, and the one the first stub got wrong), its terminal failure codes, the asked-for reasoning effort and token budget asserted by name, a thinking-only stream refused with what it spent, one call in flight, and the live provider catalog, and — the check the unstyled-settings bug proved was missing — **the content type of every page source, asked of the real handler by name** (the whitelist and the extension table are the plugin's own exported constants, so `pages.css` is asserted to be `text/css; charset=utf-8` and every script `text/javascript; charset=utf-8`) |
+| `host+model` | Node, 500 ms | model and motion catalogues, path safety, the two byte routes, both catalogues and the imported-directory route over **real HTTP**, boundary hub, the live-state channel with the 碎碎念 line it carries (flattened, capped, cleared) and the PRESS it carries (which gesture, which of the user's own PARTS owns the structure, the model's own name for it, each field capped, and anything without a reason or a region refused as "not a press"), the STRUCTURE list the 部位 editor offers (every node, mesh and material name of the model, deduplicated, kinded and capped), the DESCRIBED MODEL HELD IN MEMORY (a process-wide LRU of four parsed reports, so the settings window stops re-reading and re-parsing the file on every open — asserted by the cache's own counters: a second request for an unchanged file is a HIT and does not parse, a changed one is re-parsed, `forgetModelInfo` forces a re-read, and the cache never grows past its capacity), and the AI 碎碎念 pair over real HTTP against a stub provider that records the request (the persona and the state's own instruction, and nothing else — or, for a request that names a PART, that part's own prompt; or, for one that names only a STRUCTURE, an instruction built from that name VERBATIM, which is how a part with no prompt still gets answered — with a stale id falling back to the state rather than failing the page, and a long or multi-line structure name capped and flattened), the DSH path through a stub stream that speaks the REAL chunk protocol (`{ type: 'finish', reason: { kind, failure } }` — the shape `BlockAssembler` reads, and the one the first stub got wrong), its terminal failure codes, the asked-for reasoning effort and token budget asserted by name, a thinking-only stream refused with what it spent, one call in flight, and the live provider catalog, and — the check the unstyled-settings bug proved was missing — **the content type of every page source, asked of the real handler by name** (the whitelist and the extension table are the plugin's own exported constants, so `pages.css` is asserted to be `text/css; charset=utf-8` and every script `text/javascript; charset=utf-8`) |
 | `load` | Node, 50 ms | manifest, host half, activation, cleanup, stream lifecycle |
 | `clientchunk` | browser | DSH's **own** module system delivering the committed chunks, and the request-shape guards |
 | `vendor` | Node, 20 s | the committed chunk matches a fresh build from the pins |
-| `browser` | browser | vendor chunk, procedural avatar, framing, glTF/VRM/MMD loaders |
-| `client` | browser | the widget: mount, drag (handler-driven AND listener-driven), throw, wall and ceiling rebounds, wheel zoom, view orbit, gaze beyond the pet's frame and its reset, size reset, the per-state motion box sets (two clips in one state, the loop/once marker, the one-shot flag reaching the scene, a stale clip kept visible but unpickable), the floating-window switch and its three host answers, all 11 states, dispose, the AI 碎碎念 path (one `POST /pet3d/say` per event across four frames, the fallback line up until the answer lands, the answer in the bubble), and the PRESS path: a wobbling press is a click that moves nothing, a still press held for 0.6 s is a 长按 while it is still down and adds no click, the part is measured with a real raycast against the model (renaming the meshes moves the region from body to eye, and a miss is not a region), a part whose row names an emotion answers before the generic row is fallen through to, a USER part claims a structure the name heuristic would give another region to, and a press says that part's line — locally, and then with the part named in the `POST /pet3d/say` the host answers (a drag says nothing at all). Also drives the desktop page's glue against a fake bridge: drag, throw, zoom limits, orbit, the gaze from the launcher's cursor, the rectangle click-through depends on, and a press on ITS pet saying the part's line in its own bubble |
-| `mmd` | browser | a **real PMD model** through the full pipeline and a WebGL render |
+| `browser` | browser | vendor chunk, procedural avatar, framing, glTF/VRM loaders (VRM only) |
+| `client` | browser | the widget: mount, drag (handler-driven AND listener-driven), throw, wall and ceiling rebounds, wheel zoom, view orbit, gaze beyond the pet's frame and its reset, size reset, the per-state motion box sets (two clips in one state, the loop/once marker, the one-shot flag reaching the scene, a stale clip kept visible but unpickable), the floating-window switch and its three host answers, all 11 states, dispose, the AI 碎碎念 path (one `POST /vrmpet3d/say` per event across four frames, the fallback line up until the answer lands, the answer in the bubble), and the PRESS path: a wobbling press is a click that moves nothing, a still press held for 0.6 s is a 长按 while it is still down and adds no click, the part is measured with a real raycast against the model (renaming the meshes moves the region from body to eye, and a miss is not a region), a part whose row names an emotion answers before the generic row is fallen through to, a USER part claims a structure the name heuristic would give another region to, and a press says that part's line — locally, and then with the part named in the `POST /vrmpet3d/say` the host answers (a drag says nothing at all). Also drives the desktop page's glue against a fake bridge: drag, throw, zoom limits, orbit, the gaze from the launcher's cursor, the rectangle click-through depends on, and a press on ITS pet saying the part's line in its own bubble |
 | `desktop` | Node + a real Electron window | the bare-Electron runtime borrowed from the installation by hard links, the spawn environment (the `ELECTRON_RUN_AS_NODE` trap), the command line, the lifecycle, the right-click menu the REAL window opens (from the shared module, module flag and DOM hit test included), **the right-drag orbit measured with real mouse events (the view must keep turning while the pointer travels away from the pet), the pointer CAPTURE on the secondary press that makes it hold, and the `orbiting` report that stops the launcher making the window click-through mid-drag** — the pointer lock is attempted too but is a bonus, since Windows refuses to focus this deliberately unfocusable window, the settings page's own sections (状态 / 视线 / 大小 / 碎碎念 with its per-state boxes and AI controls / 部位, whose editor is DRIVEN in the real window: 新增部位, a typed structure becoming a chip, the chip's 前缀→精确 toggle and its removal / 模型导入 / 动作导入), and a **real launcher window** asked to prove itself: always on top, transparent, screen-sized, drawing pixels with an alpha channel |
 | `docs` | Node, 8 s | documented paths, commands and check counts match reality |
 
@@ -734,7 +764,7 @@ comment saying which bug they exist for.
 Chromium is available; `clientchunk` also skips when the installed `app.asar` cannot
 be found, because a delivery test against a fake loader would prove nothing. The
 `desktop` suite runs its Node half everywhere and **skips only the live window** when
-there is no installation to borrow an Electron from (set `PEe3D_DESKeOP_RUNeIME` to
+there is no installation to borrow an Electron from (set `VRMPET3D_DESKTOP_RUNTIME` to
 name a standalone one), because the pet is fully usable without the window.
 
 `clientchunk` is the newest and the least obvious. It extracts
@@ -749,13 +779,19 @@ it needs a model and a motion file, and neither may be committed here. The fixtu
 are synthesized by `scripts/make-motion-fixtures.mjs` and
 `scripts/make-vrma-fixtures.mjs`, so they carry no third-party terms. That suite is
 where "the clip actually moves a bone" is asserted, because a clip that parses and
-binds to nothing is the characteristic failure of both formats.
+binds to nothing is the characteristic failure of both formats. **It is not one of the nine suites**, and
+since 2026-10-12 it is kept on disk rather than wired in — together with
+`scripts/make-fixtures.mjs` (the downloaded MMD sample) and `scripts/make-motion-fixtures.mjs` (the `.vmd`
+fixture): both feed only a format `Scene.loadMotion` now refuses, so only the VRMA half of this paragraph
+still describes this build.
 
-The **874** the docs quote is the sum of the suites that print an assertion count,
+The **1945** the docs quote is the sum of the suites that print an assertion count,
 plus one for each suite that reports a verdict or a hash instead (`load`, `vendor`).
 `docs` deliberately excludes its own assertion count: including it is circular,
 because that count depends on whether the documented total matched, so a single run
-could never converge.
+could never converge. (This paragraph used to quote 874, a figure it had carried since
+long before the current suites; it was replaced by the real total on 2026-10-12, when
+`check-docs.mjs` was re-run over the renamed, VRM-only tree.)
 
 The asset route is served from a real `node:http` server in `host+model`, not a
 hand-rolled fake response: the handler streams with `createReadStream(...).pipe(res)`,
@@ -770,20 +806,22 @@ document is parsed and does not wait for external `file://` scripts, so a
 ## Known limits
 
 * **Not published to npm.** Install by pointing a profile at this folder.
-* **No physics for MMD.** Hair and tails on a PMX model do not swing; a VRM's
-  SpringBone does. That stays true with an authored motion loaded.
-* **Authored motion is opt-in, binds by name, and is not retargeted.** The idle is
-  procedural by default; a `.vmd` / `.vrma` file plays only where the user assigns
-  one to a state. A `.vmd` binds MMD bones by **exact name**, so a motion authored
-  for a different skeleton animates nothing — silently, with no error. A `.vrma`
-  drives VRM humanoid bones and cannot drive a PMX/PMD model, and neither format is
-  converted into the other. `held` / `falling` / `landing` always take the
+* **MMD is not supported at all (2026-10-12), which supersedes the old "no physics for MMD" limit.**
+  A PMX/PMD model is refused by name before a loader is reached, and a `.vmd` likewise, so there is no MMD
+  avatar whose hair could swing or not swing. A VRM's SpringBone is the only chain physics here, and it
+  works with an authored motion loaded. (The retired limit read: "Hair and tails on a PMX model do not
+  swing; a VRM's SpringBone does.")
+* **Authored motion is opt-in, VRMA-only, and not retargeted.** The idle is
+  procedural by default; a `.vrma` file plays only where the user assigns
+  one to a state. It drives VRM humanoid bones, so it cannot drive an avatar with no humanoid rig, and it
+  is never converted from or to another format — a `.vmd` is recognised and refused rather than converted.
+  `held` / `falling` / `landing` always take the
   procedural path, because the drag physics owns those poses.
-* **VMD camera, light and self-shadow tracks are ignored.** Only bone and morph
-  tracks are played. The pet's camera belongs to the viewport framing, and this is a
-  desktop pet rather than a video renderer.
+* **VMD camera, light and self-shadow tracks are moot (RETIRED 2026-10-12).** No VMD is played at all now.
+  When one was, only its bone and morph tracks were read, because the pet's camera belongs to the viewport
+  framing and this is a desktop pet rather than a video renderer.
 * **A VRM stands in a relaxed pose made by the plugin, not in its own rest pose.**
-  A VRM's rest pose is a **e-pose** by specification, so a freshly loaded VRM renders
+  A VRM's rest pose is a **T-pose** by specification, so a freshly loaded VRM renders
   with both arms straight out, and the plugin's idle only writes breathing and gaze.
   The scene therefore derives a stand from the rig at load time
   (`core.aimDownQuaternion` + `dropArm`: take the bone's own shoulder→elbow direction
@@ -797,7 +835,7 @@ document is parsed and does not wait for external `file://` scripts, so a
   does, every frame.** three-vrm keeps the normalized humanoid nodes in a separate tree
   from the bones the mesh is skinned to. Without the sync, the idle writes land on a
   rig nobody can see: measured in the live app on 2026-10-08, a real VRM loaded and
-  rendered as a frozen e. ewo consequences are easy to get wrong:
+  rendered as a frozen T-pose. Two consequences are easy to get wrong:
   * the sync also has to happen **before** the SpringBone step, or the hair follows the
     previous frame's pose;
   * `update()` propagates **rotation for every bone but translation only for the hips**,
@@ -807,11 +845,12 @@ document is parsed and does not wait for external `file://` scripts, so a
 * **DRACO and KTX2 compression are unsupported.** Both loaders build decoder URLs
   from `import.meta.url` as a module side effect, and an IIFE bundle has no
   `import.meta`, so importing either throws `TypeError: Invalid URL` at load and
-  takes the whole chunk down. Neither is used by VRM or PMX.
+  takes the whole chunk down. Neither is used by a VRM (nor by the plain glTF/GLB models this plugin
+  loads beside it).
 * **The pet does not survive a page refresh as a running instance** — the plugin
   remounts and reloads the model. That is DSH's plugin lifecycle, not a bug here.
-* **The imported-directory route is driven by the settings page, not by the pet.** `/pet3d/models` is
-  implemented and verified over real HeeP, and 通用设置 → 模型导入 reads and writes it; a user cannot reach it from
+* **The imported-directory route is driven by the settings page, not by the pet.** `/vrmpet3d/models` is
+  implemented and verified over real HTTP, and 通用设置 → 模型导入 reads and writes it; a user cannot reach it from
   the pet's own controls, which is the point — the pet's right-click menu is about the pet.
 * **`modelScale` is a config-only preference now.** It has no slider any more — it was
   the control that let an enlarged model overflow its frame — but the profile config
@@ -820,7 +859,7 @@ document is parsed and does not wait for external `file://` scripts, so a
 * **The view orbit has no on-screen readout.** A long right-drag
   can leave the camera at an odd angle; the pet's own menu has 重置视角 for exactly that
   (camera only), and 通用设置 → 显示与外观 has a 复位视角 button.
-  `Pet3DWidget.prototype.reset` — the deleted panel's whole-pet 重置, which cleared every
+  `VrmPet3DWidget.prototype.reset` — the deleted panel's whole-pet 重置, which cleared every
   preference — is now unreachable from any surface; it was kept rather than deleted because
   the distinction between it and `resetView` is the decision, and a future entry may want it.
   Nothing surfaces the current yaw or pitch.

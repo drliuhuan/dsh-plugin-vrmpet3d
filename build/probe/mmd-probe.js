@@ -8,8 +8,8 @@
 // browser engine. The fixture is served relative to this page.
 (function () {
   var report = { checks: [], errors: [] };
-  var V = globalThis.__PET3D_VENDOR__;
-  var C = globalThis.__PET3D_CORE__;
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var C = globalThis.__VRMPET3D_CORE__;
   var THREE = V && V.THREE;
 
   function check(name, fn) {
@@ -36,10 +36,10 @@
   if (!V || !C) { finish(); return; }
 
   // The model is supplied by scripts/verify-browser.mjs as
-  // `globalThis.__PET3D_PMD_BASE64__`, read from build/fixtures/. It is inlined
+  // `globalThis.__VRMPET3D_PMD_BASE64__`, read from build/fixtures/. It is inlined
   // rather than fetched because a `file://` page in this Chromium cannot read a
   // sibling binary, and an object URL cannot be handed a local file either.
-  var base64 = globalThis.__PET3D_PMD_BASE64__;
+  var base64 = globalThis.__VRMPET3D_PMD_BASE64__;
   check('a model payload was supplied', function () { return typeof base64 === 'string' && base64.length > 1000; });
   if (typeof base64 !== 'string') { finish(); return; }
 

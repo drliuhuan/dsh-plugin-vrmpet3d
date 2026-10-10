@@ -18,6 +18,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BUILD = join(ROOT, 'build', 'probe');
@@ -32,7 +34,7 @@ const BUILD = join(ROOT, 'build', 'probe');
  * was first written on — a moved install used to look exactly like "no DSH here".
  */
 const ASAR_CANDIDATES = [
-  process.env.PET3D_DSH_ASAR,
+  envVar('DSH_ASAR'),
   'D:\\DeepSeek\\dsh\\resources\\app.asar',
   'F:\\DeepSeek\\Harness\\resources\\app.asar',
   join(process.env.LOCALAPPDATA || '', 'Programs', 'DeepSeek Harness', 'resources', 'app.asar'),
@@ -47,17 +49,31 @@ const CLIENT_MODULES_INNER = 'dsh/node_modules/@deepseek-ai/dsh-client-modules/l
 // generator no longer produces it and the file is gone from lib/, so asserting it here would assert a 404.
 const CHUNK_FILES = ['client.core.js', 'client.scene.js', 'client.menu.js', 'client.vendor.js'];
 
-// `--page <name>` runs any probe body in build/probe alongside the same three
-// sources. Diagnostics are worth keeping runnable rather than thrown away.
+/**
+ * The probe bodies this runner knows, and the whole allowlist.
+ *
+ * `--page <name>` used to accept any `build/probe/<name>.js` on disk, which was right while the chapters
+ * were all part of the product. It is not any more: MMD was implementation-removed on 2026-10-12 and its
+ * chapter was left on disk (`build/probe/mmd-probe.js`) rather than deleted, so a name-only lookup would
+ * still run it — and a probe for a format this build refuses proves nothing. An unknown name is therefore
+ * refused here, by name, instead of silently building a page.
+ */
+const KNOWN_PAGES = ['browser-test', 'client-test', 'chunk-delivery', 'framing-diag', 'vendor-probe'];
+
 const pageArgIndex = process.argv.indexOf('--page');
 const PAGE_NAME = pageArgIndex !== -1 && process.argv[pageArgIndex + 1]
   ? process.argv[pageArgIndex + 1]
   : 'browser-test';
+if (KNOWN_PAGES.indexOf(PAGE_NAME) === -1) {
+  console.error(`Unknown page "${PAGE_NAME}".`);
+  console.error(`  known pages: ${KNOWN_PAGES.join(', ')}`);
+  process.exit(2);
+}
 const PAGE = join(BUILD, PAGE_NAME + '.inline.html');
 
 /** Candidate Chromium-based browsers, in preference order. */
 const BROWSER_CANDIDATES = [
-  process.env.PET3D_BROWSER,
+  envVar('BROWSER'),
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -83,35 +99,21 @@ function inlineScript(path) {
 
 function buildPage() {
   mkdirSync(BUILD, { recursive: true });
-  // A probe that needs a real model gets it inlined as base64. `file://` pages in
-  // this Chromium refuse to read sibling binaries through fetch, and an object
-  // URL cannot be handed a local file either, so inlining is the only reliable
-  // route for a headless run.
-  let fixtureScript = '';
-  if (PAGE_NAME === 'mmd-probe') {
-    const fixture = process.env.MMD_FIXTURE
-      ? resolve(process.env.MMD_FIXTURE)
-      : join(ROOT, 'build', 'fixtures', 'miku', 'miku_v2.pmd');
-    if (existsSync(fixture)) {
-      const base64 = readFileSync(fixture).toString('base64');
-      fixtureScript = `<script>globalThis.__PET3D_PMD_BASE64__ = ${JSON.stringify(base64)};</script>`;
-      console.log(`fixture: ${fixture} (${(base64.length / 1024 / 1024).toFixed(2)} MB base64 inlined)`);
-    } else {
-      console.error(`fixture missing: ${fixture}`);
-      console.error('  run: node scripts/verify-model.mjs --fetch');
-    }
-  }
-  // The client-half test needs lib/pet3d.js AND the plugin half itself, plus a
+  // The client-half test needs lib/scene.js AND the plugin half itself, plus a
   // stub for the module loader and React so the real plugin entry runs unmodified.
   // It also gets the minimal synthesized VRM: the gaze axes are derived from a real rig, and
   // a fixture with a head bone is the only way to assert that without a licensed model.
+  //
+  // Every fixture is inlined as base64. `file://` pages in this Chromium refuse to
+  // read sibling binaries through fetch, and an object URL cannot be handed a local
+  // file either, so inlining is the only reliable route for a headless run.
   let clientScript = '';
   if (PAGE_NAME === 'client-test') {
     let vrmInlined = '';
-    const vrmFixture = join(ROOT, 'build', 'fixtures', 'vrma', 'pet3d-minimal.vrm');
+    const vrmFixture = join(ROOT, 'build', 'fixtures', 'vrma', 'vrmpet3d-minimal.vrm');
     if (existsSync(vrmFixture)) {
       const base64 = readFileSync(vrmFixture).toString('base64');
-      vrmInlined = `<script>globalThis.__PET3D_VRM_BASE64__ = ${JSON.stringify(base64)};</script>`;
+      vrmInlined = `<script>globalThis.__VRMPET3D_VRM_BASE64__ = ${JSON.stringify(base64)};</script>`;
       console.log(`fixture: ${vrmFixture} (${(base64.length / 1024).toFixed(1)} kB base64 inlined)`);
     } else {
       console.error(`fixture missing: ${vrmFixture}`);
@@ -119,10 +121,10 @@ function buildPage() {
     }
     // The generated WAVE, inlined for the same reason as the model: the desktop page's motion path has to
     // be driven with real VRMA bytes, and this probe page has no host to fetch them from.
-    const waveFixture = join(ROOT, 'build', 'fixtures', 'vrma', 'pet3d-wave.vrma');
+    const waveFixture = join(ROOT, 'build', 'fixtures', 'vrma', 'vrmpet3d-wave.vrma');
     if (existsSync(waveFixture)) {
       const waveBase64 = readFileSync(waveFixture).toString('base64');
-      vrmInlined += `<script>globalThis.__PET3D_WAVE_BASE64__ = ${JSON.stringify(waveBase64)};</script>`;
+      vrmInlined += `<script>globalThis.__VRMPET3D_WAVE_BASE64__ = ${JSON.stringify(waveBase64)};</script>`;
       console.log(`fixture: ${waveFixture} (${(waveBase64.length / 1024).toFixed(1)} kB base64 inlined)`);
     } else {
       console.error(`fixture missing: ${waveFixture}`);
@@ -130,17 +132,17 @@ function buildPage() {
     }
     // The resting pose, for the same reason: its arms-down and fingers-curled claims are measured from
     // real bytes rather than from the generator's own opinion of them.
-    const restFixture = join(ROOT, 'build', 'fixtures', 'vrma', 'pet3d-rest.vrma');
+    const restFixture = join(ROOT, 'build', 'fixtures', 'vrma', 'vrmpet3d-rest.vrma');
     if (existsSync(restFixture)) {
       const restBase64 = readFileSync(restFixture).toString('base64');
-      vrmInlined += `<script>globalThis.__PET3D_REST_BASE64__ = ${JSON.stringify(restBase64)};</script>`;
+      vrmInlined += `<script>globalThis.__VRMPET3D_REST_BASE64__ = ${JSON.stringify(restBase64)};</script>`;
       console.log(`fixture: ${restFixture} (${(restBase64.length / 1024).toFixed(1)} kB base64 inlined)`);
     } else {
       console.error(`fixture missing: ${restFixture}`);
       console.error('  run: node scripts/make-vrma-fixtures.mjs');
     }
     clientScript = [
-      `<script>${inlineScript(join(ROOT, 'lib', 'pet3d.js'))}</script>`,
+      `<script>${inlineScript(join(ROOT, 'lib', 'scene.js'))}</script>`,
       /**
        * The shared right-click MENU, before the widget: `lib/client.js` builds its menu from this module (it
        * arrives as the `client.menu.js` chunk in the app), so an inlined harness has to publish the same global
@@ -160,7 +162,7 @@ function buildPage() {
   function createElement(type, props, ...children) {
     return { type: type, props: props || {}, children: children };
   }
-  globalThis.__PET3D_REACT_STUB__ = {
+  globalThis.__VRMPET3D_REACT_STUB__ = {
     createElement: createElement,
     useRef: function (initial) { return { current: initial }; },
     useState: function (initial) { return [initial, function () {}]; },
@@ -171,12 +173,12 @@ function buildPage() {
   // the hook surface its factory expects.
   var realLoad = window.__ModuleLoader__.load;
   window.__ModuleLoader__.load = function (registration) {
-    if (registration.id !== 'dsh-plugin-pet3d') return realLoad(registration);
+    if (registration.id !== 'dsh-plugin-vrmpet3d') return realLoad(registration);
     var plugin = registration.factory(function (specifier) {
-      if (specifier === 'react') return globalThis.__PET3D_REACT_STUB__;
+      if (specifier === 'react') return globalThis.__VRMPET3D_REACT_STUB__;
       throw new Error('unexpected require("' + specifier + '")');
     });
-    globalThis.__PET3D_PLUGIN__ = plugin;
+    globalThis.__VRMPET3D_PLUGIN__ = plugin;
     return plugin;
   };
 })();
@@ -197,7 +199,6 @@ function buildPage() {
 <head><meta charset="utf-8"><title>pending</title></head>
 <body>
 <div id="out">running…</div>
-${fixtureScript}
 ${isDeliveryPage ? chunkDeliveryScripts() : ''}
 ${standardSources}
 ${clientScript}
@@ -239,7 +240,7 @@ function chunkDeliveryScripts() {
   }
   console.log(`chunk-delivery: ${Object.keys(chunks).length} chunk(s) inlined, ${(JSON.stringify(chunks).length / 1024 / 1024).toFixed(2)} MB of payload`);
 
-  const rowId = 'dsh-plugin-pet3d';
+  const rowId = 'dsh-plugin-vrmpet3d';
   const rev = 'test-rev-1';
   // The plugin's own row URL must keep the combo shape
   // `/plugins/??<pkg>/client.js&rev=…`: `chunkUrl` refuses any other form, which
@@ -257,8 +258,8 @@ function chunkDeliveryScripts() {
   };
 
   return [
-    `<script>globalThis.__PET3D_CHUNKS__ = ${JSON.stringify(chunks).replace(/<\//g, '<\\/')};</script>`,
-    `<script>globalThis.__PET3D_BOOT__ = ${JSON.stringify(boot)};</script>`,
+    `<script>globalThis.__VRMPET3D_CHUNKS__ = ${JSON.stringify(chunks).replace(/<\//g, '<\\/')};</script>`,
+    `<script>globalThis.__VRMPET3D_BOOT__ = ${JSON.stringify(boot)};</script>`,
     // The registration facade, installed BEFORE any bundle runs. It plays the
     // part the shell's HTML bootstrap facade plays: `create` drains its pending
     // queue, and the module system refuses to be built once that queue is gone —
@@ -277,11 +278,11 @@ function chunkDeliveryScripts() {
       return api.createClientModuleSystem(window.__ModuleLoader__, { id: 'dsh-test-bootstrap', exports: {} }, options);
     }
   };
-  globalThis.__PET3D_LOADER__ = window.__ModuleLoader__;
+  globalThis.__VRMPET3D_LOADER__ = window.__ModuleLoader__;
 })();
 </script>`,
     clientModules === null
-      ? `<script>globalThis.__PET3D_CLIENT_MODULES__ = null;</script>`
+      ? `<script>globalThis.__VRMPET3D_CLIENT_MODULES__ = null;</script>`
       : `<script>${clientModules.replace(/<\/script>/gi, '<\\/script>')}</script>`,
     // The extracted loader registers under its own id; run its factory now so
     // the `create` above has something to call. This materialize-then-create
@@ -302,7 +303,7 @@ function chunkDeliveryScripts() {
   }
   // The module system seeds react. Nothing else needs materializing: this page
   // asserts delivery, it does not mount the widget.
-  globalThis.__PET3D_REACT_STUB__ = { createElement: createElement };
+  globalThis.__VRMPET3D_REACT_STUB__ = { createElement: createElement };
 })();
 </script>`,
     `<script>${inlineScript(join(ROOT, 'lib', 'client.js'))}</script>`,
@@ -319,7 +320,7 @@ function chunkDeliveryScripts() {
 function extractClientModules() {
   if (!existsSync(DSH_ASAR)) {
     console.error(`app.asar not found: ${DSH_ASAR}`);
-    console.error('  set PET3D_DSH_ASAR to the installed DSH app.asar to run this page for real');
+    console.error('  set VRMPET3D_DSH_ASAR to the installed DSH app.asar to run this page for real');
     return null;
   }
   const extractor = join(ROOT, 'tools', 'asar-extract.mjs');
@@ -364,7 +365,7 @@ function extractReport(dom) {
 const browser = findBrowser();
 if (!browser) {
   console.error('No Chromium-based browser found.');
-  console.error('Set PET3D_BROWSER to a chrome/msedge/chromium executable and retry.');
+  console.error('Set VRMPET3D_BROWSER to a chrome/msedge/chromium executable and retry.');
   process.exit(2);
 }
 
@@ -382,6 +383,20 @@ try {
 
 if (!report) {
   console.error('the page produced no report (it may have failed to parse)');
+  process.exit(2);
+}
+
+/**
+ * A page that wrote something that is NOT its report is a FAILED run, not a diagnostic one.
+ *
+ * `#out` carries the progress line (`running: <check name>`) while an async check is in flight, so a page
+ * that never finished used to arrive here as a bare string, fall through to the "diagnostic page" branch
+ * below, and exit 0 — the whole suite reported `browser: diagnostic page (no assertions)` and the operator
+ * read that as a pass. Measured 2026-10-12 on a busy machine: `--page client-test` reported exactly that,
+ * having reached "the resting clip hangs the arms down…". A timeout has to be loud.
+ */
+if (report.parseError !== undefined) {
+  console.error(`the page never finished: ${report.parseError}`);
   process.exit(2);
 }
 

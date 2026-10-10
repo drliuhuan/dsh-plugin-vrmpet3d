@@ -4,14 +4,14 @@
  *
  * Why it exists: "the transparent parts of the clothes are black" is a claim about pixels, and every static
  * check I could make said the alpha mode was intact (the glTF says MASK, and three-vrm's VRM 0.x compat layer
- * preserves it). So this loads the real model through the real `lib/pet3d.js`, writes a PNG of it, and
+ * preserves it). So this loads the real model through the real `lib/scene.js`, writes a PNG of it, and
  * reports what the loaded materials actually carry — `alphaTest`, `transparent`, `depthWrite`, `side`, the
  * material's class and its map's name.
  *
  * It also renders a SECOND image with every alpha mask disabled (`alphaTest = 0`), which is the "if the mask
  * were ignored" look: if the two images differ around the clothes, the mask is being applied.
  *
- * Usage: node build/render-model.mjs <model.vrm|pmx> [out.png]
+ * Usage: node build/render-model.mjs <model.vrm> [out.png]
  */
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
@@ -19,24 +19,26 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const model = process.argv[2];
 const outPng = process.argv[3] || join(ROOT, 'build', 'render-model.png');
 if (!model || !existsSync(model)) {
-  console.error('usage: node build/render-model.mjs <model.vrm|pmx> [out.png]');
+  console.error('usage: node build/render-model.mjs <model.vrm> [out.png]');
   process.exit(2);
 }
 
 const BROWSERS = [
-  process.env.PET3D_BROWSER,
+  envVar('BROWSER'),
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
 ].filter(Boolean);
 const browser = BROWSERS.find((candidate) => existsSync(candidate));
 if (!browser) {
-  console.error('no Chromium-based browser found (set PET3D_BROWSER)');
+  console.error('no Chromium-based browser found (set VRMPET3D_BROWSER)');
   process.exit(2);
 }
 
@@ -44,10 +46,10 @@ const inline = (path) => readFileSync(path, 'utf8').replace(/<\/script>/gi, '<\\
 
 const PROBE = `
 (function () {
-  var V = globalThis.__PET3D_VENDOR__;
-  var C = globalThis.__PET3D_CORE__;
-  var Pet3D = globalThis.__PET3D_SCENE__;
-  var Scene = Pet3D && Pet3D.Scene;
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var C = globalThis.__VRMPET3D_CORE__;
+  var VrmPet3D = globalThis.__VRMPET3D_SCENE__;
+  var Scene = VrmPet3D && VrmPet3D.Scene;
   var report = { ok: false, errors: [], materials: [], info: {}, png: null, pngMaskOff: null };
 
   function finish() {
@@ -217,13 +219,13 @@ const page = `<!doctype html>
 <script>${inline(join(ROOT, 'lib', 'client.vendor.js'))}</script>
 <script>${inline(join(ROOT, 'lib', 'core.js'))}</script>
 <script>${inline(join(ROOT, 'lib', 'placeholder.js'))}</script>
-<script>${inline(join(ROOT, 'lib', 'pet3d.js'))}</script>
+<script>${inline(join(ROOT, 'lib', 'scene.js'))}</script>
 <script>${PROBE.replace(/<\/script>/gi, '<\\/script>')}</script>
 </body>
 </html>
 `;
 
-const work = mkdtempSync(join(tmpdir(), 'pet3d-render-'));
+const work = mkdtempSync(join(tmpdir(), 'vrmpet3d-render-'));
 writeFileSync(join(work, 'index.html'), page);
 const modelBytes = readFileSync(model);
 const chainsOnly = process.argv.includes('--chains-only');

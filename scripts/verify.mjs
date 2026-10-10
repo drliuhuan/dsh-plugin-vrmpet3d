@@ -14,16 +14,16 @@ import { dirname, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-// lib/core.js is a classic script (an IIFE that publishes `__PET3D_CORE__`), not
+// lib/core.js is a classic script (an IIFE that publishes `__VRMPET3D_CORE__`), not
 // an ES module, because the browser half loads it with `<script src>`. This
 // package declares `"type": "module"`, so Node would parse it as ESM if we
 // imported it by path — hence the side-effect import through a file: URL and the
 // read back off the global it publishes. That is the same contract the browser
 // relies on, so the test would catch a rename of the global too.
 await import(pathToFileURL(resolve(ROOT, 'lib', 'core.js')).href);
-const core = globalThis.__PET3D_CORE__;
+const core = globalThis.__VRMPET3D_CORE__;
 if (!core) {
-  console.error('lib/core.js did not publish globalThis.__PET3D_CORE__');
+  console.error('lib/core.js did not publish globalThis.__VRMPET3D_CORE__');
   process.exit(1);
 }
 
@@ -84,11 +84,17 @@ group('1. format detection');
   const glb = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02, 0, 0, 0]).buffer;
   eq(core.detectFormat(glb), 'glb', 'GLB magic "glTF" detected');
 
+  /**
+   * The two MMD magic numbers are still RECOGNISED, deliberately, although MMD is implementation-removed
+   * (2026-10-12): recognition is what lets the renderer refuse a `.pmx`/`.pmd` BY NAME rather than report
+   * "unknown format". What must be gone is every list that would OFFER one — see group 2 (extensions) and
+   * the catalog and route checks in `verify-model.mjs`.
+   */
   const pmx = new Uint8Array([0x50, 0x4d, 0x58, 0x20, 0x00, 0x00, 0x00, 0x80]).buffer;
-  eq(core.detectFormat(pmx), 'pmx', 'PMX magic "PMX " detected');
+  eq(core.detectFormat(pmx), 'pmx', 'PMX magic "PMX " is still detected, so a refusal can name it');
 
   const pmd = new Uint8Array([0x50, 0x6d, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00]).buffer;
-  eq(core.detectFormat(pmd), 'pmd', 'PMD magic "Pmd\\0" detected');
+  eq(core.detectFormat(pmd), 'pmd', 'PMD magic "Pmd\\0" is still detected, for the same reason');
 
   const gltf = new TextEncoder().encode('{"asset":{"version":"2.0"}}').buffer;
   eq(core.detectFormat(gltf), 'gltf', 'JSON glTF detected from leading brace');
@@ -107,11 +113,22 @@ group('2. model file recognition and path sanitising');
 // ---------------------------------------------------------------------------
 {
   ok(core.isModelFile('foo.vrm'), '.vrm recognised');
-  ok(core.isModelFile('A/B/C.PMX'), 'uppercase .PMX recognised');
+  ok(core.isModelFile('A/B/C.VRM'), 'uppercase .VRM recognised');
   ok(core.isModelFile('x.glb?rev=1'), 'query string stripped before matching');
   ok(!core.isModelFile('foo.txt'), '.txt rejected');
   ok(!core.isModelFile('foo'), 'extensionless rejected');
   ok(!core.isModelFile(undefined), 'undefined rejected');
+  /**
+   * And the half that decides what a user is OFFERED. MMD is implementation-removed (2026-10-12): the
+   * extension list is VRM/glTF only, so a `.pmx`/`.pmd` is neither catalogued nor servable. The magic
+   * numbers above are still recognised, which is what turns "nothing to show" into a refusal that can
+   * name the format instead.
+   */
+  eq(core.MODEL_EXTENSIONS.join(','), '.vrm,.glb,.gltf', 'the model extension list is VRM and glTF only');
+  eq(core.MODEL_EXTENSIONS.indexOf('.pmx'), -1, '.pmx is not a model extension');
+  eq(core.MODEL_EXTENSIONS.indexOf('.pmd'), -1, 'and neither is .pmd');
+  eq(core.isModelFile('x.pmx'), false, 'so isModelFile refuses a PMX');
+  eq(core.isModelFile('x.pmd'), false, 'and a PMD');
 
   eq(core.sanitizeRelativePath('tex/body.png'), 'tex/body.png', 'plain relative path kept');
   eq(core.sanitizeRelativePath('./tex/../tex/a.png'), 'tex/a.png', 'inner dot segments normalised');
@@ -586,7 +603,8 @@ group('5. preferences');
    */
   eq(core.structureRegionOf('J_Bip_C_Head'), 'head', 'a VRoid head bone is a head');
   eq(core.structureRegionOf('J_Adj_L_FaceEye'), 'eye', 'and an eye bone an eye, not a head');
-  eq(core.structureRegionOf('Hand.L'), 'hand', 'an MMD hand is a hand');
+  eq(core.structureRegionOf('Hand.L'), 'hand',
+    'an MMD bone name still reads as a hand — a naming heuristic, not MMD support');
   eq(core.structureRegionOf('左腕'), 'hand', 'and so is its Japanese name');
   eq(core.structureRegionOf('TwinTail.A.001.L'), 'tail', 'a twintail matches tail, for better or worse');
   /**
@@ -901,6 +919,34 @@ group('5. preferences');
     'a field the user did not touch is simply absent, so it keeps the file value');
   eq(core.springOverrideFor(withSprings, 'm2', 'DaiMao').gravityPower, undefined,
     'exactly: gravity was never pinned to whatever the panel happened to show');
+
+  /**
+   * ---- the storage key, and the RENAME that moved it (2026-10-12) -----------
+   *
+   * The project was renamed, so the browser key moved from `dsh.pet3d.v1` to `dsh.vrmpet3d.v1`. A rename that
+   * dropped the old key would throw away every setting on the first load — so the readers try the current name
+   * first and the old one after it, while the WRITERS use `STORAGE_KEY` only (one answer, migrated on the first
+   * edit). This group is the assertion for that promise; it is also what the two surfaces' `followStorage`
+   * handlers lean on when a document still running an older chunk fires a `storage` event under the old key.
+   */
+  const fakeStorage = (map) => ({
+    getItem: (key) => (Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null),
+    setItem: (key, value) => { map[key] = String(value); },
+  });
+  eq(core.STORAGE_KEY, 'dsh.vrmpet3d.v1', 'the delivered key carries the project\'s new name');
+  same(core.LEGACY_STORAGE_KEYS, ['dsh.pet3d.v1'], 'and the pre-rename key is remembered as the legacy one');
+  const bothKeys = fakeStorage({ 'dsh.vrmpet3d.v1': '{"size":123}', 'dsh.pet3d.v1': '{"size":1}' });
+  eq(core.storedPreferences(bothKeys).key, 'dsh.vrmpet3d.v1', 'the CURRENT key wins when both are present');
+  const legacyOnly = fakeStorage({ 'dsh.pet3d.v1': '{"size":42}' });
+  eq(JSON.stringify(core.storedPreferences(legacyOnly)), JSON.stringify({ key: 'dsh.pet3d.v1', raw: '{"size":42}' }),
+    'and a profile written before the rename is still read, key and bytes');
+  eq(core.cleanPreferences(JSON.parse(core.storedPreferences(legacyOnly).raw)).size, 42,
+    'which is what makes the rename a migration rather than a reset');
+  eq(core.storedPreferences(fakeStorage({})), null, 'nothing stored answers null, not an empty object');
+  eq(core.storedPreferences(null), null, 'and neither does a surface with no storage at all');
+  eq(core.isStorageKey(core.STORAGE_KEY), true, 'a storage event under the current key is ours');
+  eq(core.isStorageKey('dsh.pet3d.v1'), true, 'and one under the legacy key is ours too');
+  eq(core.isStorageKey('dsh.other.v1'), false, 'while an unrelated key is ignored, as it always was');
 }
 
 // ---------------------------------------------------------------------------
@@ -2488,13 +2534,13 @@ group('10. constants are self-consistent');
   const catalogFixture = [
     { id: 'm1', name: 'HatsuneMikuNT.vrm' },
     { id: 'm2', name: 'SampleModel.vrm' },
-    { id: 'm3', name: 'fish.pmx' },
+    { id: 'm3', name: 'fish.glb' },
   ];
   eq(core.resolveModelId(catalogFixture, ''), 'm2', 'an empty preference resolves to SampleModel');
   eq(core.resolveModelId(catalogFixture, 'm9'), 'm2',
     'and so does an id that is no longer in the catalog — ids are positions in a scan, so they drift');
   eq(core.resolveModelId(catalogFixture, 'm3'), 'm3', 'a stored id that IS in the catalog is honoured');
-  eq(core.resolveModelId([{ id: 'm1', name: 'a.pmx' }], ''), 'm1',
+  eq(core.resolveModelId([{ id: 'm1', name: 'a.glb' }], ''), 'm1',
     'without any VRM, the first model of any kind beats showing nothing');
   eq(core.resolveModelId([], ''), '', 'and an empty catalog resolves to nothing, which the surfaces report');
   eq(core.cleanPreferences({ modelId: 'placeholder' }).modelId, '',
@@ -2504,12 +2550,13 @@ group('10. constants are self-consistent');
 }
 
 // ---------------------------------------------------------------------------
-group('11. authored motion (VMD / VRMA)');
+group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
 // ---------------------------------------------------------------------------
 {
   // A VMD is identified by its ASCII banner and a VRMA by the extension inside
   // its GLB JSON chunk, so both detectors are exercised on real byte layouts
-  // rather than on a name.
+  // rather than on a name. The VMD half is a REFUSAL aid since 2026-10-12: this
+  // build plays VRMA only, and the banner is how it says so by name.
   function glb(jsonText, extraChunk) {
     const json = Buffer.from(jsonText, 'ascii');
     const padding = (4 - (json.length % 4)) % 4;
@@ -2532,10 +2579,11 @@ group('11. authored motion (VMD / VRMA)');
     return Buffer.concat(parts);
   }
 
-  ok(core.MOTION_EXTENSIONS.includes('.vmd') && core.MOTION_EXTENSIONS.includes('.vrma'),
-    'both motion extensions are recognised');
-  eq(core.isMotionFile('a.vmd'), true, 'isMotionFile accepts .vmd');
-  eq(core.isMotionFile('B.VRMA'), true, 'isMotionFile is case-insensitive');
+  eq(core.MOTION_EXTENSIONS.join(','), '.vrma', 'the motion extension list is VRMA only');
+  eq(core.MOTION_EXTENSIONS.indexOf('.vmd'), -1, '.vmd is not a motion this build plays');
+  eq(core.isMotionFile('a.vmd'), false,
+    'so isMotionFile refuses a VMD, which is exactly what needed the banner recognised');
+  eq(core.isMotionFile('B.VRMA'), true, 'while a VRMA is accepted, case-insensitively');
   eq(core.isMotionFile('c.vrm'), false, 'a VRM model is not a motion file');
   eq(core.isMotionFile('d.pmx'), false, 'an MMD model is not a motion file');
 
@@ -2556,7 +2604,7 @@ group('11. authored motion (VMD / VRMA)');
   }
 
   const vmdBytes = Buffer.concat([Buffer.from('Vocaloid Motion Data 0002', 'ascii'), Buffer.alloc(64)]);
-  eq(core.detectMotionFormat(vmdBytes), 'vmd', 'the VMD banner is detected');
+  eq(core.detectMotionFormat(vmdBytes), 'vmd', 'the VMD banner is still detected, so the scene can refuse it by name');
   eq(core.detectMotionFormat(Buffer.concat([Buffer.from('Vocaloid Motion', 'ascii'), Buffer.alloc(64)])), 'unknown',
     'a truncated banner is not a VMD');
   eq(core.detectMotionFormat(glb('{"extensions":{"VRMC_vrm_animation":{"specVersion":"1.0"}}}')), 'vrma',

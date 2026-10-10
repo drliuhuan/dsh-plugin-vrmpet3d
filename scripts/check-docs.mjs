@@ -153,7 +153,9 @@ group('3. documented check counts match the suites');
     chunkDelivery: countFrom([join(ROOT, 'scripts', 'verify-browser.mjs'), '--page', 'chunk-delivery'], /browser: (\d+) checks passed/),
     browser: countFrom([join(ROOT, 'scripts', 'verify-browser.mjs')], /browser: (\d+) checks passed/),
     client: countFrom([join(ROOT, 'scripts', 'verify-browser.mjs'), '--page', 'client-test'], /browser: (\d+) checks passed/),
-    mmd: countFrom([join(ROOT, 'scripts', 'verify-browser.mjs'), '--page', 'mmd-probe'], /browser: (\d+) checks passed/),
+    // `mmd` sat here until 2026-10-12: MMD was implementation-removed, the `mmd-probe` page went with it,
+    // and `verify-browser.mjs` now refuses a page name it does not know — so a count read from that page
+    // would be a count read from a refusal.
     // The one suite that starts a real window. It reports its count even when the live half is
     // skipped for want of an installation to borrow Electron from — the Node half always runs —
     // so the documented total does not depend on this machine's layout.
@@ -206,7 +208,6 @@ group('3. documented check counts match the suites');
   ok(readme.includes(`${actual.host} — model catalog`), `README states the host count (${actual.host})`);
   ok(readme.includes(`${actual.chunkDelivery} — DSH's own`), `README states the chunk-delivery count (${actual.chunkDelivery})`);
   ok(readme.includes(`${actual.client} — the widget`), `README states the client count (${actual.client})`);
-  ok(readme.includes(`${actual.mmd} — a real PMD model`), `README states the mmd count (${actual.mmd})`);
   ok(readme.includes(`${actual.desktop} — the pet's own window`), `README states the desktop count (${actual.desktop})`);
 
   const documented = handoff.match(/(\d+) checks/);
@@ -269,7 +270,7 @@ group('4. structural invariants');
   ok(existsSync(chunkPath), 'the vendored 3D chunk is committed');
   if (existsSync(chunkPath)) {
     const chunk = readFileSync(chunkPath, 'utf8');
-    ok(chunk.includes('__PET3D_VENDOR__'), 'the chunk publishes __PET3D_VENDOR__');
+    ok(chunk.includes('__VRMPET3D_VENDOR__'), 'the chunk publishes __VRMPET3D_VENDOR__');
     ok(chunk.length > 1000000, `the chunk is the expected order of size (${(chunk.length / 1024 / 1024).toFixed(2)} MB)`);
   }
 
@@ -318,10 +319,10 @@ group('4. structural invariants');
 
   // Globals the client half depends on, one per source file.
   const globals = [
-    ['lib/core.js', '__PET3D_CORE__'],
-    ['lib/placeholder.js', '__PET3D_PLACEHOLDER__'],
-    ['lib/pet3d.js', '__PET3D_SCENE__'],
-    ['lib/client.js', '__PET3D_CLIENT__'],
+    ['lib/core.js', '__VRMPET3D_CORE__'],
+    ['lib/placeholder.js', '__VRMPET3D_PLACEHOLDER__'],
+    ['lib/scene.js', '__VRMPET3D_SCENE__'],
+    ['lib/client.js', '__VRMPET3D_CLIENT__'],
   ];
   for (const [file, symbol] of globals) {
     const source = readFileSync(join(ROOT, file), 'utf8');

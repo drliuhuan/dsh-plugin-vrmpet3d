@@ -107,6 +107,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { listenOnUsablePort } from './loopback.mjs';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -119,16 +121,16 @@ function argValue(flag, fallback) {
 }
 
 const OUT_DIR = resolve(argValue('--out', join(ROOT, 'build', 'fixtures', 'vrma')));
-const OUT_VRM = join(OUT_DIR, 'pet3d-minimal.vrm');
-const OUT_VRMA = join(OUT_DIR, 'pet3d-test.vrma');
+const OUT_VRM = join(OUT_DIR, 'vrmpet3d-minimal.vrm');
+const OUT_VRMA = join(OUT_DIR, 'vrmpet3d-test.vrma');
 /**
  * The generated WAVE. It exists to prove the other direction of the same pipeline: not "a hand-written
  * clip loads" but "a clip produced by a generator (the shape a text-to-motion tool emits) plays on a real
  * model and moves its bones". `--out` moves all three together.
  */
-const OUT_WAVE = join(OUT_DIR, 'pet3d-wave.vrma');
+const OUT_WAVE = join(OUT_DIR, 'vrmpet3d-wave.vrma');
 /** The resting pose: arms down, elbows and fingers relaxed, the body turning slowly. See uildRestVrma. */
-const OUT_REST = join(OUT_DIR, 'pet3d-rest.vrma');
+const OUT_REST = join(OUT_DIR, 'vrmpet3d-rest.vrma');
 /**
  * The manifest written beside the clips, declaring which of them play ONCE.
  *
@@ -137,13 +139,13 @@ const OUT_REST = join(OUT_DIR, 'pet3d-rest.vrma');
  * the host half (which pulls in the settings store, the launcher and the model parser) to learn one file name
  * would be a poor trade. `verify-model.mjs` asserts the two spellings are equal, so a rename cannot drift.
  */
-export const MOTION_MANIFEST_FILE = 'pet3d-motions.json';
+export const MOTION_MANIFEST_FILE = 'vrmpet3d-motions.json';
 const TRANSPORT = argValue('--transport', 'auto');
 
 /** Candidate Chromium-based browsers, matching scripts/verify-browser.mjs. */
 const BROWSER_CANDIDATES = [
   argValue('--browser', null),
-  process.env.PET3D_BROWSER,
+  envVar('BROWSER'),
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -320,10 +322,10 @@ export function buildVrma() {
   const json = {
     asset: {
       version: '2.0',
-      generator: 'dsh-plugin-pet3d scripts/make-vrma-fixtures.mjs',
+      generator: 'dsh-plugin-vrmpet3d scripts/make-vrma-fixtures.mjs',
     },
     scene: 0,
-    scenes: [{ name: 'pet3d-test', nodes: [0] }],
+    scenes: [{ name: 'vrmpet3d-test', nodes: [0] }],
     nodes: [
       { name: 'hips', translation: [0, 0.7, 0], children: [1] },
       { name: 'spine', translation: [0, 0.15, 0], children: [2] },
@@ -350,7 +352,7 @@ export function buildVrma() {
     },
     animations: [
       {
-        name: 'pet3d-test',
+        name: 'vrmpet3d-test',
         samplers: [
           { input: 0, output: 1, interpolation: 'LINEAR' },
           { input: 0, output: 2, interpolation: 'LINEAR' },
@@ -489,10 +491,10 @@ export function buildWaveVrma() {
   const json = {
     asset: {
       version: '2.0',
-      generator: 'dsh-plugin-pet3d scripts/make-vrma-fixtures.mjs (wave)',
+      generator: 'dsh-plugin-vrmpet3d scripts/make-vrma-fixtures.mjs (wave)',
     },
     scene: 0,
-    scenes: [{ name: 'pet3d-wave', nodes: [0] }],
+    scenes: [{ name: 'vrmpet3d-wave', nodes: [0] }],
     nodes,
     extensionsUsed: ['VRMC_vrm_animation'],
     extensions: {
@@ -512,7 +514,7 @@ export function buildWaveVrma() {
     },
     animations: [
       {
-        name: 'pet3d-wave',
+        name: 'vrmpet3d-wave',
         samplers: [
           { input: 0, output: 1, interpolation: 'LINEAR' },
           { input: 0, output: 2, interpolation: 'LINEAR' },
@@ -715,10 +717,10 @@ export function buildRestVrma() {
   const json = {
     asset: {
       version: '2.0',
-      generator: 'dsh-plugin-pet3d scripts/make-vrma-fixtures.mjs (rest)',
+      generator: 'dsh-plugin-vrmpet3d scripts/make-vrma-fixtures.mjs (rest)',
     },
     scene: 0,
-    scenes: [{ name: 'pet3d-rest', nodes: [0] }],
+    scenes: [{ name: 'vrmpet3d-rest', nodes: [0] }],
     nodes: nodes.map((node) => {
       const out = { name: node.name };
       if (node.name === 'hips') out.translation = [0, 0.7, 0];
@@ -745,7 +747,7 @@ export function buildRestVrma() {
     },
     animations: [
       {
-        name: 'pet3d-rest',
+        name: 'vrmpet3d-rest',
         samplers,
         channels: channels.map((channel, at) => ({
           sampler: at,
@@ -871,7 +873,7 @@ export function buildGestureVrma(spec) {
   const json = {
     asset: {
       version: '2.0',
-      generator: 'dsh-plugin-pet3d scripts/make-vrma-fixtures.mjs (gesture)',
+      generator: 'dsh-plugin-vrmpet3d scripts/make-vrma-fixtures.mjs (gesture)',
     },
     scene: 0,
     scenes: [{ name: spec.name, nodes: [0] }],
@@ -923,8 +925,8 @@ export function buildGestureVrma(spec) {
  */
 const GESTURE_TABLE = [
   {
-    file: 'pet3d-look-around.vrma',
-    name: 'pet3d-look-around',
+    file: 'vrmpet3d-look-around.vrma',
+    name: 'vrmpet3d-look-around',
     seconds: 5,
     loop: true,
     note: '慢速张望：头 ±25° 偏航，胸与胯反向跟随，手臂自然下垂',
@@ -948,8 +950,8 @@ const GESTURE_TABLE = [
     },
   },
   {
-    file: 'pet3d-weight-shift.vrma',
-    name: 'pet3d-weight-shift',
+    file: 'vrmpet3d-weight-shift.vrma',
+    name: 'vrmpet3d-weight-shift',
     seconds: 6,
     loop: true,
     note: '换重心：胯横向 0.03 单位摆动，上身与头滞后，手臂随身体轻摆',
@@ -972,8 +974,8 @@ const GESTURE_TABLE = [
     },
   },
   {
-    file: 'pet3d-stretch.vrma',
-    name: 'pet3d-stretch',
+    file: 'vrmpet3d-stretch.vrma',
+    name: 'vrmpet3d-stretch',
     seconds: 4,
     loop: true,
     note: '伸展：双臂抬到水平以上（最高 +20°），身体上提 0.02 单位再落下',
@@ -998,8 +1000,8 @@ const GESTURE_TABLE = [
     },
   },
   {
-    file: 'pet3d-happy-hop.vrma',
-    name: 'pet3d-happy-hop',
+    file: 'vrmpet3d-happy-hop.vrma',
+    name: 'vrmpet3d-happy-hop',
     seconds: 2,
     loop: false,
     note: '成功：跳一下（胯上提 0.12 单位）、双臂上摆，落下后归位 —— 一次性',
@@ -1036,8 +1038,8 @@ const GESTURE_TABLE = [
  */
 const GESTURE_MANIFEST = {
   clips: {
-    'pet3d-wave.vrma': { loop: false },
-    'pet3d-happy-hop.vrma': { loop: false },
+    'vrmpet3d-wave.vrma': { loop: false },
+    'vrmpet3d-happy-hop.vrma': { loop: false },
   },
 };
 
@@ -1274,7 +1276,7 @@ export function buildVrm() {
     if (children[index].length) node.children = children[index];
     return node;
   });
-  nodes.push({ name: 'Pet3DFixtureBody', mesh: 0, skin: 0 });
+  nodes.push({ name: 'VrmPet3DFixtureBody', mesh: 0, skin: 0 });
   springNodes.forEach((node) => nodes.push(node));
 
   const humanBones = {};
@@ -1283,14 +1285,14 @@ export function buildVrm() {
   const json = {
     asset: {
       version: '2.0',
-      generator: 'dsh-plugin-pet3d scripts/make-vrma-fixtures.mjs',
+      generator: 'dsh-plugin-vrmpet3d scripts/make-vrma-fixtures.mjs',
     },
     scene: 0,
-    scenes: [{ name: 'Pet3DFixtureScene', nodes: [0, meshNode] }],
+    scenes: [{ name: 'VrmPet3DFixtureScene', nodes: [0, meshNode] }],
     nodes,
     meshes: [
       {
-        name: 'pet3d-fixture-mesh',
+        name: 'vrmpet3d-fixture-mesh',
         primitives: [
           {
             attributes: {
@@ -1310,7 +1312,7 @@ export function buildVrm() {
     ],
     skins: [
       {
-        name: 'pet3d-fixture-skin',
+        name: 'vrmpet3d-fixture-skin',
         skeleton: 0,
         joints: VRM_BONES.map((_, index) => index),
         inverseBindMatrices: 5,
@@ -1318,7 +1320,7 @@ export function buildVrm() {
     ],
     materials: [
       {
-        name: 'pet3d-fixture-material',
+        name: 'vrmpet3d-fixture-material',
         pbrMetallicRoughness: {
           baseColorFactor: [0.85, 0.55, 0.35, 1],
           metallicFactor: 0,
@@ -1336,9 +1338,9 @@ export function buildVrm() {
         // VRMMetaLoaderPlugin accept. "1.0" is what the released spec says.
         specVersion: '1.0',
         meta: {
-          name: 'pet3d minimal fixture',
+          name: 'vrmpet3d minimal fixture',
           version: '1.0',
-          authors: ['dsh-plugin-pet3d scripts/make-vrma-fixtures.mjs'],
+          authors: ['dsh-plugin-vrmpet3d scripts/make-vrma-fixtures.mjs'],
           // Not cosmetic: VRMMetaLoaderPlugin throws unless this exact URL is in
           // its acceptLicenseUrls (which defaults to this one value).
           licenseUrl: 'https://vrm.dev/licenses/1.0/',
@@ -1441,12 +1443,12 @@ const PROBE = `
   }
 
   var EXPECTED = ${JSON.stringify({})};
-  var V = globalThis.__PET3D_VENDOR__;
-  var C = globalThis.__PET3D_CORE__;
-  // lib/pet3d.js has published the scene as both the bare constructor and, in
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var C = globalThis.__VRMPET3D_CORE__;
+  // lib/scene.js has published the scene as both the bare constructor and, in
   // later revisions, as a namespace object carrying it under a Scene key.
   // Accept both so this probe does not break on a purely internal refactor.
-  var SCENE_GLOBAL = globalThis.__PET3D_SCENE__;
+  var SCENE_GLOBAL = globalThis.__VRMPET3D_SCENE__;
   var Scene = (SCENE_GLOBAL && SCENE_GLOBAL.Scene) || SCENE_GLOBAL;
   report.info.sceneGlobalShape = SCENE_GLOBAL && SCENE_GLOBAL.Scene ? 'namespace.Scene' : 'constructor';
   check('vendor chunk, core and scene are present', function () {
@@ -1464,7 +1466,7 @@ const PROBE = `
 
   var scene = new Scene(canvas, {
     assetBase: '/asset',
-    modelId: 'pet3d-minimal',
+    modelId: 'vrmpet3d-minimal',
     onError: function (message) { report.errors.push('scene.onError: ' + message); }
   });
   scene.resize(SIZE, SIZE);
@@ -1473,7 +1475,7 @@ const PROBE = `
   // load http:// at all, from the base64 the host read off disk. Either way the
   // hash below proves it is the same file.
   function loadBytes(url) {
-    var inlined = globalThis.__PET3D_FIXTURE_BASE64__;
+    var inlined = globalThis.__VRMPET3D_FIXTURE_BASE64__;
     if (inlined && inlined[url]) {
       var binary = atob(inlined[url]);
       var bytes = new Uint8Array(binary.length);
@@ -1489,10 +1491,10 @@ const PROBE = `
   var vrmBytes = null;
   var vrmaBytes = null;
 
-  loadBytes('/fixtures/pet3d-minimal.vrm')
+  loadBytes('/fixtures/vrmpet3d-minimal.vrm')
     .then(function (buffer) {
       vrmBytes = buffer;
-      return loadBytes('/fixtures/pet3d-test.vrma');
+      return loadBytes('/fixtures/vrmpet3d-test.vrma');
     })
     .then(function (buffer) {
       // ---- 1. the bytes the page holds are the bytes on disk ---------------
@@ -1526,7 +1528,7 @@ const PROBE = `
 
       // ---- 2. the VRM through the plugin's own scene code -------------------
       var started = performance.now();
-      return scene.parse(vrmBytes, 'pet3d-minimal').then(function (parsed) {
+      return scene.parse(vrmBytes, 'vrmpet3d-minimal').then(function (parsed) {
         report.info.parseMs = Math.round(performance.now() - started);
         report.info.parseResult = parsed;
         check('scene.parse() reported success', function () { return parsed.ok === true; });
@@ -1768,7 +1770,7 @@ ${fixtureScript}
 <script>${inlineScript(join(ROOT, 'lib', 'client.vendor.js'))}</script>
 <script>${inlineScript(join(ROOT, 'lib', 'core.js'))}</script>
 <script>${inlineScript(join(ROOT, 'lib', 'placeholder.js'))}</script>
-<script>${inlineScript(join(ROOT, 'lib', 'pet3d.js'))}</script>
+<script>${inlineScript(join(ROOT, 'lib', 'scene.js'))}</script>
 <script>${probe.replace(/<\/script>/gi, '<\\/script>')}</script>
 </body>
 </html>
@@ -1914,7 +1916,7 @@ async function main() {
   const browser = findBrowser();
   if (!browser) {
     console.error('No Chromium-based browser found.');
-    console.error('Set PET3D_BROWSER or pass --browser <chrome|msedge|chromium> and retry.');
+    console.error('Set VRMPET3D_BROWSER or pass --browser <chrome|msedge|chromium> and retry.');
     return 2;
   }
 
@@ -1965,14 +1967,14 @@ async function main() {
 
   // The `file` transport needs the bytes as text inside the page; they are read
   // from the files just written, so it is still the on-disk fixture that loads.
-  const fixtureScript = '<script>globalThis.__PET3D_FIXTURE_BASE64__ = '
+  const fixtureScript = '<script>globalThis.__VRMPET3D_FIXTURE_BASE64__ = '
     + JSON.stringify({
-      '/fixtures/pet3d-minimal.vrm': vrmBytes.toString('base64'),
-      '/fixtures/pet3d-test.vrma': vrmaBytes.toString('base64'),
+      '/fixtures/vrmpet3d-minimal.vrm': vrmBytes.toString('base64'),
+      '/fixtures/vrmpet3d-test.vrma': vrmaBytes.toString('base64'),
     })
     + ';</script>';
 
-  const work = mkdtempSync(join(tmpdir(), 'pet3d-vrma-'));
+  const work = mkdtempSync(join(tmpdir(), 'vrmpet3d-vrma-'));
   const requests = [];
 
   // 2. Loopback HTTP, the intended shape: fixtures as real URLs.
@@ -1984,8 +1986,8 @@ async function main() {
       response.end(buildPage(probe, ''));
       return;
     }
-    const fixture = url === '/fixtures/pet3d-minimal.vrm' ? OUT_VRM
-      : url === '/fixtures/pet3d-test.vrma' ? OUT_VRMA
+    const fixture = url === '/fixtures/vrmpet3d-minimal.vrm' ? OUT_VRM
+      : url === '/fixtures/vrmpet3d-test.vrma' ? OUT_VRMA
         : null;
     if (!fixture) {
       response.writeHead(404, { 'content-type': 'text/plain' });

@@ -11,7 +11,7 @@
 //      is not transparent, or a launcher that dies because its environment says "be Node".
 //
 // The live half SKIPS (it does not fail) when there is no installation to borrow from and no
-// `PET3D_DESKTOP_RUNTIME`: the plugin is fully usable without the window, and a suite that
+// `VRMPET3D_DESKTOP_RUNTIME`: the plugin is fully usable without the window, and a suite that
 // fails for a missing optional runtime teaches people to ignore failures.
 //
 // It never downloads anything, never writes into the installation, and always kills the
@@ -20,7 +20,7 @@ import { createServer } from 'node:http';
 // The loopback helper: `listen(0)` can be handed a port Chromium refuses (ERR_UNSAFE_PORT), which reads as
 // "the page never loaded" rather than as the port collision it is. See the helper's own header.
 import { listenOnUsablePort } from './loopback.mjs';
-// The plugin's own parser: the test server then answers /pet3d/model-info with exactly what the host
+// The plugin's own parser: the test server then answers /vrmpet3d/model-info with exactly what the host
 // would, for the committed VRM fixture — the same file the browser suite loads as a model.
 import { compactModelInfo, describeModel } from '../lib/vrm-info.js';
 import { spawn, execFileSync } from 'node:child_process';
@@ -28,6 +28,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 import {
   DesktopWindow, NODE_MODE_VARIABLE, RUNTIME_SUPPORT, STATUS_PREFIX, defaultAppDir, ensureRuntime,
@@ -45,7 +47,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * the page has to render. The default placeholder has neither, so a check against it would pass while
  * the whole feature was broken.
  */
-const SETTINGS_MODEL = join(ROOT, 'build', 'fixtures', 'vrma', 'pet3d-minimal.vrm');
+const SETTINGS_MODEL = join(ROOT, 'build', 'fixtures', 'vrma', 'vrmpet3d-minimal.vrm');
 const SETTINGS_MODEL_ID = 'fixture';
 let passed = 0;
 const failures = [];
@@ -103,7 +105,7 @@ console.log('\n0. the two halves agree on how the page reports itself');
   // side would otherwise silently end the reporting, and "the window is running" would go back to
   // meaning nothing about whether the pet is drawn.
   const launcher = readFileSync(join(ROOT, 'desktop', 'main.js'), 'utf8');
-  const declared = /const PET3D_STATUS_PREFIX = '([^']*)'/.exec(launcher);
+  const declared = /const VRMPET3D_STATUS_PREFIX = '([^']*)'/.exec(launcher);
   ok(Boolean(declared), 'the launcher declares a status prefix');
   eq(declared ? declared[1] : null, STATUS_PREFIX, 'both halves use the same status prefix');
 
@@ -181,32 +183,32 @@ console.log('\n0. the two halves agree on how the page reports itself');
    *
    * The page has published `status.scale` — the model's own text-size correction, which the wheel ON THE TEXT
    * drives — since that gesture was added, but the copy list did not name it, so the correction was invisible
-   * from `/pet3d/desktop` and "the text gesture did nothing" could not be told from "it worked and the size is
+   * from `/vrmpet3d/desktop` and "the text gesture did nothing" could not be told from "it worked and the size is
    * right". A field that vanished from a report is not something the live half can notice on a machine with no
    * window to run, so the field list is asserted here, by name.
    */
   ok(/scale: lastPageState\.status\.scale === undefined \? null : lastPageState\.status\.scale/.test(launcher),
-    'the launcher relays the prompt’s per-model text correction to /pet3d/desktop');
+    'the launcher relays the prompt’s per-model text correction to /vrmpet3d/desktop');
 
   /**
    * And the same list again for the PRESS readout — which gesture, and which part of the model it landed on.
    *
    * The page measures it (a raycast), the launcher relays it, and the field list is the only place the relay can
-   * drop it: `/pet3d/desktop` is where "I clicked its eye and nothing happened" has to be answerable from.
+   * drop it: `/vrmpet3d/desktop` is where "I clicked its eye and nothing happened" has to be answerable from.
    */
   ok(/touch: lastPageState && lastPageState\.touch/.test(launcher)
     && /region: lastPageState\.touch\.region \|\| null/.test(launcher),
-    'the launcher relays the press readout, region and all, to /pet3d/desktop');
+    'the launcher relays the press readout, region and all, to /vrmpet3d/desktop');
 
   /**
    * The same copy list, for the page's MOTION readout — the second field list that had quietly lost
    * entries.
    *
    * `lib/desktop-page.js` publishes four different answers to "why is my clip not playing": how many
-   * clips the page's catalog holds (`offered`), whether `/pet3d/motions` answered at all (`routed`),
+   * clips the page's catalog holds (`offered`), whether `/vrmpet3d/motions` answered at all (`routed`),
    * which of the mapped clips can drive THIS avatar (`available`) and what went wrong loading one
    * (`reason`). The relay rebuilt the object from a fixed list and named only the last two, so from
-   * `/pet3d/desktop` "the host never served the route" and "nothing is mapped to a state" were the
+   * `/vrmpet3d/desktop` "the host never served the route" and "nothing is mapped to a state" were the
    * same answer — measured on the live window on 2026-10-10: 6 clips in the host catalog, `mapped: {}`,
    * `available: []`, and no field that could say which of the two it was.
    */
@@ -236,7 +238,7 @@ console.log('\n0b. the per-frame VRM update reaches every component');
    * renderer painted 38 269 near-black pixels before the fix and 9 431 after, and the dress alone went from
    * 28 034 to 0.
    */
-  const scene = readFileSync(join(ROOT, 'lib', 'pet3d.js'), 'utf8');
+  const scene = readFileSync(join(ROOT, 'lib', 'scene.js'), 'utf8');
   ok(/vrm\.materials\s*&&\s*vrm\.materials\.forEach/.test(scene)
     && /typeof material\.update === 'function'/.test(scene),
     'and three-vrm\'s MToon materials are updated each frame, which is what masks a garment cut-out');
@@ -265,8 +267,8 @@ console.log('\n1. the environment the launcher is started with');
 console.log('\n2. the command line');
 // ---------------------------------------------------------------------------
 {
-  const args = launchArgs({ url: 'http://127.0.0.1:1/pet3d/window', modelId: 'miku', parentPid: 42 });
-  eq(args[0], '--url=http://127.0.0.1:1/pet3d/window', 'the page URL comes first');
+  const args = launchArgs({ url: 'http://127.0.0.1:1/vrmpet3d/window', modelId: 'miku', parentPid: 42 });
+  eq(args[0], '--url=http://127.0.0.1:1/vrmpet3d/window', 'the page URL comes first');
   eq(args[1], '--model-id=miku', 'the model is passed through');
   eq(args[2], '--parent-pid=42', 'the parent pid is passed for the watchdog');
   eq(args.length, 3, 'and nothing else: a positional argument would be read as an app directory');
@@ -280,7 +282,7 @@ console.log('\n3. the bare-Electron layout');
 {
   // A fake installation, small enough to build in a test: the plan and the linking logic are
   // what matter, not the size of the real binaries.
-  const scratch = mkdtempSync(join(tmpdir(), 'pet3d-desktop-'));
+  const scratch = mkdtempSync(join(tmpdir(), 'vrmpet3d-desktop-'));
   const fakeInstall = join(scratch, 'install');
   const fakeTarget = join(scratch, 'runtime');
   try {
@@ -347,16 +349,16 @@ console.log('\n4. where the runtime lives, and what is used instead');
   // runtime goes beside the installation, which is always on its own volume.
   const insisted = resolve('F:\\install');
   eq(sameVolume(stateDir('C:\\profile'), insisted), false, 'a C: profile is not on F:');
-  eq(planRuntimeDir(insisted, 'C:\\profile'), join(dirname(insisted), 'pet3d-desktop-runtime'),
+  eq(planRuntimeDir(insisted, 'C:\\profile'), join(dirname(insisted), 'vrmpet3d-desktop-runtime'),
     'a different volume falls back to beside the installation');
-  eq(planRuntimeDir(insisted, 'F:\\profile'), resolve('F:\\profile\\pet3d-desktop\\runtime'),
+  eq(planRuntimeDir(insisted, 'F:\\profile'), resolve('F:\\profile\\vrmpet3d-desktop\\runtime'),
     'a same-volume state directory is used as-is');
   eq(planRuntimeDir(insisted, 'C:\\profile', 'D:\\explicit'), resolve('D:\\explicit'),
     'an explicit directory wins over both');
 
   function planRuntimeDir(installRoot, profile, preferred) {
     // Mirrors `DesktopWindow.prepareRuntime`'s choice without touching the filesystem.
-    return runtimeDirFor({ installRoot, preferred, stateDir: join(profile, 'pet3d-desktop', 'runtime') });
+    return runtimeDirFor({ installRoot, preferred, stateDir: join(profile, 'vrmpet3d-desktop', 'runtime') });
   }
 }
 
@@ -387,13 +389,13 @@ console.log('\n5. the window object: start, idempotence, stop, failure');
     log: () => {},
   });
 
-  const status = window.start({ url: 'http://127.0.0.1:1/pet3d/window', modelId: 'miku' });
+  const status = window.start({ url: 'http://127.0.0.1:1/vrmpet3d/window', modelId: 'miku' });
   eq(status.state, 'running', 'a start reports running');
   eq(started.length, 1, 'exactly one process was spawned');
   eq(started[0].args[0], defaultAppDir(), 'the first argument is the launcher directory');
   ok(started[0].args[1].startsWith('--url='), 'followed by the page URL');
   ok(!(NODE_MODE_VARIABLE in started[0].options.env), 'the child environment cannot put Electron into Node mode');
-  eq(window.start({ url: 'http://127.0.0.1:1/pet3d/window' }).state, 'running', 'starting twice is harmless');
+  eq(window.start({ url: 'http://127.0.0.1:1/vrmpet3d/window' }).state, 'running', 'starting twice is harmless');
   eq(started.length, 1, 'and does not spawn a second process');
 
   eq(window.describe().running, true, 'describe() reports it as running');
@@ -405,7 +407,7 @@ console.log('\n5. the window object: start, idempotence, stop, failure');
    * A REPLACED child must not report on its successor.
    *
    * `action: 'restart'` stops the window and starts a new one, and the old process's exit event lands
-   * AFTER the new start. Without the guard the host answered `/pet3d/desktop` with
+   * AFTER the new start. Without the guard the host answered `/vrmpet3d/desktop` with
    * `{state: 'stopped', reason: 'signal SIGTERM', pid: null}` while the new window was on screen and
    * drawing — the same payload's `page.ready` was `true`, which is what gave it away. Measured
    * 2026-10-08, on the first live use of `restart`; the panel's switch reads that state, so it would
@@ -754,8 +756,8 @@ if (live.skipped) {
          * 不涉及模型定制的内容，要分流到总设置面板中，然后针对每个模型有自己的模型参数面板", and then the follow-up that made them
          * separate documents: "模型参数和通用设置（原总设置）是两个单独的页面").
          *
-         * The launcher opened the model's page (`/pet3d/config`) and then NAVIGATED the same window to the sibling ROUTE
-         * (`/pet3d/global`), reading both: so this asserts each page said which page it is (`data-page`, compared against
+         * The launcher opened the model's page (`/vrmpet3d/config`) and then NAVIGATED the same window to the sibling ROUTE
+         * (`/vrmpet3d/global`), reading both: so this asserts each page said which page it is (`data-page`, compared against
          * the markup that was served rather than inferred from section counts), that the two answers differ, and that the
          * global keys came from the global reading (the two pages run one script, so a naive merge would look right while
          * showing the wrong page).
@@ -855,7 +857,7 @@ if (live.skipped) {
          * And the CATALOG'S ANSWER reaches the STORE, not merely the pickers.
          *
          * This is the operator's 2026-10-12 report as a check: 「即便配置了DeepSeek Account，点击试一句那里的生成，仍然会
-         * 报错'失败：还没有选择 DSH 的 provider 和模型'」. `/pet3d/llm` offers two providers, and two models once one is
+         * 报错'失败：还没有选择 DSH 的 provider 和模型'」. `/vrmpet3d/llm` offers two providers, and two models once one is
          * named, while the fresh stub store has NO `dshProvider` and NO `dshModel` — and a `<select>` with no
          * matching value still DISPLAYS its first option, so both pickers read as configured while the pair the
          * host would use is empty. What is asserted is the fix: the page adopts the option it is already showing,
@@ -876,7 +878,7 @@ if (live.skipped) {
         /**
          * And the 模型导入 section: a folder picker and the list of what is already imported.
          *
-         * The backend has existed since §21 (the page only reads and writes the host's `/pet3d/models`), so what
+         * The backend has existed since §21 (the page only reads and writes the host's `/vrmpet3d/models`), so what
          * this asserts is that the section EXISTS and that the page knows whether it has a launcher bridge to
          * open a dialog with. The stub host in this suite does not serve that route — which is exactly the case
          * the page has to survive with a readable message rather than an empty section.
@@ -888,7 +890,7 @@ if (live.skipped) {
         ok(Array.isArray(imports.dirs),
           `and lists what the host has imported (${(imports.dirs || []).length})`);
         /**
-         * And 动作导入, the parallel section over `/pet3d/motions`.
+         * And 动作导入, the parallel section over `/vrmpet3d/motions`.
          *
          * A separate route and a separate list file from the model one, so it is asserted separately: this
          * section is what makes an authored clip usable without editing the profile's config, and the 状态 rows
@@ -1018,7 +1020,7 @@ process.exit(1);
  * at a real URL without starting DSH.
  *
  * Deliberately a real HTTP server on the plugin's own origin: the page fetches its sources and
- * its model bytes with relative `/pet3d/...` URLs, and a `file://` page would change exactly
+ * its model bytes with relative `/vrmpet3d/...` URLs, and a `file://` page would change exactly
  * that behaviour.
  */
 async function startPageServer() {
@@ -1041,7 +1043,7 @@ async function startPageServer() {
   // right-click menu from the shared module, so a stub that omitted it would fail the window for a reason that does
   // not exist in the app. `pages.css` is not in this set because the branch below answers it with its own type.
   const sources = new Set([
-    'client.vendor.js', 'core.js', 'pet3d.js', 'client.js', 'desktop-page.js',
+    'client.vendor.js', 'core.js', 'scene.js', 'client.js', 'desktop-page.js',
     'config-page.js', 'menu.js',
   ]);
   const server = createServer((req, res) => {
@@ -1050,7 +1052,7 @@ async function startPageServer() {
       res.writeHead(status, { 'content-type': type, 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store' });
       res.end(body);
     };
-    if (url.pathname === '/pet3d/window' || url.pathname === '/pet3d/window/') {
+    if (url.pathname === '/vrmpet3d/window' || url.pathname === '/vrmpet3d/window/') {
       send(200, 'text/html; charset=utf-8', readFileSync(join(ROOT, 'lib', 'desktop-page.html')));
       return;
     }
@@ -1060,7 +1062,7 @@ async function startPageServer() {
     // The two routes the settings page reads. Answered from the VRM FIXTURE, through the plugin's own
     // parser, so this is the real path and not a stub: a model with expressions and two spring chains,
     // which is what the page has to render.
-    if (url.pathname === '/pet3d/catalog') {
+    if (url.pathname === '/vrmpet3d/catalog') {
       send(200, 'application/json', JSON.stringify({
         models: [{ id: SETTINGS_MODEL_ID, name: basename(SETTINGS_MODEL), format: 'vrm', bytes: statSync(SETTINGS_MODEL).size }],
       }));
@@ -1080,7 +1082,7 @@ async function startPageServer() {
      * answered with the same snapshot as a GET, which is what the host does and what the page expects back — the
      * page's own latch (`hasSnapshot` in `lib/config-page.js`) needs the first answer to be a real snapshot.
      */
-    if (url.pathname === '/pet3d/settings') {
+    if (url.pathname === '/vrmpet3d/settings') {
       // What the page POSTs is kept: the 试一句 bug this suite now covers is about a chosen pair REACHING the
       // store, and the store is this route. The snapshot below is deliberately version 1 for ever, so the
       // answer is not adopted back — which is how the page's own copy stays readable here.
@@ -1101,14 +1103,14 @@ async function startPageServer() {
     /**
      * The LLM catalog, as the host serves it — the route 试一句's settings depend on.
      *
-     * Answered here rather than left to 404 because the page has to DO something with it: `/pet3d/llm` lists the
+     * Answered here rather than left to 404 because the page has to DO something with it: `/vrmpet3d/llm` lists the
      * providers always and a provider's models only for `?provider=`, so a page that fetches it is holding a
      * catalog the store may know nothing about. What that means is the 2026-10-12 operator report — DeepSeek
      * Account configured, 试一句 → 「失败：还没有选择 DSH 的 provider 和模型」 — because the model picker DISPLAYS
      * its first option even while the stored `dshModel` is empty. The fixture's two providers and two models are
      * the live shapes, renamed.
      */
-    if (url.pathname === '/pet3d/llm') {
+    if (url.pathname === '/vrmpet3d/llm') {
       const wanted = url.searchParams.get('provider') || '';
       send(200, 'application/json', JSON.stringify({
         dsh: {
@@ -1127,7 +1129,7 @@ async function startPageServer() {
       }));
       return;
     }
-    if (url.pathname === '/pet3d/model-info') {
+    if (url.pathname === '/vrmpet3d/model-info') {
       if (url.searchParams.get('m') !== SETTINGS_MODEL_ID) {
         send(404, 'application/json', '{"error":"unknown model id"}');
         return;
@@ -1154,7 +1156,7 @@ async function startPageServer() {
       send(200, 'application/json', JSON.stringify({ ...info, id: SETTINGS_MODEL_ID, name: basename(SETTINGS_MODEL) }));
       return;
     }
-    if (url.pathname === '/pet3d/config' || url.pathname === '/pet3d/config/') {
+    if (url.pathname === '/vrmpet3d/config' || url.pathname === '/vrmpet3d/config/') {
       /**
        * A chain count the fixture does not have (?chains=9), remembered for the model-info the PAGE will ask
        * for. It cannot ride on that request: the page fetches ?m=<id> and nothing else.
@@ -1172,7 +1174,7 @@ async function startPageServer() {
      * about the first one. `pages.css` matters for the same reason as in the app — a page whose stylesheet 404s still
      * runs its script, so the failure would be invisible in every number this suite checks.
      */
-    if (url.pathname === '/pet3d/global' || url.pathname === '/pet3d/global/') {
+    if (url.pathname === '/vrmpet3d/global' || url.pathname === '/vrmpet3d/global/') {
       // The global page asks for nothing model-shaped, so the override the model page's URL set is cleared here:
       // it is server state between two requests, and leaving it set would let the model reading be the one that is
       // stale rather than the global one.
@@ -1180,25 +1182,25 @@ async function startPageServer() {
       send(200, 'text/html; charset=utf-8', readFileSync(join(ROOT, 'lib', 'global-page.html')));
       return;
     }
-    if (url.pathname === '/pet3d/window/lib/pages.css') {
+    if (url.pathname === '/vrmpet3d/window/lib/pages.css') {
       send(200, 'text/css; charset=utf-8', readFileSync(join(ROOT, 'lib', 'pages.css')));
       return;
     }
     // The motion catalog, as the host serves it: one looping clip and one that declares itself a
     // one-shot, which is what the 动作 section lists and counts.
-    if (url.pathname === '/pet3d/motions') {
+    if (url.pathname === '/vrmpet3d/motions') {
       send(200, 'application/json', JSON.stringify({
         motions: [
-          { id: 'a1', name: 'pet3d-rest.vrma', format: 'vrma', bytes: 24796, source: 'user', loop: true },
-          { id: 'a2', name: 'pet3d-wave.vrma', format: 'vrma', bytes: 9348, source: 'user', loop: false },
+          { id: 'a1', name: 'vrmpet3d-rest.vrma', format: 'vrma', bytes: 24796, source: 'user', loop: true },
+          { id: 'a2', name: 'vrmpet3d-wave.vrma', format: 'vrma', bytes: 9348, source: 'user', loop: false },
         ],
         motionDirs: [],
         importedDirs: [],
       }));
       return;
     }
-    if (url.pathname.startsWith('/pet3d/window/lib/')) {
-      const name = decodeURIComponent(url.pathname.slice('/pet3d/window/lib/'.length));
+    if (url.pathname.startsWith('/vrmpet3d/window/lib/')) {
+      const name = decodeURIComponent(url.pathname.slice('/vrmpet3d/window/lib/'.length));
       if (!sources.has(name)) { send(404, 'application/json', '{"error":"no such source"}'); return; }
       send(200, 'text/javascript; charset=utf-8', readFileSync(join(ROOT, 'lib', name)));
       return;
@@ -1211,7 +1213,7 @@ async function startPageServer() {
      * paints nothing, and "the pet takes clicks" cannot be asserted against an empty stage, so the fixture is
      * served here instead.
      */
-    if (url.pathname === '/pet3d/asset') {
+    if (url.pathname === '/vrmpet3d/asset') {
       const bytes = readFileSync(SETTINGS_MODEL);
       res.writeHead(200, {
         'content-type': 'application/octet-stream',
@@ -1248,8 +1250,8 @@ async function runLiveSettingsWindow(runtime, extraQuery) {
   const { server, port, settingsPatches } = await startPageServer();
   // The model in the URL, exactly as the host passes it: without it a fresh profile has no stored
   // preference and the page would open on the placeholder.
-  const url = `http://127.0.0.1:${port}/pet3d/config?model=${SETTINGS_MODEL_ID}${extraQuery || ''}`;
-  const resultFile = join(tmpdir(), `pet3d-desktop-settings-${process.pid}.json`);
+  const url = `http://127.0.0.1:${port}/vrmpet3d/config?model=${SETTINGS_MODEL_ID}${extraQuery || ''}`;
+  const resultFile = join(tmpdir(), `vrmpet3d-desktop-settings-${process.pid}.json`);
   rmSync(resultFile, { force: true });
   const shown = [];
   try {
@@ -1291,18 +1293,18 @@ async function runLiveSettingsWindow(runtime, extraQuery) {
 }
 
 async function runLiveWindow() {
-  if (process.env.PET3D_SKIP_DESKTOP === '1') return { skipped: 'PET3D_SKIP_DESKTOP=1' };
+  if (envVar('SKIP_DESKTOP') === '1') return { skipped: 'VRMPET3D_SKIP_DESKTOP=1' };
 
   let runtime = null;
   try {
-    runtime = resolveStandaloneRuntime(process.env.PET3D_DESKTOP_RUNTIME);
+    runtime = resolveStandaloneRuntime(envVar('DESKTOP_RUNTIME'));
     if (!runtime) {
       // Under the suite, `process.execPath` is the workspace's own Node, whose ancestry leads
       // nowhere near the app. The installation is found the way every other script here finds
       // it: from the known locations of `resources/app.asar`.
       const installRoot = installationRoot();
       if (!installRoot) {
-        return { skipped: 'no DSH installation found; set PET3D_DESKTOP_RUNTIME, DSH_ASAR or PET3D_DSH_ASAR' };
+        return { skipped: 'no DSH installation found; set VRMPET3D_DESKTOP_RUNTIME, DSH_ASAR or VRMPET3D_DSH_ASAR' };
       }
       // The runtime goes BESIDE THE INSTALLATION, exactly as the host half puts it: hard links
       // require one volume, so a workspace-relative path would either copy 244 MB or (on a
@@ -1320,8 +1322,8 @@ async function runLiveWindow() {
   }
 
   const { server, port } = await startPageServer();
-  const url = `http://127.0.0.1:${port}/pet3d/window`;
-  const resultFile = join(tmpdir(), `pet3d-desktop-selftest-${process.pid}.json`);
+  const url = `http://127.0.0.1:${port}/vrmpet3d/window`;
+  const resultFile = join(tmpdir(), `vrmpet3d-desktop-selftest-${process.pid}.json`);
   rmSync(resultFile, { force: true });
 
   const window = new DesktopWindow({
@@ -1474,8 +1476,8 @@ async function runLiveWindow() {
     server.close();
     rmSync(resultFile, { force: true });
     // Keep the runtime: it is the real cache the host half reuses, and on one volume it costs
-    // nothing. `PET3D_CLEAN_DESKTOP=1` removes it for a machine that wants the disk back.
-    if (process.env.PET3D_CLEAN_DESKTOP === '1') removeRuntime(runtimeDir);
+    // nothing. `VRMPET3D_CLEAN_DESKTOP=1` removes it for a machine that wants the disk back.
+    if (envVar('CLEAN_DESKTOP') === '1') removeRuntime(runtimeDir);
   }
 }
 
@@ -1488,7 +1490,7 @@ async function runLiveWindow() {
  */
 function installationRoot() {
   const candidates = [
-    process.env.PET3D_DSH_ASAR,
+    envVar('DSH_ASAR'),
     process.env.DSH_ASAR,
     'D:\\DeepSeek\\dsh\\resources\\app.asar',
     'F:\\DeepSeek\\Harness\\resources\\app.asar',

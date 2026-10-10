@@ -9,18 +9,20 @@
  *
  *   1. core        pure logic, plain Node                     (~0.1 s)
  *   2. host+model  catalog, path safety, HTTP route, hub      (~0.5 s)
- *   3. clientchunk the real module system delivers the chunks (~1 s)
- *   4. vendor      the committed 3D chunk matches a rebuild   (~20 s)
- *   5. browser     3D stack, placeholder, framing, loaders    (needs a browser)
- *   6. client      the widget end to end in a DOM             (needs a browser)
- *   7. mmd         a REAL PMD model through the full pipeline (needs fixture)
+ *   3. load        the manifest, host half and activation     (~1 s)
+ *   4. clientchunk the real module system delivers the chunks (~1 s)
+ *   5. vendor      the committed 3D chunk matches a rebuild   (~20 s)
+ *   6. docs        documented paths, commands and counts      (~30 s)
+ *   7. browser     3D stack, placeholder, framing, loaders    (needs a browser)
+ *   8. client      the widget end to end in a DOM             (needs a browser)
+ *   9. desktop     the pet's own window in a borrowed Electron (needs Electron)
  *
- * Suites 5-7 need a Chromium-based browser; suite 7 additionally needs the model
- * fixture, which `node scripts/verify-model.mjs --fetch` downloads. A missing
- * browser is reported as a skip, not a failure, because a headless environment
- * without one is a legitimate place to run the rest.
+ * Suites 7 and 8 need a Chromium-based browser; a missing browser is reported as a
+ * skip, not a failure, because a headless environment without one is a legitimate
+ * place to run the rest. Suite 9 skips itself in the same spirit when there is no
+ * Electron installation to borrow from.
  *
- * Suite 3 needs the installed app.asar, because it runs DSH's OWN client module
+ * Suite 4 needs the installed app.asar, because it runs DSH's OWN client module
  * system rather than a copy of it. When that file cannot be read the page still
  * runs and fails loudly, naming the path: an inlined fake loader would be a test
  * of this repository's assumptions, which is precisely what missed the original
@@ -30,10 +32,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-const FIXTURE = process.env.MMD_FIXTURE || join(ROOT, 'build', 'fixtures', 'miku', 'miku_v2.pmd');
 
 /**
  * The installed DSH archive the `clientchunk` suite reads its loader from. Kept
@@ -42,7 +44,7 @@ const FIXTURE = process.env.MMD_FIXTURE || join(ROOT, 'build', 'fixtures', 'miku
  * that file's list; see the note there.
  */
 const ASAR_CANDIDATES = [
-  process.env.PET3D_DSH_ASAR,
+  envVar('DSH_ASAR'),
   'D:\\DeepSeek\\dsh\\resources\\app.asar',
   'F:\\DeepSeek\\Harness\\resources\\app.asar',
   join(process.env.LOCALAPPDATA || '', 'Programs', 'DeepSeek Harness', 'resources', 'app.asar'),
@@ -77,7 +79,7 @@ const SUITES = [
     name: 'clientchunk',
     what: 'the real DSH module system delivers every committed client chunk',
     command: ['node', join(ROOT, 'scripts', 'verify-browser.mjs'), '--page', 'chunk-delivery'],
-    skip: () => (existsSync(ASAR) ? null : `app.asar absent (${ASAR}); set PET3D_DSH_ASAR`),
+    skip: () => (existsSync(ASAR) ? null : `app.asar absent (${ASAR}); set VRMPET3D_DSH_ASAR`),
   },
   {
     name: 'vendor',
@@ -93,19 +95,13 @@ const SUITES = [
   },
   {
     name: 'browser',
-    what: '3D stack, procedural avatar, framing, glTF/VRM/MMD loaders',
+    what: '3D stack, placeholder, framing, the glTF and VRM loaders',
     command: ['node', join(ROOT, 'scripts', 'verify-browser.mjs')],
   },
   {
     name: 'client',
     what: 'the widget end to end: mount, drag, throw, land, states, dispose',
     command: ['node', join(ROOT, 'scripts', 'verify-browser.mjs'), '--page', 'client-test'],
-  },
-  {
-    name: 'mmd',
-    what: 'a real PMD model through the full MMD pipeline and a WebGL render',
-    command: ['node', join(ROOT, 'scripts', 'verify-browser.mjs'), '--page', 'mmd-probe'],
-    skip: () => (existsSync(FIXTURE) ? null : `model fixture absent (${FIXTURE}); run: node scripts/verify-model.mjs --fetch`),
   },
   {
     // The only suite that starts a real window: it borrows the installed Electron (hard
@@ -122,7 +118,7 @@ const SUITES = [
 /** True when a Chromium-based browser is reachable, matching verify-browser.mjs. */
 function browserAvailable() {
   const candidates = [
-    process.env.PET3D_BROWSER,
+    envVar('BROWSER'),
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -136,12 +132,12 @@ function browserAvailable() {
 }
 
 const results = [];
-const needsBrowser = new Set(['clientchunk', 'browser', 'client', 'mmd']);
+const needsBrowser = new Set(['clientchunk', 'browser', 'client']);
 const haveBrowser = browserAvailable();
 
 for (const suite of SUITES) {
   if (needsBrowser.has(suite.name) && !haveBrowser) {
-    results.push({ ...suite, status: 'skip', detail: 'no Chromium-based browser found (set PET3D_BROWSER)' });
+    results.push({ ...suite, status: 'skip', detail: 'no Chromium-based browser found (set VRMPET3D_BROWSER)' });
     console.log(`skip  ${suite.name.padEnd(11)} ${suite.what}`);
     continue;
   }

@@ -12,7 +12,7 @@ nothing else still gets them right.
 
 `verify-all.mjs` is the operator's instrument, not a reflex:
 
-* it runs **ten suites**, including three that start a real browser and one that borrows an Electron runtime and
+* it runs **nine suites**, including two that start a real browser and one that borrows an Electron runtime and
   opens a **real always-on-top window** on the operator's screen — so a run takes tens of seconds and, on a busy
   machine, interferes with whatever the operator is doing;
 * the `docs` suite shells out to **every other suite** to recompute their counts, which makes it the most expensive
@@ -27,7 +27,7 @@ is.
 
 1. **Run the suites whose inputs changed**, from the table below. Nothing else.
 2. **Regenerate what the change invalidates.** `node scripts/client-chunks.mjs` after any edit to `lib/core.js`,
-   `lib/pet3d.js` or `lib/menu.js` — the delivered chunks are committed copies, and a stale one is a *silent*
+   `lib/scene.js` or `lib/menu.js` — the delivered chunks are committed copies, and a stale one is a *silent*
    failure. That is a build step, not verification; the cheap freshness assertion is
    `node scripts/client-chunks.mjs --check`.
 3. **Report which suites ran and what they said** — "core: 786 passed", not "all green". Never write
@@ -48,7 +48,7 @@ is.
 | `lib/index.js`, `lib/settings.js`, `lib/desktop.js` — routes, catalogs, the settings store | `node scripts/verify-model.mjs` |
 | the manifest, activation, `apply`/dispose, the route TABLE | `node scripts/check-plugin-load.mjs` |
 | `lib/config-page.html`, `lib/global-page.html`, `lib/config-page.js`, `desktop/` — the two settings pages and the launcher | `node scripts/verify-desktop.mjs` |
-| `lib/client.js`, `lib/menu.js`, `lib/desktop-page.js`, `lib/pet3d.js`, `build/probe/client-test.js` — the widget, the shared right-click menu and the renderer | `node scripts/verify-browser.mjs --page client-test` |
+| `lib/client.js`, `lib/menu.js`, `lib/desktop-page.js`, `lib/scene.js`, `build/probe/client-test.js` — the widget, the shared right-click menu and the renderer | `node scripts/verify-browser.mjs --page client-test` |
 | a delivered chunk's name, or the loader registration | `node scripts/verify-browser.mjs --page chunk-delivery` |
 | `vendor/`, the pinned 3D stack | `node scripts/vendor-build.mjs --check` |
 | documentation, or any count those docs quote | `node scripts/check-docs.mjs` (it recomputes the totals, so it IS the local suite for this case) |
@@ -62,7 +62,7 @@ Overlapping changes mean the union of those rows — still not the whole tree.
 
 **这块已经定稿，不要顺手改。** 具体指：宠物被拖动 / 抛掷 / 下坠 / 落地时喂给模型的运动反馈，也就是
 `Scene.setDragMotion` 这条通道、它的两个调用点（`lib/client.js` 的 `reportDragMotion` / `reportFallMotion`，
-`lib/desktop-page.js` 的同名两份）、以及 `lib/pet3d.js` 里 `applyDragLag` 的调校常数
+`lib/desktop-page.js` 的同名两份）、以及 `lib/scene.js` 里 `applyDragLag` 的调校常数
 （`DRAG_LAG_SECONDS` / `DRAG_LAG_MAX_PX` / `DRAG_LAG_TAU` / `DRAG_PITCH_*`）。它按手感定过、也按上面的读数测过。
 
 * **不要为了别的事情动它**：不是"重构顺便统一一下"的地方，也不是"加个参数看起来更好"的地方。

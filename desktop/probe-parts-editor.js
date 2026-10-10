@@ -14,7 +14,7 @@
  * Nothing here is asserted: the numbers travel to `scripts/verify-desktop.mjs`, where the suite decides.
  */
 (async () => {
-  const state = () => globalThis.__PET3D_CONFIG_STATE__ || {};
+  const state = () => globalThis.__VRMPET3D_CONFIG_STATE__ || {};
   const parts = () => (state().parts || {});
   const rows = () => Array.from(document.querySelectorAll('#part-body tr:not(.part-detail)'));
   // COUNTED FROM THE DOM, not from the published state: that state is republished on a poll, so reading it
@@ -218,7 +218,7 @@
    *
    * The store is put back at the end, because a probe must not leave the profile in a state the next suite reads.
    */
-  const storeKey = (globalThis.__PET3D_CORE__ || {}).STORAGE_KEY || 'dsh.pet3d.v1';
+  const storeKey = (globalThis.__VRMPET3D_CORE__ || {}).STORAGE_KEY || 'dsh.vrmpet3d.v1';
   const storeBefore = globalThis.localStorage.getItem(storeKey);
   const openWithSource = (source) => {
     let stored = {};

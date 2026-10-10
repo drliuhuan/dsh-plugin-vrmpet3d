@@ -1,6 +1,6 @@
-# HANDOFF.md — resuming work on dsh-plugin-pet3d
+# HANDOFF.md — resuming work on dsh-plugin-vrmpet3d
 
-Last updated: 2026-10-12 (**the forty-first pass is FINISHED — see the FIRST entry below; ▶NEXT UP at the top holds the ONE item the operator left**)
+Last updated: 2026-10-12 (**the forty-second pass is FINISHED — the project is now `dsh-plugin-vrmpet3d` and VRM only, and that means your running install needs the reinstall in §5 item 1; see the FIRST entry below for the pass itself, and ▶NEXT UP for the ONE feature item the operator left**)
 
 Read this file to pick the project up on another machine. It is written so that
 nothing needs to be remembered or explained verbally.
@@ -9,7 +9,7 @@ nothing needs to be remembered or explained verbally.
 > 下坠 / 落地喂给模型的那条通道（`setDragMotion` 及其两个调用点）与 `applyDragLag` 的调校常数**不要顺手改**；
 > 细则和硬约束见 `AGENTS.md` 的「冻结区」一节。
 >
-> **The tree is green: 10 suites, 1925 checks** — `check-docs.mjs` re-derives every one of them from the real
+> **The tree is green: 9 suites, 1945 checks** — `check-docs.mjs` re-derives every one of them from the real
 > suites, so its own verdict is the statement (see the bottom of this file).
 >
 > **▶NEXT UP (operator, 2026-10-12, end of session — 「收手，准备下班」. ONE item is left, in the operator's own words,
@@ -34,6 +34,15 @@ nothing needs to be remembered or explained verbally.
 > different PAGES (模型参数 / 通用设置), so the model page can never see that picker move. What carries a source change to
 > the table is the `storage` path that was already there, and the new desktop check drives THAT.**
 
+>
+> **⚠ THE FORTY-SECOND PASS RENAMED THE PROJECT (2026-10-12).** The package is now
+> **`dsh-plugin-vrmpet3d`** — routes `/vrmpet3d/*`, globals `__VRMPET3D_*`, CSS `vrmpet3d-*`, the renderer file
+> renamed (pet3d.js → **`lib/scene.js`**, and the old name no longer exists), env vars `VRMPET3D_*` (old names still
+> read), and the stored settings key
+> `dsh.vrmpet3d.v1` (the old `dsh.pet3d.v1` is still READ, so a profile migrates itself on the next edit). It also
+> **dropped MMD support**: PMX/PMD models and VMD motions are no longer loaded (the files stay in the tree; the
+> implementation does not). **A running install therefore needs a reinstall — the profile names the old package — and
+> the exact command sequence is at the top of §5.**
 >
 > **▶START HERE (2026-10-12, fortieth pass):** the newest entry adds the five 部位 rows the operator asked for
 > (大腿/小腿/脚/胸部/屁股) with their match words in the name table, the two ordering traps that table has (a thigh
@@ -157,7 +166,7 @@ nothing needs to be remembered or explained verbally.
 > `verify-browser.mjs --page client-test` → `browser: 90 checks passed`, with
 > `shippedPressAi: {"text":"宿主的一句话","hidden":false,"sayCalls":1,"state":{"region":"butt",…},"published":"宿主的一句话"}`
 > — a real press on the fixture's `hips` under source `ai`, with the app's published line still up (so the shipped 变态！ was
-> NOT said) and exactly one `/pet3d/say` request (so silence is the wait, not a dead reaction); `check-plugin-load.mjs` →
+> NOT said) and exactly one `/vrmpet3d/say` request (so silence is the wait, not a dead reaction); `check-plugin-load.mjs` →
 > `plugin load preflight: PASSED` (it gained a static assertion that all three readers of the shipped part lines pass the
 > same source argument); `client-chunks.mjs` regenerated `lib/client.core.js` (a chunk edit) and `--check` is clean;
 > `check-docs.mjs` → `docs: 211 checks passed` with every documented count recomputed from the suites.
@@ -175,6 +184,71 @@ nothing needs to be remembered or explained verbally.
 > heaviest browser page (the press gap, which is real and not faked), and this tree lives on a synced folder that has already
 > produced two `ReplaceFileW EIO` errors on writes during this pass. Nothing was changed to paper over it; if it recurs, that
 > is where to look.
+
+> # ✅ 2026-10-12 (forty-second pass) — the project is RENAMED to dsh-plugin-vrmpet3d, and it loads VRM only
+>
+> **The ask (operator, verbatim):** 「整个项目改名叫dsh-plugin-vrmpet3d，为了方便，只接受VRM模型了，项目文件跟着改」, then
+> 「先不砍文件，只去掉实现」 as the scope of the second half.
+>
+> **The rename is complete** — mechanical where it could be, deliberate where it could not. Package
+> `dsh-plugin-pet3d` → **`dsh-plugin-vrmpet3d`**; every route `/pet3d/*` → **`/vrmpet3d/*`** (including the deployed
+> `desktop/main.js`, `preload.js`, the two settings pages and every probe); every browser global `__PET3D_*` →
+> **`__VRMPET3D_*`**; DOM attributes, CSS classes and custom properties `pet3d-*`/`--pet3d-*` → `vrmpet3d-*`; the
+> renderer file renamed (pet3d.js → **`lib/scene.js`**, its delivered chunk was already `client.scene.js`); the DSH bundle
+> row in `cordis.patch.yml` (`id: vrmpet3d`); the desktop runtime directory; and the docs. The working DIRECTORY is
+> still `…\dsh-plugin-pet3d` — renaming it would break the profile's `link:` path, so that is the operator's call.
+>
+> **Four migrations, because a rename must not cost the user their settings.** Each is a READ fallback plus a write to
+> the new name; the old files are left alone as the user's data:
+>
+> | what | old | new |
+> |---|---|---|
+> | browser preferences | `dsh.pet3d.v1` | `dsh.vrmpet3d.v1` (`core.LEGACY_STORAGE_KEYS`, `core.storedPreferences`, `core.isStorageKey`) |
+> | host settings | `pet3d-settings.json` | `vrmpet3d-settings.json` (`SettingsStore`'s constructor) |
+> | imported dirs | `pet3d-model-dirs.json`, `pet3d-motion-dirs.json`, `<dir>/pet3d-motions.json` | the same three with `vrmpet3d` |
+> | environment | `PET3D_*` | `VRMPET3D_*` (both read — the new `lib/env.js`) |
+>
+> **MMD is implementation-removed, VRM only, and NO FILE WAS DELETED.** `MODEL_EXTENSIONS` is `['.vrm','.glb','.gltf']`,
+> `MOTION_EXTENSIONS` is `['.vrma']`; `@moeru/three-mmd`, `mmd-parser` and the unused addons left `vendor/entry.js`,
+> `vendor/package.json` and the lock, and the rebuilt chunk is **2,278,218 bytes (was 2,566,971)** with no `MMD`
+> namespace at all. Out of `lib/scene.js` went `wrapMMD`, `findMMDBone`, `MMD_BONE_ALIASES`, `mmdShellOf`,
+> `captureSkeletonRest`, the PMX/PMD load branch and `buildVmdRecord`; the MMD-only files (`build/probe/mmd-probe.js`,
+> `scripts/verify-motion.mjs`, `scripts/make-fixtures.mjs`, `scripts/make-motion-fixtures.mjs`, the ASSET-CONTRACT
+> chapters) are still on disk and simply no longer wired in. **The two magic-number sniffs are KEPT on purpose**: a
+> PMX/PMD still reports as `pmx`/`pmd` and a VMD as `vmd`, so the refusal can NAME the format —
+> 「PMX is not supported: this build loads VRM only (see docs/ASSET-CONTRACT.md).」 beats "unrecognised model format",
+> and the settings page explains a `.vmd` the same way.
+>
+> **The suite list is NINE now.** `scripts/verify-all.mjs` lost the `mmd` suite; `verify-browser.mjs` gained a
+> `KNOWN_PAGES` allowlist, so `--page mmd-probe` is refused by name instead of silently rebuilding a page nothing
+> tests; `check-docs.mjs` no longer counts it.
+>
+> **Counts moved: 1925 → 1945** (core 1002 → **1018**, host 524 → **541**; the mmd suite's 13 checks are gone and
+> desktop **242**, client **90**, browser **13** and chunk-delivery **39** are unchanged), **10 suites → 9**.
+> **Verified:** `core: 1018 checks passed`; `host + model: 541 checks passed`; `browser: 39` (chunk-delivery) /
+> `90` (client-test) / `13` (browser) passed; `desktop: 242 checks passed` (real Electron); `check-plugin-load.mjs`
+> → PASSED; `vendor-build.mjs --check` → `vendor chunk up to date (2278218 bytes, sha256 1002f3fb6490f10e…)`;
+> `client-chunks.mjs --check` clean; `check-docs.mjs` → green with every count recomputed. `verify-all.mjs` was NOT run.
+>
+> **A REAL BUG the new assertions caught, and it is why they exist.** The host migration derived the old file name with
+> `file.endsWith('/vrmpet3d-settings.json')` — and `settingsFileFor` builds the path with `path`-style separators, so on
+> WINDOWS the path is `…\vrmpet3d-settings.json` and the test never matched: **the migration was dead on the machine
+> that matters.** It now decides on the BASE NAME (`split(/[\\/]/).pop()`), and `verify-model.mjs` group 13c writes a
+> pre-rename store by hand, opens it with `SettingsStore`, and asserts the model choice, a user part row with its
+> structure and 碎碎念, a per-state box, the `live` slot and the newly written file all survive — plus that a profile
+> with no old file starts at defaults. `verify.mjs` group 5 has the browser-key half of the same promise (current key
+> wins, legacy key read, unrelated key ignored, `null` for nothing stored).
+>
+> **Also found while verifying, and worth knowing:** `--page client-test` intermittently never finishes (the page sits
+> in "the resting clip hangs the arms down…"), and the runner used to treat that non-JSON output as a *diagnostic page*
+> and exit **0** — a silent pass for a suite that ran zero assertions. `verify-browser.mjs` now prints
+> `the page never finished: …` and exits 2 for a report carrying `parseError`, while the genuine diagnostic path
+> (`--page framing-diag`) still exits 0. The flake is environmental: the runner rewrites a ~3.8 MB
+> `build/probe/*.inline.html` inside a Synology-synced folder on every run, and the sync client also made the editor
+> fail with `ReplaceFileW EIO` repeatedly during this pass.
+>
+> **The install now needs a reinstall** — the profile names the old package — and the exact sequence is at the top of
+> §5 item 1. The settings, the model list and the motion list all come across by themselves.
 
 
 > # ✅ 2026-10-12 (fortieth pass) — five more 部位: 大腿/小腿/脚/胸部/屁股, their match words, and the voice 胸部 and 屁股 answer with
@@ -240,9 +314,9 @@ nothing needs to be remembered or explained verbally.
 > provider 和模型'，而且报错的提示位置和'生成'按钮太远，不仔细找都找不到。」
 >
 > **Reproduced against the running app BEFORE touching anything, and the three readings are the proof.** `GET
-> /pet3d/llm` answered two providers (`deepseek-official` = DeepSeek, `deepseek-account` = DeepSeek Account);
+> /vrmpet3d/llm` answered two providers (`deepseek-official` = DeepSeek, `deepseek-account` = DeepSeek Account);
 > `?provider=deepseek-account` answered two models (`deepseek-flash`, `deepseek-v4-pro`); the operator's store held
-> `'dshProvider': 'deepseek-account', 'dshModel': ''`; and `POST /pet3d/say {state: working}` answered
+> `'dshProvider': 'deepseek-account', 'dshModel': ''`; and `POST /vrmpet3d/say {state: working}` answered
 > `{text: null, error: '还没有选择 DSH 的 provider 和模型', ms: 0}`. So the provider WAS configured, the MODEL was
 > empty, and the window's picker was displaying 「DeepSeek-V41-Flash」.
 >
@@ -279,10 +353,10 @@ nothing needs to be remembered or explained verbally.
 > live Electron self-test included); `client-chunks.mjs --check` clean (no chunk was edited); `check-docs.mjs` for
 > the count change. `verify-all.mjs` was NOT run.
 >
-> **The assertion that IS the fix:** the desktop suite's stub now serves `/pet3d/llm` (two providers, two models for
+> **The assertion that IS the fix:** the desktop suite's stub now serves `/vrmpet3d/llm` (two providers, two models for
 > the one asked about) and opens the settings window on a store with NO pair at all. It asserts that the page ends
 > up holding `fake-official / fake-1` — the option its own picker shows — that the model in the store is one the
-> picker offers, that the pair was POSTed to `/pet3d/settings` (the page's own copy is NOT what 试一句 reads), and
+> picker offers, that the pair was POSTed to `/vrmpet3d/settings` (the page's own copy is NOT what 试一句 reads), and
 > that 试一句's answer shares the row with 生成 (`speech.testResultSameRow`). In `verify-model.mjs` the two refusals
 > are asserted by name, with no call reaching the LLM service in either case.
 >
@@ -368,7 +442,7 @@ nothing needs to be remembered or explained verbally.
 > "the pet is standing perfectly still" — which is literally true from inside the canvas, because what moves is the
 > SLOT the pet lives in — and the hair hung rigid while the pet flew.
 >
-> **The fix is one call per airborne frame:** `Pet3DWidget.prototype.reportFallMotion` converts the fall's velocity
+> **The fix is one call per airborne frame:** `VrmPet3DWidget.prototype.reportFallMotion` converts the fall's velocity
 > and feeds the same channel the drag uses. Not a second mechanism: one number ("how fast, and which way") drives
 > both the body lag and the lean the chains answer. Two unit conversions are load-bearing and both are in the
 > comment — viewport FRACTIONS/s → screen PIXELS/s, and `fall.vy` is positive UPWARD (`core.stepFall` does
@@ -494,14 +568,14 @@ nothing needs to be remembered or explained verbally.
 >
 > **The fix: the launcher owns the lock, both directions.** `desktop/main.js` holds the request and release scripts
 > (`ORBIT_LOCK_JS` / `ORBIT_UNLOCK_JS`) and runs them with `executeJavaScript(script, true)` — the very call the
-> self-test had been making, now on the production path. On `pet3d:orbit(true)` it sets the window focusable,
+> self-test had been making, now on the production path. On `vrmpet3d:orbit(true)` it sets the window focusable,
 > focuses it, waits 30 ms (there is a message round trip between `focus()` and the renderer actually being the
 > focused document) and requests the lock; on `false` it exits the lock, restores `focusable: false`, hands focus
 > back and re-asserts always-on-top. The page sends one message per direction and only READS the result
 > (`pointerlockchange`) — one writer per environment, with the page's own `requestPointerLock` kept solely for the
 > browser-tab case where there is no launcher and no focus constraint.
 >
-> **And the self-test now drives the production path:** `pet3dDesktop.orbit(true)` from inside the page — through
+> **And the self-test now drives the production path:** `vrmpet3dDesktop.orbit(true)` from inside the page — through
 > preload, through the real IPC handler — then reads `document.pointerLockElement`, then `orbit(false)` and confirms
 > it was released. Measured result:
 > `{"supported":true,"locked":true,"hasFocus":true,"releasedAfter":true}`, and the suite asserts `locked === true`.
@@ -547,7 +621,7 @@ nothing needs to be remembered or explained verbally.
 > **The chain is four links, and each is asserted statically in `check-plugin-load.mjs`:**
 > 1. the page asks the launcher for focus the moment the press BECOMES an orbit (`bridge.orbit(true)`), never on
 >    the press itself — the thirty-first pass's lesson, and the probe pins it (`noFocusOnStill`);
-> 2. `desktop/preload.js` carries it over the bridge (`pet3d:orbit` / `pet3d:orbit-focus`);
+> 2. `desktop/preload.js` carries it over the bridge (`vrmpet3d:orbit` / `vrmpet3d:orbit-focus`);
 > 3. `desktop/main.js` sets the window focusable, focuses it, and answers — **and `keepOnTop` no longer blurs it
 >    for the duration of the orbit**, which would have thrown the lock's own precondition away;
 > 4. only on that answer does the page call `requestPointerLock()`. Ending the orbit releases the lock, restores
@@ -719,7 +793,7 @@ nothing needs to be remembered or explained verbally.
 >    itself on an entry click, on Escape and on an outside press; the page's `menuOpen` was only ever reset by
 >    the page's OWN `closeMenu()`, so after a click on an entry the page still believed the menu was up — and
 >    `menuOpen` is what the WINDOW is sized from, so the launcher kept the extra room for a menu that was gone
->    and `__PET3D_DESKTOP_STATE__.menu.open` kept reporting it. Fixed with `onClose`, which now owns the
+>    and `__VRMPET3D_DESKTOP_STATE__.menu.open` kept reporting it. Fixed with `onClose`, which now owns the
 >    "give the window its pet-sized box back" work so there is ONE path. **Found by the new 重力 probe check,
 >    which is the first check in that file to CLICK an entry in this window** — every earlier menu check called
 >    `closeMenu()` and so exercised the one path that was wired.
@@ -781,14 +855,14 @@ nothing needs to be remembered or explained verbally.
 >
 > * **The two settings panels are GONE — and the panel SOURCE is now really deleted.** The delivered chunk
 >   (`client.panel.js`) went in the interrupted pass; this session removed `panel.js` too. It had no whitelist
->   entry (`WINDOW_SOURCES` names `menu.js`), no page loaded it, and its `__PET3D_PANEL__` global was read by
+>   entry (`WINDOW_SOURCES` names `menu.js`), no page loaded it, and its `__VRMPET3D_PANEL__` global was read by
 >   nothing — **a second definition of the pet's right-click UI left in the tree with no caller is exactly the
 >   debt this repository keeps paying for**, and it is the one state a replaced file must never be left in.
 >   `lib/client.js` (app pet) and `lib/desktop-page.js` (floating window) no longer build a panel: no panel
 >   markup, no panel CSS, no per-state motion checkbox rows, no model picker row, no size stepper, no draggable
 >   title bar, no close button. Their panel-owned preferences are still READ (they are settings now), they simply
 >   have no control on the pet.
-> * **`lib/menu.js` is the ONE right-click menu, for both pets** — published as `globalThis.__PET3D_MENU__`,
+> * **`lib/menu.js` is the ONE right-click menu, for both pets** — published as `globalThis.__VRMPET3D_MENU__`,
 >   delivered to the app as the generated chunk `lib/client.menu.js` (chunk table updated; `menu.js` replaced the
 >   panel in the host's `WINDOW_SOURCES`, and `lib/desktop-page.html` loads it).
 >   `MENU_ITEMS` is the operator's order, once: `resetView, resetSize, globalSettings, modelSettings, surface,
@@ -815,20 +889,20 @@ nothing needs to be remembered or explained verbally.
 >   `petSurface` was ADDED to that page's `LOCAL_KEYS` and `panelOpen` removed. The window still GROWS to hold
 >   the menu: `menuBox`/`menuOpen`/`placeMenu()` replaced `panelBox`/`panelOpen`/`layoutPanel()`, `hitTest` uses
 >   `isOverMenu`, and the page's published `reportRect` field is now **`menu:`** (was `panel:`), with
->   `hit.overMenu` (was `overPanel`) and `menu: { open, rect, module }` in `__PET3D_DESKTOP_STATE__`.
->   `globalThis.__PET3D_DESKTOP_MENU__(true|x,y|false)` replaced `__PET3D_DESKTOP_PANEL__`, and the mount's
+>   `hit.overMenu` (was `overPanel`) and `menu: { open, rect, module }` in `__VRMPET3D_DESKTOP_STATE__`.
+>   `globalThis.__VRMPET3D_DESKTOP_MENU__(true|x,y|false)` replaced `__VRMPET3D_DESKTOP_PANEL__`, and the mount's
 >   returned API is `openMenuAt/closeMenu/isMenuOpen/menu()/menuApi()/menuRect()`.
-> * **`harness.js` + `ROUTES.harness = '/pet3d/harness'`** implement 重启/退出 DeepSeek Harness.
+> * **`harness.js` + `ROUTES.harness = '/vrmpet3d/harness'`** implement 重启/退出 DeepSeek Harness.
 >   `POST {action:'quit'|'restart'}`; the handler answers FIRST (`{ok, action, graceful, helperPid}`) and defers
 >   the action one tick, because the response is the last thing the page will ever hear. `quit` =
 >   `ctx.get('appExit')(0)` (the launcher's own bounded shutdown; `process.exitCode = 0` when a composition has
 >   no `appExit`). `restart` = a DETACHED `process.execPath` helper that waits for THIS pid to leave, then
 >   relaunches the app with `ELECTRON_RUN_AS_NODE` **deleted** from the env, followed by the same quit. Both
->   surfaces `fetch('/pet3d/harness')` and report a refusal (app: the badge; window: the 碎碎念 bubble); the two
+>   surfaces `fetch('/vrmpet3d/harness')` and report a refusal (app: the badge; window: the 碎碎念 bubble); the two
 >   failure strings live in `lib/menu.js`'s `LABELS` because they are about ITS entries.
 > * **`desktop/main.js`** follows the rename: `panelRect` → `menuRect`, `rect.panel` → `rect.menu`,
 >   `extras = [menu, status, speech]`, `report.checks.menu` / `checks.menuHitTest`, and its self-test drives
->   `window.__PET3D_DESKTOP_MENU__(true/false)`.
+>   `window.__VRMPET3D_DESKTOP_MENU__(true/false)`.
 >
 > ## Two DECISIONS this session had to make (both are in the code with their reasons)
 >
@@ -860,9 +934,9 @@ nothing needs to be remembered or explained verbally.
 > 1. **`build/probe/client-test.js` was RED (4 of 82 after the one-line fix; 8 before it).** The trivial first
 >    failure was the swallowed `var host2 = document.createElement('div')` in the stale-delivery check — and
 >    because `host2` was undefined, that check's `finally` threw on `host2.remove()` BEFORE it restored
->    `globalThis.__PET3D_MENU__`, which is why two later checks failed with a missing module. **A `finally` that
+>    `globalThis.__VRMPET3D_MENU__`, which is why two later checks failed with a missing module. **A `finally` that
 >    can throw is how one bug becomes three.** The other real failures were all the probe disagreeing with the
->    product: a `hasReset` assertion for a `.pet3d-size-reset` button that went with the panel (now: the pet's
+>    product: a `hasReset` assertion for a `.vrmpet3d-size-reset` button that went with the panel (now: the pet's
 >    chrome carries no size control at all), `debugRow.title` read off `menu.items()` records that do not carry a
 >    title (now: read off the NODE — `disabled` and the tooltip are what the browser acts on), and a `/inside/i`
 >    regex on the window's switch label (now: asserted against `menu.js`'s own table, because a regex on English
@@ -926,7 +1000,7 @@ nothing needs to be remembered or explained verbally.
 >   no panel markup, no panel CSS, no per-state motion checkbox rows, no model picker row, no size stepper, no
 >   draggable title bar, no close button. Their panel-owned preferences are still READ (they are settings now),
 >   they simply have no control on the pet.
-> * **`lib/menu.js` (NEW) is the ONE right-click menu, for both pets** — published as `globalThis.__PET3D_MENU__`,
+> * **`lib/menu.js` (NEW) is the ONE right-click menu, for both pets** — published as `globalThis.__VRMPET3D_MENU__`,
 >   delivered to the app as the generated chunk `lib/client.menu.js` (chunk table updated; `menu.js` replaced
 >   `panel.js` in the host's `WINDOW_SOURCES`, and `lib/desktop-page.html` loads it).
 >   `MENU_ITEMS` is the operator's order, once: `resetView, resetSize, globalSettings, modelSettings, surface,
@@ -952,27 +1026,27 @@ nothing needs to be remembered or explained verbally.
 >   `petSurface` was ADDED to that page's `LOCAL_KEYS` and `panelOpen` removed. The window still GROWS to hold
 >   the menu: `menuBox`/`menuOpen`/`placeMenu()` replaced `panelBox`/`panelOpen`/`layoutPanel()`, `hitTest` uses
 >   `isOverMenu`, and the page's published `reportRect` field is now **`menu:`** (was `panel:`), with
->   `hit.overMenu` (was `overPanel`) and `menu: { open, rect, module }` in `__PET3D_DESKTOP_STATE__`.
->   `globalThis.__PET3D_DESKTOP_MENU__(true|x,y|false)` replaced `__PET3D_DESKTOP_PANEL__`, and the mount's
+>   `hit.overMenu` (was `overPanel`) and `menu: { open, rect, module }` in `__VRMPET3D_DESKTOP_STATE__`.
+>   `globalThis.__VRMPET3D_DESKTOP_MENU__(true|x,y|false)` replaced `__VRMPET3D_DESKTOP_PANEL__`, and the mount's
 >   returned API is `openMenuAt/closeMenu/isMenuOpen/menu()/menuApi()/menuRect()`.
-> * **`harness.js` (NEW) + `ROUTES.harness = '/pet3d/harness'`** implement 重启/退出 DeepSeek Harness.
+> * **`harness.js` (NEW) + `ROUTES.harness = '/vrmpet3d/harness'`** implement 重启/退出 DeepSeek Harness.
 >   `POST {action:'quit'|'restart'}`; the handler answers FIRST (`{ok, action, graceful, helperPid}`) and defers
 >   the action one tick, because the response is the last thing the page will ever hear. `quit` =
 >   `ctx.get('appExit')(0)` (the launcher's own bounded shutdown; `process.exitCode = 0` when a composition has
 >   no `appExit`). `restart` = a DETACHED `process.execPath` helper (`RESTART_HELPER_PROGRAM`) that waits for
 >   THIS pid to leave, then relaunches the app with `ELECTRON_RUN_AS_NODE` **deleted** from the env (`detached`,
->   `unref`, cwd = the executable's directory), followed by the same quit. Both surfaces `fetch('/pet3d/harness')`
+>   `unref`, cwd = the executable's directory), followed by the same quit. Both surfaces `fetch('/vrmpet3d/harness')`
 >   and report a refusal (app: the badge; window: the 碎碎念 bubble). The two failure strings live in
 >   `lib/menu.js`'s `LABELS` (they are about ITS entries) and both surfaces read them from there.
 > * **`desktop/main.js`** (the launcher) follows the rename: `panelRect` → `menuRect`, `rect.panel` → `rect.menu`,
 >   `extras = [menu, status, speech]`, `report.checks.menu` / `checks.menuHitTest` (was `checks.panel` /
->   `panelHitTest`), and its self-test drives `window.__PET3D_DESKTOP_MENU__(true/false)`.
+>   `panelHitTest`), and its self-test drives `window.__VRMPET3D_DESKTOP_MENU__(true/false)`.
 > * **`scripts/check-plugin-load.mjs` ran GREEN** after the rewrite: `plugin load preflight: PASSED`, with
 >   `98 ids` (config-page.html 23, global-page.html 75, 5 created) and **18 routes** — its panel-is-one-definition
 >   block became the menu-is-one-definition block, and it gained a block for the harness chain (route → handler →
 >   `appExit` → detached APP relaunch → both surfaces asking for it).
 > * **`scripts/verify-model.mjs` ran GREEN: `host + model: 514 checks passed`** (unchanged count; the route-table
->   assertion gained `exact /pet3d/harness`).
+>   assertion gained `exact /vrmpet3d/harness`).
 > * `scripts/client-chunks.mjs` regenerated: `client.core.js` (unchanged), `client.scene.js` (unchanged),
 >   **`lib/client.menu.js` (NEW, 15904 bytes)**; `--check` reports `client chunks up to date (3 of 3)`.
 > * `scripts/verify-browser.mjs` inlines/serves `lib/menu.js` and its `CHUNK_FILES` names `client.menu.js`.
@@ -994,11 +1068,11 @@ nothing needs to be remembered or explained verbally.
 >    `var host2 = document.createElement('div'); document.body.appendChild(host2);` — which must be re-inserted
 >    just before `var stale = null;` in that check (`lib/client.js` is fine; this is probe-only). Because
 >    `host2` is undefined, the `finally` block throws on `host2.remove()` **before** it restores
->    `globalThis.__PET3D_MENU__`, so every check after it runs with the menu module deleted — which is why
+>    `globalThis.__VRMPET3D_MENU__`, so every check after it runs with the menu module deleted — which is why
 >    `the right-click menu is the shared definition…` (`menuApi` undefined) and the window page's
 >    `pet.menu()` (`null`) also fail. **Fix that one line, re-run, then look at whatever is genuinely left.**
 >    The other known-shape failures to expect: the probe's own new checks may need the `stubFetch` route stubs
->    for `/pet3d/harness`, and check counts changed (87 → 82: the removed panel/motion-row checks outnumber the
+>    for `/vrmpet3d/harness`, and check counts changed (87 → 82: the removed panel/motion-row checks outnumber the
 >    added menu ones — **the docs' browser figure must be corrected to whatever the suite finally reports**).
 > 2. **`scripts/verify-desktop.mjs` has NOT been touched** and now disagrees with the launcher. It must:
 >    (a) serve `'menu.js'` instead of `'panel.js'` in its fake page server's source list (~line 950);
@@ -1054,7 +1128,7 @@ nothing needs to be remembered or explained verbally.
 >
 > **A snapshot now RE-APPLIES the surface, and that is a fix rather than a detail.** Every other preference is
 > a value the scene re-applies; this one decides which surfaces EXIST, so it has to reach the launcher
-> (`POST /pet3d/desktop`). `adoptSurface()` compares the incoming value with the one last applied and calls
+> (`POST /vrmpet3d/desktop`). `adoptSurface()` compares the incoming value with the one last applied and calls
 > `applySurface('quiet')` when it moved — without it, ticking 调试模式 in the settings window started the
 > window only after a page reload, which reads as a switch that does nothing. `petSurface` therefore joins
 > `PANEL_KEYS`: the panel's switch is the other writer, and a choice that never reached the store would be
@@ -1069,10 +1143,10 @@ nothing needs to be remembered or explained verbally.
 > **Switching it ON in the running app needed the settings FILE, and that is a host-restart fact worth
 > keeping.** `cleanPreferences` runs in the HOST for the settings store, so the copy loaded at activation
 > rewrites an unknown `both` back to `auto`. Measured live before the edit was picked up:
-> `POST /pet3d/settings {"preferences":{"petSurface":"both"}}` answered `version 9, petSurface auto` — the
+> `POST /vrmpet3d/settings {"preferences":{"petSurface":"both"}}` answered `version 9, petSurface auto` — the
 > value accepted by nothing and the version not even bumped, i.e. the switch would have ticked and unticked
 > itself with no error anywhere. The store file was therefore written directly
-> (`~/.dsh/profiles/desktop/pet3d-desktop/pet3d-settings.json`, backup `.bak-20261010-both`, only
+> (`~/.dsh/profiles/desktop/vrmpet3d-desktop/vrmpet3d-settings.json`, backup `.bak-20261010-both`, only
 > `petSurface` changed), which is what the NEXT host boot reads; the client half needs the usual page reload.
 > Revert with the backup, or just clear the box on the 通用设置 page once the host is new.
 >
@@ -1096,13 +1170,13 @@ nothing needs to be remembered or explained verbally.
 > the entry rule above in place, the cached chunk no longer decides anything once the entry is refetched.
 >
 > **And the diagnosis was settled from the page itself, not from a theory.** In the DevTools console,
-> `document.querySelector('.pet3d-pet')` was MOUNTED with an inline `visibility: hidden` — the surface rule, not
+> `document.querySelector('.vrmpet3d-pet')` was MOUNTED with an inline `visibility: hidden` — the surface rule, not
 > the 隐藏 preference (that one sets the `hidden` ATTRIBUTE, which inline visibility cannot undo) — and setting
 > `visibility = ''` brought the second pet back on the spot. So the pet, its scene and its state channel were
-> healthy the whole time; only the value the hide-rule read was wrong, i.e. the chunk. `fetch('/pet3d/settings')`
+> healthy the whole time; only the value the hide-rule read was wrong, i.e. the chunk. `fetch('/vrmpet3d/settings')`
 > from the same console agreed with this file: `petSurface: both` in the store while the page behaved as `auto`.
 >
-> **Also measured while chasing it:** `/pet3d/preview` answers `{"seq":0,"preview":null}` and the in-app widget
+> **Also measured while chasing it:** `/vrmpet3d/preview` answers `{"seq":0,"preview":null}` and the in-app widget
 > polls it every 400 ms (`watchHostPreview`), the settings store every 1500 ms (`watchHostSettings`). That is the
 > designed poll behind the settings window's 预览, not a reload loop — worth writing down, because a request log
 > full of `preview` lines reads like a runaway refresh when the real problem is a cached chunk.
@@ -1124,8 +1198,8 @@ nothing needs to be remembered or explained verbally.
 >
 > **The report:** "插件面板设置窗口完全变成了无格式文本的堆积，排查原因。"
 >
-> **The cause, measured rather than guessed.** `GET http://127.0.0.1:19387/pet3d/window/lib/pages.css` answered
-> `200` with `content-type: text/javascript; charset=utf-8` — the route that serves every `/pet3d/window/lib/`
+> **The cause, measured rather than guessed.** `GET http://127.0.0.1:19387/vrmpet3d/window/lib/pages.css` answered
+> `200` with `content-type: text/javascript; charset=utf-8` — the route that serves every `/vrmpet3d/window/lib/`
 > source hard-coded ONE type for the whole whitelist (`desktopSourceHandler` in `lib/index.js`), and the twenty-fifth
 > pass had added the shared stylesheet to that whitelist. A stylesheet response that is not CSS is refused by the
 > browser before a single rule is applied (Chrome: "Refused to apply style ... its MIME type ('text/javascript') is
@@ -1160,7 +1234,7 @@ nothing needs to be remembered or explained verbally.
 > the page is served fresh on every request (`no-store`), but the handler that answers it is the copy loaded at
 > activation. Verified after the edit with the live route still reporting `text/javascript`, i.e. the running DSH was
 > still answering with the old handler at that moment; the plugin directory is a junction to this tree
-> (`~/.dsh/profiles/desktop/node_modules/dsh-plugin-pet3d` → this checkout), so a restart picks the fix up with no
+> (`~/.dsh/profiles/desktop/node_modules/dsh-plugin-vrmpet3d` → this checkout), so a restart picks the fix up with no
 > install step.
 >
 > **Run per `AGENTS.md`:** `verify-model.mjs` reported `host + model: 514 checks passed` (and `504` before the new
@@ -1186,10 +1260,10 @@ nothing needs to be remembered or explained verbally.
 > `lib/pages.css` holds the `<style>` block both pages share, so the split did not duplicate 154 lines of CSS into two
 > files that can drift.
 >
-> **Route shapes.** `ROUTES.config` = `/pet3d/config` (unchanged) and the NEW `ROUTES.global` = `/pet3d/global`, both
+> **Route shapes.** `ROUTES.config` = `/vrmpet3d/config` (unchanged) and the NEW `ROUTES.global` = `/vrmpet3d/global`, both
 > served by one factory (`settingsPageHandler(file, label)`: `readFileSync` per request, `cache-control: no-store`,
-> `GET`/`HEAD` only) — deliberately NOT `/pet3d/settings`, which is the settings STORE. `pages.css` joined the
-> `/pet3d/window/lib` whitelist. The launcher's two actions keep their names (`settings` → the global page,
+> `GET`/`HEAD` only) — deliberately NOT `/vrmpet3d/settings`, which is the settings STORE. `pages.css` joined the
+> `/vrmpet3d/window/lib` whitelist. The launcher's two actions keep their names (`settings` → the global page,
 > `config` + `modelId` → the model page) and now open two PAGES; `probeOtherPanel` became `probeOtherPage` and swaps
 > the ROUTE (`url.pathname`) instead of a query parameter it could not rely on being present. `lib/client.js` and
 > `lib/desktop-page.js` build the sibling route for their tab fallback, and `panel.js`'s second row is relabelled
@@ -1201,7 +1275,7 @@ nothing needs to be remembered or explained verbally.
 > snapshot has been adopted, so a page that fails to boot cannot post its defaults over everything the user
 > configured. `chooseEditingModel` and the `?model=` URL adoption no longer write during boot for the same reason; the
 > URL's choice is pushed once, from `adoptSnapshot`, and only when the store has no model of its own. `onUnsupported`
-> opens the latch deliberately: a host with no `/pet3d/settings` has no store to overwrite and its own storage IS the
+> opens the latch deliberately: a host with no `/vrmpet3d/settings` has no store to overwrite and its own storage IS the
 > store.
 >
 > **The id audit is now over the UNION of the two pages** (`scripts/check-plugin-load.mjs`): "does this lookup resolve
@@ -1214,7 +1288,7 @@ nothing needs to be remembered or explained verbally.
 > operator asked to have removed) is gone with its write.
 >
 > **The desktop suite's two panel assertions became two PAGE assertions and the count did NOT move** (229): the
-> launcher opens `/pet3d/config` and navigates the same window to `/pet3d/global`, and what is asserted is the two
+> launcher opens `/vrmpet3d/config` and navigates the same window to `/vrmpet3d/global`, and what is asserted is the two
 > readings' own `page`, that neither page carries the other's sections, and that the 通用设置 keys came from the global
 > reading. Two existing assertions failed first and were right to: `sizes.controls` and `wind.rows` are published by
 > the 通用设置 page, so `probeOtherPage`'s merge now takes `sizes` and `wind` from the global reading too.
@@ -1222,12 +1296,12 @@ nothing needs to be remembered or explained verbally.
 > **Counts did NOT move:** desktop 229, host 504, project total **1832** — the three host-side page assertions replaced
 > three container assertions one-for-one, and the two new desktop assertions replaced two. The route-count assertions
 > in `check-plugin-load.mjs` moved 16 → 17 (the new route register, no new assertion) and `verify-model.mjs`'s route
-> table gained `exact /pet3d/global`. Since the counts are unchanged, the README/ARCHITECTURE/HANDOFF totals needed no
+> table gained `exact /vrmpet3d/global`. Since the counts are unchanged, the README/ARCHITECTURE/HANDOFF totals needed no
 > edit; the README's `verify-desktop.mjs` row and ARCHITECTURE's settings-window paragraph were still reworded,
 > because both described the deleted `?panel=` mechanism.
 >
 > **The live profile was checked, not just assumed.** The desktop suite drives the launcher against its OWN stub HTTP
-> server, which answers `/pet3d/settings` itself — so the 部位 probe's add/rename/delete writes a response body in
+> server, which answers `/vrmpet3d/settings` itself — so the 部位 probe's add/rename/delete writes a response body in
 > `scripts/verify-desktop.mjs`, not the operator's store, and the window it opens has been given its own Chromium
 > profile (`app.setPath('userData', …-selftest)`) since 2026-10-08. Neither of those was changed here; what is now
 > written down is why the suite is safe to run against a live DSH. The launcher's own `--self-test` flag does open
@@ -1247,7 +1321,7 @@ nothing needs to be remembered or explained verbally.
 >
 > **What was asked:** "模型参数加载太慢了，让它的信息和当前模型一样常驻内存。"
 >
-> **What was actually slow.** `/pet3d/model-info` did cache — a handler-local `Map` keyed by `path:size:mtime`
+> **What was actually slow.** `/vrmpet3d/model-info` did cache — a handler-local `Map` keyed by `path:size:mtime`
 > holding the COMPACT projection — but it cached the wrong thing and put it where nothing could invalidate it.
 > The expensive part is `describeModel`'s read+parse of the 10–100 MB file, and that ran whenever the key was
 > absent: after every size/mtime change (correct, but it means every edit of the model re-parses twice — once
@@ -1261,11 +1335,11 @@ nothing needs to be remembered or explained verbally.
 > size+`mtimeMs` freshness check the route used to key on — so an edited file is still re-parsed. `describeModel`
 > is now a thin wrapper over it, so every existing caller (`scripts/vrm-report.mjs`, `scripts/verify-desktop.mjs`)
 > keeps working unchanged. Invalidation is EXPLICIT as well as incidental: `forgetModelInfo(path)` and
-> `clearModelInfoCache()` are exported, and `/pet3d/models` POST calls `clearModelInfoCache()` when a request
+> `clearModelInfoCache()` are exported, and `/vrmpet3d/models` POST calls `clearModelInfoCache()` when a request
 > actually CHANGED the directory list — the one place this process learns a model file appeared or went away.
 > An idempotent add does not clear it.
 >
-> **The route lost its own cache, deliberately.** `/pet3d/model-info` now calls `compactModelInfo(describeModelCached(
+> **The route lost its own cache, deliberately.** `/vrmpet3d/model-info` now calls `compactModelInfo(describeModelCached(
 > absolute, stats))` and nothing else. Two caches keyed on the same pair meant the outer one answered and the
 > inner one never even saw the request — and it was the outer one that `forgetModelInfo` could not reach. The suite
 > caught this on its first run: with the route-level map still present, "the first request parses the file" FAILED,
@@ -1298,7 +1372,7 @@ nothing needs to be remembered or explained verbally.
 >
 > **The report:** "我刚刚让你改布局，为什么改完之后原先所有的参数都丢了？"
 >
-> **First, the file.** `C:\Users\drliu\.dsh\profiles\desktop\pet3d-desktop\pet3d-settings.json` had a LastWriteTime of
+> **First, the file.** `C:\Users\drliu\.dsh\profiles\desktop\vrmpet3d-desktop\vrmpet3d-settings.json` had a LastWriteTime of
 > **2026/10/10 14:20** — untouched all day — and its contents were intact: `modelId: m1`, `parts: 5` with the operator's
 > OWN labels (眼睛/头/手, 手臂/身体/尾巴), and `speech`, `status`, `expressions` all present. The store had never been
 > written by any of that day's passes.
@@ -1375,7 +1449,7 @@ nothing needs to be remembered or explained verbally.
 > running instance, and that one request named the cause outright:
 >
 > ```
-> GET /pet3d/state -> {"seq":47,"state":"working","at":14863 ms old,"stale":false,"clock":null}
+> GET /vrmpet3d/state -> {"seq":47,"state":"working","at":14863 ms old,"stale":false,"clock":null}
 > ```
 >
 > **Symptom 2 (no 用时) — my eighteenth pass.** The clock was made to come from the TURN frames the host relays, and
@@ -1396,7 +1470,7 @@ nothing needs to be remembered or explained verbally.
 > is also why symptom 4 (no completion notice) had nothing left to appear in. **Raised to 5 minutes**, which still bounds
 > "for ever" — the whole point of the rule — without ever flushing a pet that is merely in the background.
 >
-> **What the window can now be asked.** `/pet3d/desktop`'s `state.clock` reports which of the three clocks the label is
+> **What the window can now be asked.** `/vrmpet3d/desktop`'s `state.clock` reports which of the three clocks the label is
 > drawn from (`{ startedAt, endedAt }`, the sentinel `'state'`, or null), because two of them have now been shipped
 > wrong once and the readouts were otherwise identical.
 >
@@ -1505,7 +1579,7 @@ nothing needs to be remembered or explained verbally.
 >   settled notice → `end - start` (DSH's 「用时 X」); **null → the token's CLAUSE is dropped** (from the nearest preceding
 >   separator to the token, so the shipped line reads `深度求索中 ···`, DSH's token-free variant); and an OMITTED clock
 >   keeps the old state-age behaviour for callers that know nothing about turns. The two surfaces pass it: the app from
->   its machine, the window from the relay (`POST /pet3d/state`'s `clock`, sanitised by the host, which also drops it
+>   its machine, the window from the relay (`POST /vrmpet3d/state`'s `clock`, sanitised by the host, which also drops it
 >   once the report is stale).
 > * **A task is not a turn:** a `turn/end` — or the store's falling edge — now lands in `pendingNotice` and is promoted
 >   only after `COMPLETION_SETTLE_MS` (4 s) with nothing starting again, and is CANCELLED outright by a `turn/start` in
@@ -1533,7 +1607,7 @@ nothing needs to be remembered or explained verbally.
 > **The report:** "有时候开始工作的碎碎念不消失，完成任务后还在显示深度求索中."
 >
 > **What was actually wrong, and it was not the 碎碎念 box.** "深度求索中" is the STATUS prompt (`DEFAULT_STATUS_TEXT.working`),
-> and `GET /pet3d/state` in the operator's live app returned `seq=96, state=working, at 87 s old`. That 87 s was
+> and `GET /vrmpet3d/state` in the operator's live app returned `seq=96, state=working, at 87 s old`. That 87 s was
 > legitimate — but it exposed the real defect: **nothing in the pipeline could tell "still working" from "the page
 > stopped reporting".** The chain, in three files: the app POSTs only on CHANGE (its dedupe, `createStateReporter`), the
 > host then served that report FOR EVER with an unchanged `seq` (`stateHandler`), and the floating window reacts only to
@@ -1654,7 +1728,7 @@ nothing needs to be remembered or explained verbally.
 > chain is reduced to ONE string in the intent (`requestAi(..., structure, chain)`), so both surfaces send a plain
 > name and cannot disagree about the shape.
 >
-> **Priority, on the wire.** `/pet3d/say` takes `chain` (capped and flattened like every other string from a page)
+> **Priority, on the wire.** `/vrmpet3d/say` takes `chain` (capped and flattened like every other string from a page)
 > and `speechPromptFor` builds, when the part has no prompt of its own:
 > `用户摸了一下它的 <chain> 这条弹簧骨链（结构：<structure>）（部位：<label>）。就这一下，说一句自言自语。`
 > — the chain first, the structure as detail. The host suite asserts the ORDER of the two names in the instruction,
@@ -1672,7 +1746,7 @@ nothing needs to be remembered or explained verbally.
 > `['hair','tail']` through the production install path. The probe's widget is constructed without a model load of
 > its own, so this looks like a harness artifact rather than a product fact — but it has NOT been proven either way,
 > and it matters: if the app's own scene had no chains, this feature could never fire live. **Check it after the
-> restart** with `GET /pet3d/desktop` → the window publishes `springs.chains` and `springs.joints`, so one request
+> restart** with `GET /vrmpet3d/desktop` → the window publishes `springs.chains` and `springs.joints`, so one request
 > answers it.
 >
 > **Counts moved:** 1687 → 1709 (core 873→884, host 457→467, client 85→86, desktop 205 unchanged). **Run per
@@ -1718,7 +1792,7 @@ nothing needs to be remembered or explained verbally.
 > `lib/config-page.js`, so an unparseable launcher fails in a second with the parser's own message instead of
 > spawning two Electron windows first; and `check-plugin-load.mjs`'s existing read of the launcher is unaffected.
 > **The rule, again:** in this tree a backtick is only safe inside a file that is not itself embedded in a template
-> literal — the same trap as `THREE`/`core` being non-module-scope names in `lib/pet3d.js`, and it has now cost two
+> literal — the same trap as `THREE`/`core` being non-module-scope names in `lib/scene.js`, and it has now cost two
 > incidents.
 >
 > **Counts moved:** 1661 → 1687 (core 863→873, host 450→457, client 85 unchanged, desktop 196→205 — of which 3 are
@@ -1730,7 +1804,7 @@ nothing needs to be remembered or explained verbally.
 >
 > **Still owed:** DSH restart + page reload (the host half is unchanged in shape but the client chunk is), then on
 > screen: 设置 → 部位 → 浏览… should open a scrollable, filterable list; and with AI 碎碎念 on, clicking the pet's
-> `bust` (or any structure no part owns) should send that name — `/pet3d/say`'s response echoes `structure`, and the
+> `bust` (or any structure no part owns) should send that name — `/vrmpet3d/say`'s response echoes `structure`, and the
 > host logs the line it asked for.
 
 > ## ✅ 2026-10-11 (thirteenth pass) — the parts became the USER'S, and a warning about how this file was nearly lost
@@ -1757,12 +1831,12 @@ nothing needs to be remembered or explained verbally.
 > says nothing at all (the pet is being carried, not patted).
 >
 > **Three surfaces, one chain.** The app's widget owns a `SpeechMachine`; the floating window has none, so it
-> picks from the same `core.pickLine`/`core.customSpeechLines` itself and, in AI mode, POSTs `/pet3d/say` with the
+> picks from the same `core.pickLine`/`core.customSpeechLines` itself and, in AI mode, POSTs `/vrmpet3d/say` with the
 > part id — the window's pet can be clicked while the app's pet is elsewhere on the desktop, so its throttle and
 > its local line are its own. The host resolves a request's instruction through `speechPromptFor`: the part's own
 > prompt, else the state's, and a stale id falls back to the state rather than failing a page that was left open.
-> `/pet3d/model-info` grew the STRUCTURE list (every node, mesh and material name, kinded and capped) because a
-> picker has to offer what the model actually has; `/pet3d/state`'s `touch` now carries `part` and `label` too.
+> `/vrmpet3d/model-info` grew the STRUCTURE list (every node, mesh and material name, kinded and capped) because a
+> picker has to offer what the model actually has; `/vrmpet3d/state`'s `touch` now carries `part` and `label` too.
 >
 > **⚠️ INCIDENT — README.md was damaged by the agent, and this is how.** Updating the doc COUNTS, the agent wrote
 > the file with `Get-Content -Raw` + `Set-Content -Encoding utf8` instead of the UTF-8-safe edit tool. Windows
@@ -1797,18 +1871,18 @@ nothing needs to be remembered or explained verbally.
 > too (options > 10, with anatomical names among the samples) so "filled from the model" is asserted on the element
 > a user types into rather than on a count. Two traps worth naming: **a stray BACKTICK inside an injected
 > `executeJavaScript` comment** ended the template literal in `desktop/main.js` early, so the page received
-> `pet3d/model-info` as a bare expression and the probe reported "pet3d is not defined" — `node --check` cannot see
-> that, exactly like the `THREE`/`core` module-scope traps in `lib/pet3d.js`; and the probe must count parts from
+> `vrmpet3d/model-info` as a bare expression and the probe reported "vrmpet3d is not defined" — `node --check` cannot see
+> that, exactly like the `THREE`/`core` module-scope traps in `lib/scene.js`; and the probe must count parts from
 > the DOM, because the page's published state is republished on a poll and answers with the PREVIOUS moment.
 >
 > **And the live app is still the OLD code — measured, not assumed.** With DSH untouched since before this pass,
-> `GET /pet3d/model-info?m=m4` answers without a `structures` key and `GET /pet3d/settings` answers with a
+> `GET /vrmpet3d/model-info?m=m4` answers without a `structures` key and `GET /vrmpet3d/settings` answers with a
 > `preferences` object that has no `parts`. So nothing about this feature is live yet: the operator's restart is
 > what turns it on, and the checks in the block above are the ones to repeat afterwards.
 >
 > **Live pass still owed:** the parts editor and the press speech have only run in suites. On screen, the first
 > things to look at are: 设置 → 部位 shows five rows and a filled structure picker; adding `LiuHai` to a part makes
-> a press on the bangs report that part (`/pet3d/state`'s `touch.part`/`label` name it); and in AI mode a press
+> a press on the bangs report that part (`/vrmpet3d/state`'s `touch.part`/`label` name it); and in AI mode a press
 > sends that part's prompt (the host logs the request).
 
 > ## ✅ 2026-10-11 (twelfth pass) — 点击 vs 拖动 gets two bounds, and a press now knows WHICH PART it hit
@@ -1850,11 +1924,11 @@ nothing needs to be remembered or explained verbally.
 > the two cannot drift.
 >
 > **4. The press is diagnosable from outside.** `scene.lastInteraction` (reason, region, bone, mesh) travels: the
-> app publishes it in the state it already posts (`/pet3d/state` grew `touch`, sanitised and capped), the window
-> publishes it in its own readout and the launcher relays it (`/pet3d/desktop`'s `page.touch`). "I clicked its eye
+> app publishes it in the state it already posts (`/vrmpet3d/state` grew `touch`, sanitised and capped), the window
+> publishes it in its own readout and the launcher relays it (`/vrmpet3d/desktop`'s `page.touch`). "I clicked its eye
 > and nothing happened" now has an answer: the press landed elsewhere, or that region's row names no emotion.
 >
-> **Two traps this pass hit, both worth remembering.** `THREE` is NOT a module-scope name in `lib/pet3d.js` — it
+> **Two traps this pass hit, both worth remembering.** `THREE` is NOT a module-scope name in `lib/scene.js` — it
 > arrives per Scene as `this.THREE` — so a `new THREE.Vector3()` at module scope threw while the script was loading
 > and the client probe reported "core, scene and client are all loaded -> false"; `node --check` cannot see that.
 > And the window's threshold was first measured in `clientX`, which is wrong for a window that MOVES with the pet —
@@ -1867,13 +1941,13 @@ nothing needs to be remembered or explained verbally.
 >
 > **Unproven on screen:** the raycast has only ever run against the committed fixture (an unnamed, unskinned mesh
 > that maps to `body`, plus the renamed-mesh case that proves the mapping). On a real VRM it should name
-> `head`/`leftEye`/`leftHand`; that is the first thing to look at, and `/pet3d/state`'s `touch.bone` is where the
+> `head`/`leftEye`/`leftHand`; that is the first thing to look at, and `/vrmpet3d/state`'s `touch.bone` is where the
 > answer appears.
 
 > ## ✅ 2026-10-11 (eleventh pass) — 试一句 said "the model produced nothing", and the truth was in a field I read wrong
 >
 > **The report:** DSH Provider selected, DeepSeek Account → `deepseek-flash`, persona written, 试一句 → 生成 →
-> 「失败：模型没有给出可用的一句话」. Reproduced live over the route: `GET /pet3d/say?event=working` answered in
+> 「失败：模型没有给出可用的一句话」. Reproduced live over the route: `GET /vrmpet3d/say?event=working` answered in
 > **1130 ms** with `text: null` and that message.
 >
 > **Two defects, and the second is the one worth remembering.**
@@ -1952,7 +2026,7 @@ nothing needs to be remembered or explained verbally.
 > The machine shows the fallback IMMEDIATELY and lets the answer replace it, so a bubble appears on the state
 > change and simply gets better a moment later.
 >
-> **Where the model call happens, and why it is the host.** `POST /pet3d/say` builds the request and makes it: the
+> **Where the model call happens, and why it is the host.** `POST /vrmpet3d/say` builds the request and makes it: the
 > custom provider's key and DSH's own routes are host-side facts, and a page holding the key would put the
 > credential in the DOM of every surface. The request is the **persona (system), the fixed rules, and the state's
 > own instruction (user turn)** — nothing else. That is the privacy rule the built-in lines already followed,
@@ -1965,37 +2039,37 @@ nothing needs to be remembered or explained verbally.
 > first claim about the terminal chunk was WRONG** — it said the finish was honoured by reading `chunk.kind`, and the
 > real protocol puts the kind inside `reason` (`{ type: 'finish', reason: { kind, failure } }`); see the ELEVENTH
 > block, which found it against the live route and fixed it. The service
-> is looked up LAZILY, so a composition with no LLM adapter is legal and reports itself honestly in `/pet3d/llm`.
+> is looked up LAZILY, so a composition with no LLM adapter is legal and reports itself honestly in `/vrmpet3d/llm`.
 > **The custom provider** is any OpenAI-compatible `POST {baseUrl}/chat/completions` with a bearer key.
 >
 > **The settings page** grew a 台词来源 picker, six collapsible boxes (each holding that state's lines AND its
 > generation prompt), the AI half's provider/URL/model/key/persona/temperature/timeout controls, and a **试一句**
 > button that answers even while the source is `builtin` — it is how a user finds out whether their key, URL,
 > provider or prompt works. The credential travels in the settings snapshot because the operator chose that
-> ("跟其他设置一起存在 pet3d-settings.json"); the suite asserts the FIELD is never published in the page's own
+> ("跟其他设置一起存在 vrmpet3d-settings.json"); the suite asserts the FIELD is never published in the page's own
 > readout and never appears in the state channel. **No time-based rate limit:** 每句显示 can legitimately be one
 > second, so a floor would refuse the second line of a fast user — what is refused is a second call while one is
 > still running.
 >
 > **Counts moved:** 1410 → 1525 (core 732→786, host 363→415, client 79→80, desktop 169→177). The client probe
-> covers the whole AI path in a real DOM (four frames of one event produce exactly ONE `POST /pet3d/say`, the
+> covers the whole AI path in a real DOM (four frames of one event produce exactly ONE `POST /vrmpet3d/say`, the
 > fallback stays up, the answer is what the bubble then says) and the desktop suite covers the settings section.
 >
-> **Unproven on screen:** all of it. The host routes need a **DSH restart** (`/pet3d/say`, `/pet3d/llm`), the
+> **Unproven on screen:** all of it. The host routes need a **DSH restart** (`/vrmpet3d/say`, `/vrmpet3d/llm`), the
 > client half a page reload, and the settings page is served fresh on every open — so the first thing to do is
 > restart, then open 模型参数 → 碎碎念 and press 试一句.
 
 > ## ✅ 2026-10-11 (eighth pass) — the motion readout stops hiding WHICH failure it is
 >
-> **Found by measuring the running app rather than reading it:** `GET /pet3d/motions` listed six clips while
-> `GET /pet3d/desktop` answered `motion: {mapped: {}, available: [], …}` — and nothing in that answer could say
+> **Found by measuring the running app rather than reading it:** `GET /vrmpet3d/motions` listed six clips while
+> `GET /vrmpet3d/desktop` answered `motion: {mapped: {}, available: [], …}` — and nothing in that answer could say
 > whether the host had served the route at all or whether no clip was mapped to any state. It was the second:
-> `pet3d-settings.json` carries `"motions": {}`. The pet therefore had no authored motion to play and no
+> `vrmpet3d-settings.json` carries `"motions": {}`. The pet therefore had no authored motion to play and no
 > readout that said why.
 >
 > **The cause is a copy list, exactly like `status.scale` before it.** `lib/desktop-page.js` publishes four
 > answers to "why is my clip not playing" — `offered` (how many clips the page's own catalog holds), `routed`
-> (whether `/pet3d/motions` answered at all), `available` (which of the mapped clips can drive THIS avatar) and
+> (whether `/vrmpet3d/motions` answered at all), `available` (which of the mapped clips can drive THIS avatar) and
 > `reason` (what went wrong loading one) — and the launcher's `announce()` rebuilt that object naming only the
 > last two. Both are relayed now, and an older page that does not publish them reports `null` rather than a
 > lie, which is the rule `scale` already followed.
@@ -2005,7 +2079,7 @@ nothing needs to be remembered or explained verbally.
 > that the page still publishes both, so the copy list cannot outlive its source.
 >
 > **Unproven on screen:** the fields themselves — launcher code, so a DSH restart, after which
-> `GET /pet3d/desktop` should read `offered: 6` and `routed: true` beside the empty `mapped`/`available`.
+> `GET /vrmpet3d/desktop` should read `offered: 6` and `routed: true` beside the empty `mapped`/`available`.
 > **A note on this file's dates:** they run a day ahead of the machine clock that writes them (this block was
 > written at 2026-10-10 08:5x local), so line up sessions by the newest source mtime, not by the heading.
 
@@ -2030,8 +2104,8 @@ nothing needs to be remembered or explained verbally.
 > ## ✅ 2026-10-11 (seventh pass) — 动作导入: the motion route gets the UI it never had
 >
 > The operator asked "模型和动作的导入接口和界面做好了吗?" and the honest answer was: **the model pair was finished,
-> the motion INTERFACE was finished with no UI at all** — `/pet3d/motions` already accepted `{add}`/`{remove}`,
-> refused non-directories and persisted to `pet3d-motion-dirs.json`, but the only ways to reach it were the
+> the motion INTERFACE was finished with no UI at all** — `/vrmpet3d/motions` already accepted `{add}`/`{remove}`,
+> refused non-directories and persisted to `vrmpet3d-motion-dirs.json`, but the only ways to reach it were the
 > profile's `motionDirs` config or a hand-made POST, while the 状态 section's own note told the user to "import
 > that directory from the host" with nothing to click. This pass closes that gap.
 >
@@ -2039,12 +2113,12 @@ nothing needs to be remembered or explained verbally.
 >
 > * The settings window's **动作导入** card: 选择文件夹… (native dialog), 手动输入路径 fallback, the imported list with
 >   **移除** per row, and the host's refusal text shown verbatim.
-> * `desktop/preload.js` gained **`pickMotionDir`**, and `pet3d:pick-dir` now takes a `{kind}` so the launcher can
+> * `desktop/preload.js` gained **`pickMotionDir`**, and `vrmpet3d:pick-dir` now takes a `{kind}` so the launcher can
 >   title the dialog 导入动作目录 / 导入模型目录 instead of calling every folder a model directory. One handler, two
 >   entry points — launcher code, so a **DSH restart**.
 > * The one thing genuinely different from models: a write's reply carries the rebuilt catalog, so a new clip
 >   reaches the per-state CHECKBOXES (`renderMotions()`) rather than a dropdown — and if an older host replies
->   without `motions`, the page re-reads `/pet3d/motions`. A motion import is therefore visible in the 状态 rows
+>   without `motions`, the page re-reads `/vrmpet3d/motions`. A motion import is therefore visible in the 状态 rows
 >   with no reload.
 > * The misleading note inside 状态 is fixed: it now points at the section that can actually do the import.
 > * `motionImport` is published beside `import` (`controls`, `picker`, `dirs`, `clips`, `catalogFile`, `error`), so
@@ -2089,7 +2163,7 @@ nothing needs to be remembered or explained verbally.
 >   case the new rule exists for, and erasing A's completion there would defeat it.
 > * The tone: `core.STATUS_TONES` (done → `gold` + bold, error → `danger`) is reported by `statusFor`, both
 >   surfaces write `data-tone`/`data-bold` and style them in their own palette, and the launcher relays
->   `status.tone`/`bold` so `/pet3d/desktop` can answer "is it gold?".
+>   `status.tone`/`bold` so `/vrmpet3d/desktop` can answer "is it gold?".
 > * The settings page DISABLES 等待确认's 持续时间 field (a number that can never take effect is worse than no
 >   field) and says what the other two now mean; `statusTiming` publishes all of it for the live suite.
 >
@@ -2110,9 +2184,9 @@ nothing needs to be remembered or explained verbally.
 >
 > **What was actually true, from two HTTP requests (no guessing):**
 >
-> * `GET /pet3d/state` → `{"seq":53,"state":null,"at":<16 min ago>,"error":"TypeError: this.core.SpeechMachine is
->   not a constructor at new Pet3DWidget (…client.js&rev=c7a693d3c03f:704:19) …"}` — the IN-APP pet was DEAD.
-> * `GET /pet3d/desktop` → `page.status.text = "深度求索中，用时 23分1秒 ···"` — the window was faithfully drawing
+> * `GET /vrmpet3d/state` → `{"seq":53,"state":null,"at":<16 min ago>,"error":"TypeError: this.core.SpeechMachine is
+>   not a constructor at new VrmPet3DWidget (…client.js&rev=c7a693d3c03f:704:19) …"}` — the IN-APP pet was DEAD.
+> * `GET /vrmpet3d/desktop` → `page.status.text = "深度求索中，用时 23分1秒 ···"` — the window was faithfully drawing
 >   the last state it had ever been told, and counting the clock up.
 >
 > **Root cause, and it is this session's own regression:** the app loaded the NEW `lib/client.js` (which builds
@@ -2127,7 +2201,7 @@ nothing needs to be remembered or explained verbally.
 > 1. **An optional symbol must never kill the pet.** `SpeechMachine` is now built only when the core has it
 >    (`this.speechMissing` records the absence), and the shared panel module is checked rather than required —
 >    `panelAvailable` plus guards on every panel-dependent path (`applyStrings`, `bindPanel`, `syncControls`,
->    `togglePanel`, `setPanelOpen`, `buildMotionRows`, `populateModels`). The `throw new Error('pet3d:
+>    `togglePanel`, `setPanelOpen`, `buildMotionRows`, `populateModels`). The `throw new Error('vrmpet3d:
 >    lib/panel.js is not loaded.')` is GONE. A stale chunk now costs the voice or the panel, never the pet.
 >    *Probe:* "a stale delivery costs the voice and the panel, never the pet" deletes both globals, builds a
 >    widget, ticks a frame, and requires it to mount.
@@ -2138,7 +2212,7 @@ nothing needs to be remembered or explained verbally.
 >    cleared, bubble cleared, `state: null` published. *Probe:* the desktop-page check now asserts a null state
 >    clears the prompt AND that a live prompt came back before it (`status.noState` in the report).
 > 3. **The launcher now relays the page's own view of the state** (`state: {drawn, published, at, error}` in
->    the announce payload, so `/pet3d/desktop` carries `page.state.*`). This is a LAUNCHER change — a DSH
+>    the announce payload, so `/vrmpet3d/desktop` carries `page.state.*`). This is a LAUNCHER change — a DSH
 >    restart — and it is what makes this exact question answerable from one request next time: the host's
 >    state and the page's state are different facts, and the fixed field list had hidden the second one.
 >
@@ -2147,29 +2221,29 @@ nothing needs to be remembered or explained verbally.
 > **Read this twice (new gotcha, §42):** `lib/client.js` and the chunks it loads (`client.core.js`,
 > `client.panel.js`) are delivered SEPARATELY under the same revision. Editing one and reloading before the
 > other is in step produces exactly this failure — and the pet disappears with a TypeError that only shows up in
-> `/pet3d/state`. Always: edit → `node scripts/client-chunks.mjs` → THEN reload; and hard-reload (Ctrl+Shift+R)
+> `/vrmpet3d/state`. Always: edit → `node scripts/client-chunks.mjs` → THEN reload; and hard-reload (Ctrl+Shift+R)
 > when a chunk changed, because the URL's revision does not change with the file.
 >
 > **Still unproven:** the fix on screen. The operator's running app is the pre-fix build; a reload (or restart)
-> is required, and after that `/pet3d/state` should read `error: null` with a state that follows the turn.
+> is required, and after that `/vrmpet3d/state` should read `error: null` with a state that follows the turn.
 
 > ## ✅ 2026-10-11 (fourth pass) — 模型导入: the UI the backend was waiting for
 >
 > The last of the operator's four feature items. The BACKEND has been finished and tested since §21 (a
-> plugin-owned `pet3d-model-dirs.json`, `/pet3d/models`' `{add}`/`{remove}` with refused paths, a catalog rebuilt
+> plugin-owned `vrmpet3d-model-dirs.json`, `/vrmpet3d/models`' `{add}`/`{remove}` with refused paths, a catalog rebuilt
 > on every request); what was missing was any way for a user to reach it. The settings window's new **模型导入**
 > section is that way:
 >
 > * **选择文件夹…** opens a NATIVE folder dialog. A web page cannot, so the LAUNCHER exposes it:
->   `desktop/preload.js` gained `pickModelDir` (`pet3d:pick-dir`), `desktop/main.js` handles it with
+>   `desktop/preload.js` gained `pickModelDir` (`vrmpet3d:pick-dir`), `desktop/main.js` handles it with
 >   `dialog.showOpenDialog`, and **the settings window now gets the preload too** — it previously had none, which
 >   is why this needed a launcher change (a **DSH restart** for it to be live).
 > * **手动输入路径** is the fallback when there is no bridge (the page opened as a browser tab, or an older
 >   launcher): it reveals a path field rather than failing silently.
 > * The section lists what is already imported, each row with a **移除**, and shows the host's own refusal text
 >   (`no such directory: …`, `not a directory: …`) verbatim — the honest failure the route already produced.
-> * **The page never writes the list.** The chosen path goes back to the host over `/pet3d/models`, so the host
->   stays the single writer and `PET3D_MODEL_DIRS_FILE` (gotcha 37) keeps every suite off the operator's file.
+> * **The page never writes the list.** The chosen path goes back to the host over `/vrmpet3d/models`, so the host
+>   stays the single writer and `VRMPET3D_MODEL_DIRS_FILE` (gotcha 37) keeps every suite off the operator's file.
 >   `check-plugin-load.mjs` asserts exactly that, plus the preload/handler pair.
 > * An import is live immediately (the catalog is rebuilt per request, and the page re-reads it), and the page
 >   publishes `import: { controls, picker, dirs, modelCount, catalogFile, error }`, so the live suite can tell
@@ -2198,8 +2272,8 @@ nothing needs to be remembered or explained verbally.
 >   code, paths, file names, model output or error text. The client probe drives the app's own bubble with a
 >   session id in hand and asserts the id never appears, and core asserts no shipped line can carry a path.
 > * **The app decides, the window draws.** The in-app pet (`lib/client.js`) runs the machine, draws
->   `.pet3d-speech` above the status prompt (offset by the prompt's measured height), and publishes the line
->   WITH the state; `lib/index.js`'s `/pet3d/state` flattens it to one line, caps it at 80 chars, clears it on
+>   `.vrmpet3d-speech` above the status prompt (offset by the prompt's measured height), and publishes the line
+>   WITH the state; `lib/index.js`'s `/vrmpet3d/state` flattens it to one line, caps it at 80 chars, clears it on
 >   a report that names none, and serves it back; `lib/desktop-page.js` draws its own bubble from the poll body
 >   and reports `speech` in `rect`, and `desktop/main.js` unions that rectangle into the window's bounds WITHOUT
 >   adding it to the hit test — the window grows to show the bubble, and the bubble stays click-through.
@@ -2264,7 +2338,7 @@ nothing needs to be remembered or explained verbally.
 >    The page's own state readout now publishes `sizes` (`app`, `window`, `controls`), which is what the live
 >    desktop suite asserts.
 > 2. **`status.scale` is relayed.** The page has published it since the wheel-on-the-text gesture; the
->    launcher's fixed field list for `/pet3d/desktop` did not name it, so the correction was invisible from
+>    launcher's fixed field list for `/vrmpet3d/desktop` did not name it, so the correction was invisible from
 >    outside. `desktop/main.js` copies it now, `scripts/verify-desktop.mjs` asserts the field list by name
 >    (a launcher change needs a **DSH restart** to be live), and the client probe asserts the page's side of it
 >    plus that it moves under a real correction.
@@ -2299,13 +2373,13 @@ nothing needs to be remembered or explained verbally.
 > DeepSeek Harness 无法使用
 > 应用无法启动或已意外停止。
 > web boot: 1 entry did not activate
-> dsh-plugin-pet3d: failed
+> dsh-plugin-vrmpet3d: failed
 > 诊断报告: …\crash-2026-10-09T09-00-21-946Z-web-boot.log
 > ```
 >
 > **The cause, measured:** `lib/client.js`'s `apply` read a **bare `core`** —
 > `var reporter = typeof core.createStateReporter === 'function' ? … : …`. `lib/client.js` is wrapped in
-> `'use strict'`, `core` is declared nowhere in it (`lib/core.js` publishes `globalThis.__PET3D_CORE__`, and
+> `'use strict'`, `core` is declared nowhere in it (`lib/core.js` publishes `globalThis.__VRMPET3D_CORE__`, and
 > every other reader in the file goes through that global or through `this.core`), and `typeof` does not make
 > a **property access** safe: `typeof core.x` evaluates `core` first. So `apply` threw
 > `ReferenceError: core is not defined` before it registered anything.
@@ -2328,7 +2402,7 @@ nothing needs to be remembered or explained verbally.
 > mount the widget". Ten suites, all green, on a build that could not start.
 >
 > **The fix** (`lib/client.js`): the reporter is now resolved on first use from
-> `globalThis.__PET3D_CORE__`, behind `stateReporter()`. Lazy is not tidiness — `lib/core.js` arrives as a
+> `globalThis.__VRMPET3D_CORE__`, behind `stateReporter()`. Lazy is not tidiness — `lib/core.js` arrives as a
 > chunk that only *begins* fetching when the factory runs, so an eager read would always take the fallback
 > and the floating window would silently stop following the pet. The fallback also gained `reportError`, which
 > it never had: a reporter without it turned "the pet could not start" into a `TypeError` inside the catch.
@@ -2343,7 +2417,7 @@ nothing needs to be remembered or explained verbally.
 > dialog's own recovery button (「禁用第三方插件、备份 profile patch 并重启」), which does what it says:
 > measured, `cordis.patch.yml` was backed up at 16:59:36, `package.json` was rewritten at 17:00:27 with
 > `dsh.profile.bundles` = `[@deepseek-ai/dsh-base, @deepseek-ai/dsh-web-app]` only, and the app then started
-> (no further `web-boot` crash logs after 17:00:21). `dsh-plugin-pet3d` is still a *dependency*, so it is
+> (no further `web-boot` crash logs after 17:00:21). `dsh-plugin-vrmpet3d` is still a *dependency*, so it is
 > installed and linked — it is simply no longer in the bundle list, which is the only place that puts its
 > `cordis.patch.yml` row into the composition. Repair and restart:
 >
@@ -2361,15 +2435,15 @@ nothing needs to be remembered or explained verbally.
 >
 > **What actually happened** (measured, not inferred): the running DSH app WRITES the profile back to disk —
 > `package.json` and the materialised `cordis.yml` — from the composition it holds in memory, and a **bundle
-> its in-memory tree does not know about is dropped on the way out**. `dsh-plugin-pet3d` had been disabled in
+> its in-memory tree does not know about is dropped on the way out**. `dsh-plugin-vrmpet3d` had been disabled in
 > the manager; `package.json` was rewritten at **16:13:50** with the plugin no longer in
-> `dsh.profile.bundles`; the next restart composed no `pet3d` row at all. `/pet3d/catalog` answered **404**,
-> `shell.overlay` had no `pet3d` occupant, and there was nothing on screen to look at. The source tree was
+> `dsh.profile.bundles`; the next restart composed no `vrmpet3d` row at all. `/vrmpet3d/catalog` answered **404**,
+> `shell.overlay` had no `vrmpet3d` occupant, and there was nothing on screen to look at. The source tree was
 > perfect the whole time — which is why **all ten suites stayed green**. Same class of trap as §5's
 > "whichever pet you want active must be the one the manager knows about"; README's Install section now
 > carries it too.
 >
-> **The repair** (applied, and confirmed: `/pet3d/catalog`, `/pet3d/settings` and `/pet3d/state` all answer
+> **The repair** (applied, and confirmed: `/vrmpet3d/catalog`, `/vrmpet3d/settings` and `/vrmpet3d/state` all answer
 > 200 again):
 >
 > ```bash
@@ -2385,13 +2459,13 @@ nothing needs to be remembered or explained verbally.
 >
 > It is the only check in the repository that looks OUTSIDE the source tree: the dependency, the
 > `dsh.profile.bundles` entry, the `node_modules` link target, and then the RUNNING app —
-> `/pet3d/catalog` (is the host half composed?) and `/pet3d/state` (is the client half alive?). Its exit code
+> `/vrmpet3d/catalog` (is the host half composed?) and `/vrmpet3d/state` (is the client half alive?). Its exit code
 > separates the three states: **0** all good, **2** profile fine but the page needs a RELOAD (the browser
 > module table is built at page load), **1** the profile needs `install-desktop-plugin.mjs`, whose exact
 > command it prints.
 >
 > **Also added in the same pass, so a client-half failure can never be silent again:** the client half now
-> reports its own start-up failure to `/pet3d/state`, which carries it as an `error` field. A chunk that never
+> reports its own start-up failure to `/vrmpet3d/state`, which carries it as an `error` field. A chunk that never
 > arrives and a widget that throws while being constructed both report, so "the pet is gone" becomes a named
 > cause readable with one HTTP request instead of a browser console nobody is watching.
 >
@@ -2434,7 +2508,7 @@ nothing needs to be remembered or explained verbally.
 > asserts the PATCH a surface pushes carries the correction — `pushedScale: {"wheel-model":1.3}` — because the
 > page's own copy never loses it, which is why this bug was invisible from inside the page; and
 > `check-plugin-load.mjs` asserts both push lists name `statusScale` by name, with this failure written next to
-> it. (A behavioural check for the window's list was tried and removed: stubbing `/pet3d/settings` made the page
+> it. (A behavioural check for the window's list was tried and removed: stubbing `/vrmpet3d/settings` made the page
 > apply an empty snapshot mid-check and broke three unrelated checks — worse than the bug it was guarding.)
 >
 > **No DSH restart needed** — both are client-half fixes; reload the page, or restart only the floating window.
@@ -2494,7 +2568,7 @@ nothing needs to be remembered or explained verbally.
 >
 > 1. `SessionAggregate.running(id)` read the **boundary record first** and the store second. A record exists
 >    only because a frame arrived, so a `turn/start` whose `turn/end` never follows — a dropped stream, or the
->    `ctx.remote.pet3d().watch()` upgrade channel simply not being wired for a plain-JavaScript plugin — pinned
+>    `ctx.remote.vrmpet3d().watch()` upgrade channel simply not being wired for a plain-JavaScript plugin — pinned
 >    that session at "running" for the life of the page: 工作中, with the clock still counting up under it.
 > 2. The completion **notice** was written only by `SessionAggregate.boundary()` — i.e. only by that same RPC
 >    stream. No stream, no 任务达成 and no 出错, ever.
@@ -2555,7 +2629,7 @@ nothing needs to be remembered or explained verbally.
 >
 > * `scripts/whale-asset.mjs` (`pnpm run fetch:whale`) reads the APNG out of the **installed** `app.asar` into
 >   `assets/whale-tail.apng`, which is excluded from the package's `files` list;
-> * the host serves it at **`/pet3d/whale`** (route 14 now);
+> * the host serves it at **`/vrmpet3d/whale`** (route 14 now);
 > * both stylesheets mask through it under DSH's own activation conditions —
 >   `@supports (mask-mode:alpha) and (mask-image:url(''))` + `prefers-reduced-motion:no-preference` +
 >   `forced-colors:none` — with the app's declaration verbatim:
@@ -2567,7 +2641,7 @@ nothing needs to be remembered or explained verbally.
 >   built), so `check-plugin-load.mjs` compares all three instead of trusting them.
 >
 > **⚠️ This needs a DSH RESTART, not a page reload.** The route is host-half code and the host half in the
-> running app was applied before this change: measured live, `/pet3d/whale` answered **404** while the new host
+> running app was applied before this change: measured live, `/vrmpet3d/whale` answered **404** while the new host
 > half was still only on disk. The host suite proves the handler correct in the meantime (it serves the route
 > over real HTTP and asserts the APNG signature, `acTL`/`fcTL`, the frame count and byte-equality with the
 > extracted file — or an honest 404 when the asset is absent).
@@ -2614,7 +2688,7 @@ nothing needs to be remembered or explained verbally.
 >   user types is still theirs: no token, no clock;
 > * **the size** is derived from the pet's box, which is the operator's own prescription ("用窗口尺寸来计算大小
 >   而非模型放大倍率"): `statusPromptFontPx(boxHeight) = boxHeight * 0.033`, clamped 10–48 px, written into
->   `--pet3d-status-font` / `--pet3d-desktop-status-font` every frame. 0.033 of a 387 px box is 12.8 px — the
+>   `--vrmpet3d-status-font` / `--vrmpet3d-desktop-status-font` every frame. 0.033 of a 387 px box is 12.8 px — the
 >   app's own label size — and the whale is sized in `em`, so the whole label grows together. Derived rather
 >   than multiplied by a scale factor, so the size preference, the model's own scale and the window all reach it;
 > * both prompts (in-app `lib/client.js`, window `lib/desktop-page.js`) were rebuilt to DSH's structure and their
@@ -2622,7 +2696,7 @@ nothing needs to be remembered or explained verbally.
 >   (`--dsw-alias-label-deep-diving{,-shimmer}`), the window's writes the colours out because it is a plain page
 >   with no DSH stylesheet.
 >
-> **Measured live, after restarting the window:** `/pet3d/desktop` → `text: 深度求索中，用时 4分42秒 ···`,
+> **Measured live, after restarting the window:** `/vrmpet3d/desktop` → `text: 深度求索中，用时 4分42秒 ···`,
 > `animation: shimmer`, `icon: true`, `fontPx: 17.8px` for a 540 px slot. The readout now publishes the label's
 > text, its mark and its **size**, so "the text did not grow with the pet" is one HTTP request away instead of a
 > guess.
@@ -2639,11 +2713,11 @@ nothing needs to be remembered or explained verbally.
 > 把手举起来会超出框架，多出来的部分正好可以显示文字".
 >
 > **First, which pet was on screen.** `petSurface: 'auto'` prefers the standalone window and hides the in-app
-> copy (`showInAppPet(!running)`), and `/pet3d/desktop` said `state: running`, so the operator was looking at
+> copy (`showInAppPet(!running)`), and `/vrmpet3d/desktop` said `state: running`, so the operator was looking at
 > the floating window — whose prompt is `lib/desktop-page.js`'s own DOM, driven by the state the in-app pet
-> publishes over `/pet3d/state`.
+> publishes over `/vrmpet3d/state`.
 >
-> **Why nothing showed, measured rather than guessed.** `/pet3d/desktop` reported the prompt UP and correct —
+> **Why nothing showed, measured rather than guessed.** `/vrmpet3d/desktop` reported the prompt UP and correct —
 > `status.text = 深度求索中...`, `animation: shimmer`, `rect = (1633, 832, 94x24)` — while the page had drawn it
 > one full height higher. `layoutStatus` computes the box's FINAL top-left itself (`centreX - width/2`,
 > `headTop - height - 4`) and clamps THAT into the frame; the stylesheet then applied
@@ -2651,7 +2725,7 @@ nothing needs to be remembered or explained verbally.
 > left and one full height up — entirely above the window's top edge. The same wrong rectangle is what the
 > launcher sizes the window from, so the window never grew to hold the prompt either. The in-app prompt is
 > unaffected: `placeHeadStatus` hands it the ANCHOR point and the transform does the centring there. **The two
-> paths must not be mixed**, and now they are not: the transform is gone from `.pet3d-desktop-status`.
+> paths must not be mixed**, and now they are not: the transform is gone from `.vrmpet3d-desktop-status`.
 >
 > **Why every check was green.** The one assertion about this compared the page's report with the page's own
 > report — `shownRect` was read straight back out of `pet.rect()` — so it could not fail. It now measures the
@@ -2687,7 +2761,7 @@ nothing needs to be remembered or explained verbally.
 > **The question that found it:** "你的宠物工作状态提示做好了吗?" — and the honest answer was *no*, even
 > though every suite was green and the code for every visible piece existed.
 >
-> **The measurement, taken from outside the app:** `GET /pet3d/state` answered
+> **The measurement, taken from outside the app:** `GET /vrmpet3d/state` answered
 > `{"seq":1,"state":"offline","at":1791537411916}`. `seq: 1` proves the client half HAD started (so the
 > boot fix above is live); `offline` while the agent was streaming a turn proves the pet could not see the
 > session it was supposed to be reporting on.
@@ -2695,13 +2769,13 @@ nothing needs to be remembered or explained verbally.
 > **The cause, traced through `lib/core.js` and `lib/client.js`:** `PetMachine.resolve` answers `offline`
 > whenever `snapshot.available !== true`, and `SessionAggregate.snapshot` computes
 > `available = input.connected === true && hasAnything && hasSelectedSession`. `input.connected` starts
-> `false` and is written only by `Pet3DWidget.prototype.setConnected` — **which nothing in this repository
+> `false` and is written only by `VrmPet3DWidget.prototype.setConnected` — **which nothing in this repository
 > ever called.** The setter was dead code, so 工作中 / 任务达成 / 出错 / 空闲 / 睡觉 were all unreachable
 > on screen; only the states that outrank `available` in the cascade (拖动 / 打招呼 / 等待确认) could ever
 > appear. The component's effect pushed `setSessionContext` on every store change and never said
 > "connected".
 >
-> **Why nothing caught it:** every existing check drives a `Pet3DWidget` directly and calls
+> **Why nothing caught it:** every existing check drives a `VrmPet3DWidget` directly and calls
 > `aggregate.setInput({ connected: true, … })` itself (`build/probe/client-test.js` did that in thirty-odd
 > places). The plugin's REAL route — `apply` → the registered `shell.overlay` component → the two hooks DSH
 > hands that component → the widget — was executed by no suite at all.
@@ -2728,7 +2802,7 @@ nothing needs to be remembered or explained verbally.
 > **The guard:** `build/probe/client-test.js` gained its first check that goes through the PLUGIN rather
 > than around it — `CLIENT.createPlugin` → `apply` against a capturing `slots` service → the registered
 > component rendered with the session standard kit → the widget's own `tick`. It asserts the widget is
-> connected, resolves 工作中, and POSTs `{"state":"working"}` to `/pet3d/state` (the channel the floating
+> connected, resolves 工作中, and POSTs `{"state":"working"}` to `/vrmpet3d/state` (the channel the floating
 > window polls and `check-profile.mjs` reads). **Negative-tested:** with the `setConnected` line removed it
 > reports `{"connected":false,"state":"offline","posted":["{\"state\":\"offline\"}"]}` — the live symptom
 > reproduced exactly, and the client suite failed on exactly that one check.
@@ -2740,7 +2814,7 @@ nothing needs to be remembered or explained verbally.
 > that was broken.
 >
 > **Still unproven:** the prompt on screen with this fix in the running app — the page must be reloaded
-> (the browser module table is built at page load). `/pet3d/state` is how to confirm it from outside: it
+> (the browser module table is built at page load). `/vrmpet3d/state` is how to confirm it from outside: it
 > must report `resting` (空闲) or `working` (工作中) instead of `offline`.
 
 > ## ✅ 2026-10-10 — DSH 状态汇报 is DONE, and verified (ten suites, **1269 checks**)
@@ -2764,9 +2838,9 @@ nothing needs to be remembered or explained verbally.
 >
 > **Two architectural additions this needed:**
 >
-> * **`/pet3d/state`** — the floating window is a page in the launcher app and has NO session data at all (no
+> * **`/vrmpet3d/state`** — the floating window is a page in the launcher app and has NO session data at all (no
 >   catalog, no statuses, no boundary stream), so it cannot work out what DSH is doing. The in-app pet resolves
->   the state and POSTs it there; the window polls it, exactly like `/pet3d/settings` and `/pet3d/preview`. It is
+>   the state and POSTs it there; the window polls it, exactly like `/vrmpet3d/settings` and `/vrmpet3d/preview`. It is
 >   `seq`-counted, not value-compared: the pet returns to `resting` between turns, so a value comparison would
 >   miss every second entry into 工作中.
 > * **the window now DRAWS the state too**, not only the prompt: it used to send a hard `resting` for every
@@ -2774,8 +2848,8 @@ nothing needs to be remembered or explained verbally.
 >   actually watching. The two pointer-owned poses still win (`held`/`falling`), and `sleeping`/`greeting` fall
 >   back to `resting`.
 >
-> **⚠️ THE ONE THING THAT NEEDS A RESTART:** the `/pet3d/state` route and the host's route table are HOST-half
-> code. The running app has been probed and answers `/pet3d/settings` 200 but `/pet3d/state` **404**, so the
+> **⚠️ THE ONE THING THAT NEEDS A RESTART:** the `/vrmpet3d/state` route and the host's route table are HOST-half
+> code. The running app has been probed and answers `/vrmpet3d/settings` 200 but `/vrmpet3d/state` **404**, so the
 > floating window's prompt cannot work until DSH is restarted. Everything else — the prompt over the app's own
 > pet, the settings section, the migration — is client/page code and is live on the next page load.
 >
@@ -2806,7 +2880,7 @@ nothing needs to be remembered or explained verbally.
 > **Current live state on THIS machine:** the host has been restarted, so the new preferences persist;
 > `modelId = m2` (`SampleModel.vrm`, VRoid ヴィータ), 18 spring chains matched / 0 skipped, and
 > `motionEvery = { resting: { min: 20, max: 80 } }` on purpose — the resting state is mapped to the one-shot
-> `a1 = pet3d-happy-hop.vrma`, so the pet hops once every 20–80 seconds (§22.3). All ten suites:
+> `a1 = vrmpet3d-happy-hop.vrma`, so the pet hops once every 20–80 seconds (§22.3). All ten suites:
 > **1212 checks, green**.
 >
 > ### What is actually left, in the order I would do it
@@ -2822,7 +2896,7 @@ nothing needs to be remembered or explained verbally.
 >    chain, and sweeping `sway` plus the per-chain stiffness/drag/gravity is the remaining lever.
 > 3. **Panel unification** — the 2026-10-08 debt that is still half done: `panel.js` exists, but
 >    `lib/desktop-page.js`'s own `buildPanel`/`refreshPanel`/`wirePanel` were never swapped onto it.
-> 4. **The supplied `gravityPower` default (0.5) as a preference** rather than a constant (`lib/pet3d.js`)
+> 4. **The supplied `gravityPower` default (0.5) as a preference** rather than a constant (`lib/scene.js`)
 >    — the spring table already shows it; the default itself is hardcoded.
 >
 > ### The one operational trap that has cost the most
@@ -2846,7 +2920,7 @@ nothing needs to be remembered or explained verbally.
 >    reports `gravityPower = -` and `gravityDir = null` for both of its spring chains (the VRM 0.x spec has no
 >    such fields), while 蓝色小肥鱼vrm (VRM 1.0) declares `gravityDir = [0,-1,0]`, `gravityPower = 0.05`.
 >    With no gravity every chain keeps its bind pose for ever: the twintails sat at 45°, the skirt stayed
->    flared. Fix: `Scene.prototype.supplyMissingGravity` in `lib/pet3d.js`, called at install time — it supplies
+>    flared. Fix: `Scene.prototype.supplyMissingGravity` in `lib/scene.js`, called at install time — it supplies
 >    `gravityPower = 0.5` and `gravityDir = (0,-1,0)` ONLY where the file gives none, so a VRM 1.0 model that
 >    declares its own physics is untouched. The supplied value becomes that chain's "default" in the settings
 >    window, so it is tunable per chain.
@@ -2884,7 +2958,7 @@ nothing needs to be remembered or explained verbally.
 > (no DSH restart), but a window started earlier keeps the old switches.
 >
 > **Checked 2026-10-08 at 20:17, before doing any of the next steps:** the launcher was restarted with
-> the app at 20:08 (a live `/pet3d/desktop` reports `state: running`, page `ready: true`), so **all five
+> the app at 20:08 (a live `/vrmpet3d/desktop` reports `state: running`, page `ready: true`), so **all five
 > switches are live in the running window now**.
 >
 > **Then the user reported it STILL freezes** — browsers and Electron-based applications first — so
@@ -2916,7 +2990,7 @@ nothing needs to be remembered or explained verbally.
 > ### Debts, in the order they should be paid
 >
 > 1. **Lock the three confirmed fixes with assertions** so nobody (including a future me) reverts them again:
->    a VRM 0.x chain must have non-zero gravity after install; `lib/pet3d.js` must not call
+>    a VRM 0.x chain must have non-zero gravity after install; `lib/scene.js` must not call
 >    `removeUnnecessaryVertices`/`combineSkeletons` (source assertion, with the measured reason in the
 >    message); `desktop/main.js` must keep the anti-freeze switches.
 > 2. **`gravityPower`'s supplied default (0.5) should be a preference**, shown in the config window's spring
@@ -2942,13 +3016,13 @@ nothing needs to be remembered or explained verbally.
 >    `vendor`). The route table did NOT need the pass this note predicted: all 149 other docs
 >    assertions passed, ELEVEN routes included.
 > 6. ~~New host surface that needs a restart to be live~~ — **LIVE since the 20:08 restart.** `GET/POST
->    /pet3d/settings` plus `lib/settings.js` (the one settings store, because `localStorage` does NOT cross
+>    /vrmpet3d/settings` plus `lib/settings.js` (the one settings store, because `localStorage` does NOT cross
 >    the boundary between DSH's profile and the launcher's — same origin, different browser profile). Every
 >    surface polls its `version`. Verified: host+model suite, and the settings page's own
->    `__PET3D_CONFIG_STATE__` — and now live: on 2026-10-08 at 20:08 the app was restarted, and
->    `/pet3d/{catalog,motions,models,settings,config,window,desktop}` all answer **200** against the running
+>    `__VRMPET3D_CONFIG_STATE__` — and now live: on 2026-10-08 at 20:08 the app was restarted, and
+>    `/vrmpet3d/{catalog,motions,models,settings,config,window,desktop}` all answer **200** against the running
 >    host, so the six "needs a restart" items of "What is left" are in the running app now. Live
->    evidence for the floating window at 20:17: `/pet3d/desktop` reported
+>    evidence for the floating window at 20:17: `/vrmpet3d/desktop` reported
 >    `state: running, page.ready: true, webgl2: true, renderer: ANGLE (NVIDIA RTX 2060)` with the pet's
 >    rect at 220×300.
 >
@@ -2968,7 +3042,7 @@ nothing needs to be remembered or explained verbally.
 > is green after the interrupted work of 2026-10-07/08, and **the pet has now been
 > seen running in the real app**: on 2026-10-08 it was hot-installed into this
 > machine's live profile (no restart), appeared in `shell.overlay`, and its own
-> routes answered `/pet3d/catalog`, `/pet3d/motions` and `/pet3d/models` with 200 —
+> routes answered `/vrmpet3d/catalog`, `/vrmpet3d/motions` and `/vrmpet3d/models` with 200 —
 > which closes the 404 that the 2026-10-07 install hit.
 >
 > The first real model loaded in the app rendered as a **frozen T-pose**, which is
@@ -2993,11 +3067,11 @@ nothing needs to be remembered or explained verbally.
 > installed but **disabled**, because both register into `shell.overlay`. The project
 > also moved drives (`D:\SynologyDrive` →`F:\SynologyDrive`), so the profile path in
 > §5 and the `.bak` filenames in §9 belong to the other machine. Profile backups
-> taken before the install: `package.json.bak-pet3d-2026-10-08T09-15-28` and
-> `cordis.patch.yml.bak-pet3d-2026-10-08T09-15-28`.
+> taken before the install: `package.json.bak-vrmpet3d-2026-10-08T09-15-28` and
+> `cordis.patch.yml.bak-vrmpet3d-2026-10-08T09-15-28`.
 >
 > **Found while resuming, and fixed:** the previous session left two suites red —
-> the host suite still expected four routes after `/pet3d/models` was added, and
+> the host suite still expected four routes after `/vrmpet3d/models` was added, and
 > `verify-model.mjs` died intermittently with `fetch failed` / `cause: bad port`,
 > because `listen(0)` can be handed a port `fetch` refuses on this machine's
 > dynamic range (it starts at 1024, not 49152). Both are fixed and covered: the new
@@ -3025,8 +3099,8 @@ is wasted re-testing what shipped:
 
 ```sh
 node scripts/check-profile.mjs                                     # 9 checks, exit 0 = wired; exit 2 = reload the page
-curl.exe -s http://127.0.0.1:19387/pet3d/state                     # the in-app pet's own report
-curl.exe -s http://127.0.0.1:19387/pet3d/desktop                   # the launcher's view of its window
+curl.exe -s http://127.0.0.1:19387/vrmpet3d/state                     # the in-app pet's own report
+curl.exe -s http://127.0.0.1:19387/vrmpet3d/desktop                   # the launcher's view of its window
 ```
 
 (In PowerShell `curl` is an alias for `Invoke-WebRequest`, so use `curl.exe` or
@@ -3036,15 +3110,15 @@ what the commands in this section assume.)
 
 | Half | Evidence in those answers | Verdict, re-measured at 2026-10-10 08:34 |
 |---|---|---|
-| host half (`lib/index.js`) | `/pet3d/state` carries a `line` field, `error: null` | **LIVE as of the eighth pass**; the ninth pass's `/pet3d/say` and `/pet3d/llm` were written afterwards, so they need a restart — `curl.exe -s http://127.0.0.1:19387/pet3d/llm` answers 404 until then |
-| launcher (`desktop/`) | `/pet3d/desktop` carries `page.state`, `page.status.scale`, `page.status.tone`/`bold` and `page.speech` — fields the launcher only copies after a restart | **LIVE**: DSH itself started at 2026-10-10 08:22, after the newest launcher edit (2026-10-09 23:16), so the seventh pass's `pickMotionDir` and dialog titles are live too. The eighth pass's `offered`/`routed` were written after that start and DO need a restart |
-| client half (the page inside DSH) | `/pet3d/state` reports `working` with no `error` — the pet is mounted and tracking the running turn | **LIVE if the tab was loaded after 08:22**; a tab left open across the restart still runs the old chunks in memory, and Ctrl+Shift+R is the one thing that settles it. The ninth pass's AI request path is client-half code, so it needs that reload |
+| host half (`lib/index.js`) | `/vrmpet3d/state` carries a `line` field, `error: null` | **LIVE as of the eighth pass**; the ninth pass's `/vrmpet3d/say` and `/vrmpet3d/llm` were written afterwards, so they need a restart — `curl.exe -s http://127.0.0.1:19387/vrmpet3d/llm` answers 404 until then |
+| launcher (`desktop/`) | `/vrmpet3d/desktop` carries `page.state`, `page.status.scale`, `page.status.tone`/`bold` and `page.speech` — fields the launcher only copies after a restart | **LIVE**: DSH itself started at 2026-10-10 08:22, after the newest launcher edit (2026-10-09 23:16), so the seventh pass's `pickMotionDir` and dialog titles are live too. The eighth pass's `offered`/`routed` were written after that start and DO need a restart |
+| client half (the page inside DSH) | `/vrmpet3d/state` reports `working` with no `error` — the pet is mounted and tracking the running turn | **LIVE if the tab was loaded after 08:22**; a tab left open across the restart still runs the old chunks in memory, and Ctrl+Shift+R is the one thing that settles it. The ninth pass's AI request path is client-half code, so it needs that reload |
 
 So the first action is a test run after all, and the measured verdict above is what makes it one: with both halves
-current as of the eighth pass, what a reload/restart is still owed is the **ninth pass** (`/pet3d/say`,
-`/pet3d/llm`, the AI request path and the regenerated `lib/client.core.js`), the eighth pass's two motion fields,
+current as of the eighth pass, what a reload/restart is still owed is the **ninth pass** (`/vrmpet3d/say`,
+`/vrmpet3d/llm`, the AI request path and the regenerated `lib/client.core.js`), the eighth pass's two motion fields,
 and a possibly stale tab. Walk the acceptance list below, and note that the two `placementX`/`placementY` values in
-`pet3d-settings.json` matched the running window's own metrics exactly — that item is proven at the data layer and
+`vrmpet3d-settings.json` matched the running window's own metrics exactly — that item is proven at the data layer and
 needs only a close-and-reopen to be seen.
 
 ### Tomorrow's list, in order
@@ -3067,19 +3141,19 @@ needs only a close-and-reopen to be seen.
      folder appears in the list, the models/clips appear at once (motions in the 状态 checkboxes), 移除 takes
      effect immediately, and the files are never deleted;
    * `node scripts/check-profile.mjs` says the wiring is live (exit 0).
-2. **If any of those disappoints, the failure is already instrumented**: `/pet3d/state` names the client half's own
-   error, `/pet3d/desktop`'s `page.state`/`page.status.tone` say what the window believes, and both import cards
+2. **If any of those disappoints, the failure is already instrumented**: `/vrmpet3d/state` names the client half's own
+   error, `/vrmpet3d/desktop`'s `page.state`/`page.status.tone` say what the window believes, and both import cards
    publish `import`/`motionImport` (`controls`, `picker`, `dirs`, `error`) so "no route", "no dialog" and "the
    section did not render" are three different answers. A motion that does not play has its own four: the eighth
-   pass made `/pet3d/desktop`'s `page.motion` carry `offered` and `routed` beside `available`/`reason`, so "the
+   pass made `/vrmpet3d/desktop`'s `page.motion` carry `offered` and `routed` beside `available`/`reason`, so "the
    host never served the route", "nothing is mapped" and "this avatar cannot drive that clip" stop looking alike —
    after a DSH restart, since the relay is launcher code.
-3. **The one thing that blocks the motion feature outright:** `pet3d-settings.json` has `"motions": {}`, so no clip
+3. **The one thing that blocks the motion feature outright:** `vrmpet3d-settings.json` has `"motions": {}`, so no clip
    is mapped to any state and the window will play no authored motion however healthy the rest is. Mapping two or
    three of the six imported clips (`a1`–`a6`) to 静息态 and 工作中 is what turns the whole 动作 feature visible,
    and it is the 2026-10-09 list's item 1, still open.
 4. **Then 小尾巴**, in this order of value: the settings PAGE still not being built from `panel.js`'s field
-   definitions (debt 3's remaining tail), `/pet3d/desktop`'s `modelId` disagreeing with what is rendered,
+   definitions (debt 3's remaining tail), `/vrmpet3d/desktop`'s `modelId` disagreeing with what is rendered,
    `HEAD_LAYER_LIMIT` (70°) and `MOTION_FRAME_MARGIN` (1.35) as settings, and the freeze question (§16, kept as a
    rig rather than a belief). The per-line editing of 碎碎念 lines is DONE (ninth pass); what is still open there is
    a reaction beyond speech (an expression or a motion tied to the same events), and the phrase table itself being
@@ -3092,7 +3166,7 @@ All of it is in the dated blocks at the top of this file, with the tests:
 1. **The floating window's own size** — `windowSize`, cleaned beside `size`, read through
    `Placement.sizeKey`, pushed in `LOCAL_KEYS` instead of `size`, and editable as **悬浮窗大小** in the
    settings window's 其他 section. A profile with only `size` keeps that value for both (the migration).
-2. **`status.scale` relayed** by `desktop/main.js`, so `/pet3d/desktop` reports the prompt's per-model
+2. **`status.scale` relayed** by `desktop/main.js`, so `/vrmpet3d/desktop` reports the prompt's per-model
    correction. Launcher code: a **DSH restart** is needed for it to be live — and for `windowSize`, which the
    launcher's page reads from that same report, and for `panel.module`, `speech` and the folder picker.
 3. **任务完成 follows the 状态 持续时间** (`core.doneWindowMs`), with the 4.2 s notice window as the floor, and
@@ -3105,7 +3179,7 @@ All of it is in the dated blocks at the top of this file, with the tests:
    chunk. See the second 2026-10-11 block for the rows, the two stub-host bugs it exposed, and what is
    asserted where.
 6. **碎碎念 DONE (§24 item 1)** — the pet's own bubble, in both surfaces, with the phrase table and the
-   throttle in core, the line relayed through `/pet3d/state`, a 碎碎念 section in the settings window, and the
+   throttle in core, the line relayed through `/vrmpet3d/state`, a 碎碎念 section in the settings window, and the
    privacy rule asserted. See the third 2026-10-11 block.
 7. **模型导入 DONE (§24 item 4)** — the settings page's 模型导入 section: a native folder picker through the
    launcher (the settings window now gets the preload), a typed-path fallback, the imported list with 移除, and
@@ -3120,7 +3194,7 @@ All of it is in the dated blocks at the top of this file, with the tests:
 10. **动作导入 DONE (seventh block)** — the motion route finally has its UI: 选择文件夹… / 手动输入路径 / imported
    list with 移除, on its own dialog title, refreshing the 状态 checkboxes from the write's own reply.
 
-11. **The motion readout's lost fields (eighth block)** — `/pet3d/desktop`'s `page.motion` now relays `offered`
+11. **The motion readout's lost fields (eighth block)** — `/vrmpet3d/desktop`'s `page.motion` now relays `offered`
     and `routed`, so "the host never served the route" and "nothing is mapped to a state" stopped being the same
     answer. Found by measuring the running app on 2026-10-10, and the same measurement is what proved both halves
     were already running the newest code.
@@ -3146,7 +3220,7 @@ intend to use — **map two or three clips to states** so the motion feature has
 | Fix | Where the truth lives |
 |---|---|
 | the 状态 prompt IS DSH's own running label | the wording (`chat.deepDivingFor`), the live clock, the whale mark and the sweep are the app's; the size is derived from the pet's box and corrected per model |
-| the mark is the ANIMATED one | `scripts/whale-asset.mjs` reads DSH's 60-frame APNG out of the installed application, the host serves it at `/pet3d/whale`, and both prompts mask through it (`mask-mode:alpha` + motion + forced-colours gates, with the static SVG underneath) |
+| the mark is the ANIMATED one | `scripts/whale-asset.mjs` reads DSH's 60-frame APNG out of the installed application, the host serves it at `/vrmpet3d/whale`, and both prompts mask through it (`mask-mode:alpha` + motion + forced-colours gates, with the static SVG underneath) |
 | the label is centred on the pet | `projectToCanvas` answers in CSS pixels; both prompts divided by `box.width / canvas.width` (the drawing buffer — devicePixelRatio twice). Measured 89 px off at 1.5×, now 0 |
 | 任务完成 actually arrives | `PetMachine.resolve` reads the AGGREGATE's notice out of the snapshot; the aggregate derives it from DSH's own `running` flag going false, so no RPC frame is needed |
 | two wheel gestures | on the TEXT it corrects that model's size (`statusScale`, 0.35–4×, 6–160 px, and 1 is dropped); on the PET it resizes the pet and the text with it |
@@ -3155,7 +3229,7 @@ intend to use — **map two or three clips to states** so the motion feature has
 
 **Verified live at the end of that session** (floating window restarted, model m2): `page.status` =
 `深度求索中，用时 7分3秒 ···`, `icon: true`, `fontPx: 17.8px` for a 396×540 box, centring offset 0 px, and
-`/pet3d/whale` → 200 `image/apng`, 21631 bytes. **Nothing from 2026-10-11 has been seen live yet**: the client
+`/vrmpet3d/whale` → 200 `image/apng`, 21631 bytes. **Nothing from 2026-10-11 has been seen live yet**: the client
 half needs a page reload and the launcher half a DSH restart, and `node scripts/check-profile.mjs` exit 2 is
 what "reload the page" looks like.
 
@@ -3169,7 +3243,7 @@ what "reload the page" looks like.
   run — do not turn it into a per-edit habit, and do not skip it when the operator asks for it.
 * **Client-half changes need a page reload; host-half changes need a DSH restart.** The route table, the
   settings store and the whale route are host half; the prompts, the gestures and the state machine are client
-  half. `/pet3d/desktop`'s readout is relayed by the LAUNCHER, so a new field in it needs a DSH restart even
+  half. `/vrmpet3d/desktop`'s readout is relayed by the LAUNCHER, so a new field in it needs a DSH restart even
   when the page that produces it was reloaded.
 * The animated mark is **not** in this repository (`docs/ASSET-CONTRACT.md` §1): a fresh checkout has none
   until `pnpm run fetch:whale` reads it out of the installed DSH, and without it the static SVG is drawn.
@@ -3187,9 +3261,9 @@ what "reload the page" looks like.
 | Check | Live value |
 |---|---|
 | the motion map is a LIST per state | `{ state: [id, ...] }`, one clip drawn at random on state ENTRY; a legacy bare string is still accepted by `core.cleanMotions` |
-| the loop/once flag | read from a `pet3d-motions.json` manifest in the motion directory; absent means loop |
-| new clips | `scripts/make-vrma-fixtures.mjs` now also writes `pet3d-look-around`, `pet3d-weight-shift`, `pet3d-stretch` (loops) and `pet3d-happy-hop` (one-shot), plus that manifest |
-| the settings window | a new 动作 section: one box set per state, the clip list from `/pet3d/motions`, and the count of one-shot clips |
+| the loop/once flag | read from a `vrmpet3d-motions.json` manifest in the motion directory; absent means loop |
+| new clips | `scripts/make-vrma-fixtures.mjs` now also writes `vrmpet3d-look-around`, `vrmpet3d-weight-shift`, `vrmpet3d-stretch` (loops) and `vrmpet3d-happy-hop` (one-shot), plus that manifest |
+| the settings window | a new 动作 section: one box set per state, the clip list from `/vrmpet3d/motions`, and the count of one-shot clips |
 | **still needs a DSH restart** | the HOST half (the manifest read and the `loop` field in the catalog). The renderer half, the panel and the settings page are live on the next window/page load |
 
 **First commands of the session**
@@ -3197,12 +3271,12 @@ what "reload the page" looks like.
 ```sh
 node scripts/verify-all.mjs                                  # expect 10 passed, 1018 checks
 node scripts/make-vrma-fixtures.mjs                          # rewrites the VRM + 4 clips + the manifest
-node scripts/verify-motion.mjs --model build/fixtures/vrma/pet3d-minimal.vrm \
-  --motion build/fixtures/vrma/pet3d-rest.vrma               # 31 checks; real loader, real mixer, the draw and the one-shot
-GET http://127.0.0.1:19387/pet3d/desktop                     # `page.motion` says what is playing, `picked` what was drawn
+node scripts/verify-motion.mjs --model build/fixtures/vrma/vrmpet3d-minimal.vrm \
+  --motion build/fixtures/vrma/vrmpet3d-rest.vrma               # 31 checks; real loader, real mixer, the draw and the one-shot
+GET http://127.0.0.1:19387/vrmpet3d/desktop                     # `page.motion` says what is playing, `picked` what was drawn
 ```
 
-**A diagnostic wart worth knowing:** `/pet3d/desktop`'s `modelId` is the launcher's STARTUP argument, and it
+**A diagnostic wart worth knowing:** `/vrmpet3d/desktop`'s `modelId` is the launcher's STARTUP argument, and it
 still reads `placeholder` — the page loads the real model from the shared settings a moment later. The
 rendered truth is `page.motion.kind` (`"vrm"` here), not that field. Making those agree (or documenting it) is
 a good first small task.
@@ -3247,7 +3321,7 @@ session events (turn started / finished, a tool failed, something needs confirma
 
 *What it is now*: `core.SPEECH_LINES` (zh + en, keyed by event) plus `core.SpeechMachine` (the throttle: one
 line at a time, a held line, no event twice in a row, a drawn idle gap, silence for anything unrecognised);
-the app's pet runs the machine and publishes the line WITH the state over `/pet3d/state`; the host flattens and
+the app's pet runs the machine and publishes the line WITH the state over `/vrmpet3d/state`; the host flattens and
 caps it; the floating window draws it and reports its rectangle, which the launcher unions into the window's
 bounds while leaving the area click-through; and the settings window has a 碎碎念 section for the on/off switch
 and the three timing numbers. The privacy rule — a bubble never contains session content — is asserted in the
@@ -3306,15 +3380,15 @@ again; do not move panel logic into the renderer.
 
 *Target*: add and manage model directories from the app, not by editing a config file.
 
-*What was there*: the whole BACKEND, done and tested since §21 — a plugin-owned `pet3d-model-dirs.json`, the
-`/pet3d/models` route's `{add}`/`{remove}` with refused paths, and a catalog rebuilt on every request (so an
+*What was there*: the whole BACKEND, done and tested since §21 — a plugin-owned `vrmpet3d-model-dirs.json`, the
+`/vrmpet3d/models` route's `{add}`/`{remove}` with refused paths, and a catalog rebuilt on every request (so an
 import is live without a restart). The UI was missing entirely.
 
 *What was done*: the settings window's **模型导入** section — a 选择文件夹… button that opens a NATIVE folder
-picker through the launcher (`pet3d:pick-dir` over `desktop/preload.js`; the settings window now gets the preload
+picker through the launcher (`vrmpet3d:pick-dir` over `desktop/preload.js`; the settings window now gets the preload
 it never had), a 手动输入路径 fallback for a window without that bridge, the imported list with 移除 per row, and
-the host's own refusal text shown verbatim. The page hands the path to the HOST over `/pet3d/models` and never
-writes the list itself, so `PET3D_MODEL_DIRS_FILE` (gotcha 37) still governs every suite. Full record in the
+the host's own refusal text shown verbatim. The page hands the path to the HOST over `/vrmpet3d/models` and never
+writes the list itself, so `VRMPET3D_MODEL_DIRS_FILE` (gotcha 37) still governs every suite. Full record in the
 fourth 2026-10-11 block at the top of this file.
 
 *Still unproven*: the dialog in a real window (launcher code — a DSH restart, and a human to click it).
@@ -3322,7 +3396,7 @@ fourth 2026-10-11 block at the top of this file.
 ### 小尾巴（不阻塞，随手可做）
 * ✅ **The size preference is split** (2026-10-11): `size` is the in-app pet's, `windowSize` the floating
   window's, with an older profile's single value migrating to both. The launcher needs a DSH restart.
-* ✅ **`/pet3d/desktop`'s `status.scale` is relayed** (2026-10-11) — launcher code, so a DSH restart.
+* ✅ **`/vrmpet3d/desktop`'s `status.scale` is relayed** (2026-10-11) — launcher code, so a DSH restart.
 * ✅ **The 完成 prompt follows the 状态 持续时间** (2026-10-11, `core.doneWindowMs`), with `NOTICE_WINDOW_MS` as
   the floor rather than the ceiling.
 * ✅ **The `{duration}` token is documented in the settings page** (2026-10-11), in the 状态 section's own hints.
@@ -3337,7 +3411,7 @@ fourth 2026-10-11 block at the top of this file.
   **The bubble makes the floating window taller while it is up** — watch §16's freeze history when judging it.
 * ✅ **模型导入** (2026-10-11): the settings page's section — a native folder picker through the launcher, a typed
   path fallback, and the imported list with removal. The DIALOG is launcher code, so it needs a DSH restart.
-* **`/pet3d/desktop`'s `modelId` disagrees with what is rendered** — it reports the launcher's startup
+* **`/vrmpet3d/desktop`'s `modelId` disagrees with what is rendered** — it reports the launcher's startup
   argument (`placeholder`) while the page shows the real VRM from the shared settings. Making them agree (or
   documenting the field as "startup model") is a ten-minute job.
 * **The freeze question is still open** (§16): YourMom proves a screen-sized, interactive, transparent window
@@ -3370,7 +3444,7 @@ across. They are separate plugins with separate installs.
 
 | Decision | Value | Why |
 |---|---|---|
-| Project name | `dsh-plugin-pet3d` | sibling to the 2D plugin, not a replacement |
+| Project name | `dsh-plugin-vrmpet3d` | sibling to the 2D plugin, not a replacement |
 | 3D stack | **vendored three.js + official VRM/MMD loaders** | user's explicit choice: broadest format support over a hand-rolled renderer |
 | Dependencies | pinned in `vendor/`, built into one committed chunk | runtime stays dependency-free and offline-capable |
 | Sample model | **none shipped** | VRM/MMD licensing forbids redistribution; placeholder avatar instead |
@@ -3389,10 +3463,10 @@ across. They are separate plugins with separate installs.
   needed to run or verify the plugin**; the vendor chunk is committed.
 * **A Chromium-based browser** — for the `clientchunk`, `browser`, `client` and
   `mmd` suites. Auto-detected in the standard Edge/Chrome locations; override with
-  `PET3D_BROWSER`.
+  `VRMPET3D_BROWSER`.
 * **The installed DSH `app.asar`** — for the `clientchunk` suite only, because that
   suite runs DSH's own client module system instead of a copy of it. Found at the
-  standard Windows install path; override with `PET3D_DSH_ASAR`. Without it the
+  standard Windows install path; override with `VRMPET3D_DSH_ASAR`. Without it the
   suite is skipped.
 * **Node only for rebuilding the 3D chunk** — `cd vendor && npm install` pulls
   esbuild + three + three-vrm + three-vrm-animation + three-mmd. Not needed
@@ -3453,7 +3527,7 @@ node scripts/live-probe.mjs --asset m1               # stream one model's bytes
 ```
 
 Regenerate the three source chunks after editing `lib/core.js`,
-`lib/placeholder.js` or `lib/pet3d.js` — and check them in CI:
+`lib/placeholder.js` or `lib/scene.js` — and check them in CI:
 
 ```bash
 node scripts/client-chunks.mjs              # writes lib/client.{core,placeholder,scene}.js
@@ -3471,14 +3545,14 @@ and a motion file that this repository cannot carry. Synthesize both (no network
 no third-party terms) and run them:
 
 ```bash
-node scripts/make-motion-fixtures.mjs        # -> build/fixtures/motions/pet3d-test.vmd
-node scripts/make-vrma-fixtures.mjs          # -> build/fixtures/vrma/{pet3d-test.vrma,pet3d-minimal.vrm}
+node scripts/make-motion-fixtures.mjs        # -> build/fixtures/motions/vrmpet3d-test.vmd
+node scripts/make-vrma-fixtures.mjs          # -> build/fixtures/vrma/{vrmpet3d-test.vrma,vrmpet3d-minimal.vrm}
 
 node scripts/verify-motion.mjs --model build/fixtures/miku/miku_v2.pmd \
-  --motion build/fixtures/motions/pet3d-test.vmd
+  --motion build/fixtures/motions/vrmpet3d-test.vmd
 
-node scripts/verify-motion.mjs --model build/fixtures/vrma/pet3d-minimal.vrm \
-  --motion build/fixtures/vrma/pet3d-test.vrma
+node scripts/verify-motion.mjs --model build/fixtures/vrma/vrmpet3d-minimal.vrm \
+  --motion build/fixtures/vrma/vrmpet3d-test.vrma
 ```
 
 Load any real model you own and render it to a PNG, with measurements:
@@ -3511,7 +3585,7 @@ running app instead, which is not subject to virtual time.
 |---|---|
 | `lib/core.js` — state machine, physics with wall and ceiling bounce, framing, idle motion (sway only, no vertical term), the per-state motion map (a list per state, legacy single-id accepted, the shared helpers), the per-state per-clip 循环/单次 + 表情 + 口型 settings, per-state one-shot intervals, the node-name and spring-chain-key rules, the preview channel, the frame-derived size limits, pointer aim, the VRM stand rotation | done, 471 checks |
 | `lib/placeholder.js` — procedural avatar | done, verified in a browser (47 meshes) |
-| `lib/pet3d.js` — scene, VRM/PMX/glTF loading, idle applier (both-eye blink), VMD/VRMA playback, the per-state draw and the one-shot end state, VRM stand + bone sync, camera orbit, gaze from an aim | done, verified with a real PMD and a real VRM |
+| `lib/scene.js` — scene, VRM/PMX/glTF loading, idle applier (both-eye blink), VMD/VRMA playback, the per-state draw and the one-shot end state, VRM stand + bone sync, camera orbit, gaze from an aim | done, verified with a real PMD and a real VRM |
 | `lib/client.js` — slot, pointer, wheel zoom inside the frame's own limits, drag reaction on first movement, right-drag orbit, gaze beyond the frame, settings, per-state motion box sets, session bridge | done, 66 checks |
 | `lib/client.{core,placeholder,scene}.js` — the generated delivery chunks | done, 43 checks against DSH's real loader |
 | `lib/index.js` — boundary stream, model catalog, motion catalog with its per-directory loop manifest, asset routes, imported-directory route, the window's page/sources/control routes, the settings store and the transient preview channel | done, 339 checks |
@@ -3526,7 +3600,7 @@ running app instead, which is not subject to virtual time.
 | `.vmd` playback on PMX/PMD | **verified**: a bone rotates 82.95° from rest over the clip (90.52° on a time-varying variant); 38 checks (the draw and the one-shot are asserted on this path too) |
 | `.vrma` playback on VRM | **verified**: a normalized bone rotates 19.39° and the raw skinned bone follows it identically; 31 checks — including on the real 25 MB VRM 0.x below |
 | Per-state assignment | done: **several clips per state**, one drawn at random on state entry, 8 states configurable, `held`/`falling`/`landing` excluded |
-| Loop / one-shot | done: declared per directory in `pet3d-motions.json`, absent means loop; a one-shot hands the pose back and is latched against a restart |
+| Loop / one-shot | done: declared per directory in `vrmpet3d-motions.json`, absent means loop; a one-shot hands the pose back and is latched against a restart |
 | Interaction with the drag physics | **verified**: `playingWhileHeld` is null — the clip drops out for the drag states and resumes after |
 | Failure handling | **verified**: a non-motion payload is refused with a reason, and the pet still renders after a malformed motion |
 | VMD camera / light / self-shadow tracks | **not played** — only bone and morph tracks |
@@ -3547,22 +3621,22 @@ running app instead, which is not subject to virtual time.
 - [x] **The composition has a `webServer` service — confirmed 2026-10-07** by asking
       the live host through the `Service` inspect provider:
       `register(route: WebRoute): () => void` with `kind: 'exact' | 'prefix'`, and a
-      duplicate `(kind, path)` throws. So `/pet3d/asset`, `/pet3d/motion`,
-      `/pet3d/catalog`, `/pet3d/motions` and `/pet3d/models` have a carrier.
+      duplicate `(kind, path)` throws. So `/vrmpet3d/asset`, `/vrmpet3d/motion`,
+      `/vrmpet3d/catalog`, `/vrmpet3d/motions` and `/vrmpet3d/models` have a carrier.
       **The first live run then proved the subtle half of this**: reading the service
       once with `ctx.get('webServer')` during `apply` missed it, nothing re-runs
-      `apply`, and `/pet3d/catalog` answered **404 in the app** while the pet itself
+      `apply`, and `/vrmpet3d/catalog` answered **404 in the app** while the pet itself
       rendered. The fix is `ctx.inject(['webServer'], — ` — declarative, so Cordis
       calls back when the service appears and disposes the scope if it goes away —      kept optional on purpose, because a hard `inject` in a composition with no web
       server would leave the plugin waiting for activation forever. That fix has run
       against a stub (`check-plugin-load.mjs` drives a late-arriving web server) and
       **has not been seen in a live app.**
-- [ ] **The `/pet3d/models` route has no client UI.** The host half is complete and
+- [ ] **The `/vrmpet3d/models` route has no client UI.** The host half is complete and
       covered over real HTTP (list, add, remove, persistence, refusals), but
       `lib/client.js` never calls it, so a user cannot import a directory from the
       settings panel yet. Extra directories still have to be named in the plugin
       config. Recorded in `docs/ARCHITECTURE.md` under Known limits.
-- [ ] **`ctx.remote.pet3d` is still unproven, and is now deliberately optional.**
+- [ ] **`ctx.remote.vrmpet3d` is still unproven, and is now deliberately optional.**
       The client `Service` catalog publishes layout, locale, sessions, slots, theme,
       timer, uiWorkspace and workspaces — there is no `remote` entry, and no
       `connection` entry either. The shipped chat plugin does inject `remote`, so the
@@ -3642,7 +3716,7 @@ running app instead, which is not subject to virtual time.
       list of fields out of the window's published state. A field the page publishes but the launcher does not relay
       looks exactly like a page that never published it; that class of bug has already happened twice (`status.scale`,
       and the motion readout's `offered`/`routed`).
-   2. **The staleness path** — `/pet3d/state` answers `state: null` once the in-app half's report ages out (`stale`),
+   2. **The staleness path** — `/vrmpet3d/state` answers `state: null` once the in-app half's report ages out (`stale`),
       which is how a frozen label is supposed to clear; a label that outlives its report is the defect the 17th pass
       measured.
    3. **The clock and the duration rules** — the turn clock comes from DSH's OWN running flag rather than from a
@@ -3655,20 +3729,61 @@ running app instead, which is not subject to virtual time.
    and cleared-on-null). A fix that changes the status line without moving one of those is a fix that changed nothing;
    one that moves the count needs the docs' totals updated in the same pass.
 
-1. **This machine (2026-10-08): the plugin IS installed and live.** It was installed
-   hot with the plugin manager — no restart — and the pet appeared. The profile state
-   now is:
+1. **⚠ THIS INSTALL NEEDS REINSTALLING (2026-10-12 — the forty-second pass renamed the package).** The profile
+   still names the OLD package, and the folder it links to still has the old name; nothing moved except the
+   manifest, which is exactly why DSH will refuse to resolve it until the swap below is done:
 
-   | Thing | State |
+   | Thing | State right now |
    |---|---|
-   | `dependencies["dsh-plugin-pet3d"]` | `link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d` |
-   | `dsh.profile.bundles` | includes `dsh-plugin-pet3d` |
+   | `dependencies["dsh-plugin-pet3d"]` | `link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d` — the OLD name, pointing at this same folder |
+   | `dsh.profile.bundles` | lists `dsh-plugin-pet3d`, which the bundle's own patch must now insert under the new name |
+   | what this folder declares | `dsh-plugin-vrmpet3d` — that mismatch IS the problem |
+   | `cordis.yml` | **materialized** (69 KB) from the bundle composition. A row for the old name in it is now an unresolved insert row, and DSH fails the entry rather than ignoring it |
    | `dsh-plugin-whale-pet` | still a dependency, **disabled** and no longer in `bundles` (both pets own `shell.overlay`) |
-   | imported model directories | `F:\SynologyDrive\FatFish-pet\Models` (persisted in `pet3d-model-dirs.json`) |
-   | `cordis.yml` | **materialized**: the plugin manager wrote the flattened bundle composition over the empty entry list (69 KB). It does not name `pet3d` — that row comes from the bundle's own patch — and `cordis.patch.yml` is untouched |
-   | backups before the install | `package.json.bak-pet3d-2026-10-08T09-15-28`, `cordis.patch.yml.bak-pet3d-2026-10-08T09-15-28` |
+   | imported model directories | `F:\SynologyDrive\FatFish-pet\Models`, persisted in `pet3d-model-dirs.json` — a name the new build still READS |
 
-   **What is left, and it needs a restart:** the running host half is still the
+   **The swap, in order — stop DSH first (the host half is not hot-reloaded):**
+
+   ```powershell
+   $profile = "$env:USERPROFILE\.dsh\profiles\desktop"
+
+   # 1. What the profile says today (read-only). Expect the OLD name in both places.
+   node -e "const m=require(process.argv[1]+'/package.json');console.log(m.dependencies['dsh-plugin-pet3d'],(m.dsh.profile.bundles||[]).includes('dsh-plugin-pet3d'))" $profile
+
+   # 2. Remove the old row and its link. Two edits in <profile>/package.json:
+   #      - delete dependencies["dsh-plugin-pet3d"]
+   #      - drop "dsh-plugin-pet3d" from dsh.profile.bundles
+   #    then delete the stale link (a junction, not a copy):
+   Remove-Item -Recurse -Force "$profile\node_modules\dsh-plugin-pet3d"
+
+   # 3. Install the new name (the installer writes package.json.bak-<stamp> itself):
+   node scripts/install-desktop-plugin.mjs --profile $profile
+
+   # 4. Prove the profile resolves it — PASSED before anyone looks at the screen:
+   node scripts/check-plugin-load.mjs --profile $profile      # -> plugin load preflight: PASSED
+
+   # 5. If cordis.yml still carries a row for the old name, re-materialize it with the plugin manager
+   #    (install_bundle with the link: spec) or edit that row; an unresolved insert row fails the entry.
+   ```
+
+   **Your settings are NOT reset by this.** Every renamed file and key is a READ fallback added by the same pass, so
+   the old ones keep working and the new names are written from the next edit on: `pet3d-settings.json` →
+   `vrmpet3d-settings.json`, `pet3d-model-dirs.json` → `vrmpet3d-model-dirs.json`, `pet3d-motion-dirs.json` →
+   `vrmpet3d-motion-dirs.json`, a motion directory's `pet3d-motions.json` → `vrmpet3d-motions.json`, the browser key
+   `dsh.pet3d.v1` → `dsh.vrmpet3d.v1`, and the `PET3D_*` environment variables → `VRMPET3D_*` (both names are still
+   read — see `lib/env.js`).
+
+   **PMX/PMD models and VMD motions are no longer loaded** (VRM only). An old model still listed in the catalog
+   answers with a refusal that NAMES the format (`PMX is not supported: this build loads VRM only …`), and a `.vmd`
+   in a motion directory is simply not offered. The model and motion files themselves stay on disk — nothing was
+   deleted.
+
+   *The 2026-10-08 record, as it was, with the names of that day:* it was installed hot with the plugin manager (no
+   restart) as `dependencies["dsh-plugin-pet3d"] = link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d`, with
+   `dsh.profile.bundles` including `dsh-plugin-pet3d`, and backups `package.json.bak-pet3d-2026-10-08T09-15-28` /
+   `cordis.patch.yml.bak-pet3d-2026-10-08T09-15-28`.
+
+   **What is left after the swap, and it needs a restart:** the running host half is still the
    *pre-fix* code. Editing `lib/index.js` does **not** hot-reload — this composition
    watches no module roots (`hmr.config.root: []`), so §11's model-id fix takes effect
    only after DSH is restarted. Nothing else is pending.
@@ -3704,24 +3819,24 @@ running app instead, which is not subject to virtual time.
    live" in one command, and `node scripts/verify-browser.mjs --page chunk-delivery`
    reproduces the client delivery path with DSH's own loader. The client chunk suite
    now finds this machine's installed `app.asar`
-   (`F:\DeepSeek\Harness\resources\app.asar`) by itself; `PET3D_DSH_ASAR` is only
+   (`F:\DeepSeek\Harness\resources\app.asar`) by itself; `VRMPET3D_DSH_ASAR` is only
    needed for an unusual install path.
 
 2. **Observe, in this order.** Each step isolates one unknown:
    * Does the pet appear at all? If not, the slot registration or the chunk delivery
-     failed — check the console for `pet3d:` lines, then inspect the DOM for a
-     `[data-pet3d]` wrapper. That attribute carries `loading`, `ready` or `error:…`,
+     failed — check the console for `vrmpet3d:` lines, then inspect the DOM for a
+     `[data-vrmpet3d]` wrapper. That attribute carries `loading`, `ready` or `error:…`,
      so its absence means the slot never rendered, while `error:…` names the cause.
    * Does it render the **placeholder**? If the canvas is blank, the failure is in
      `Scene`/`initScene`, not in model loading.
    * Open settings (right-click). Is the model list populated? If it shows only
-     "Built-in placeholder", `/pet3d/catalog` is not being served. The composition
+     "Built-in placeholder", `/vrmpet3d/catalog` is not being served. The composition
      *does* have a `webServer` (confirmed — see §4), so a failure here is the
      plugin's own `register` call, not a missing service.
-   * Configure a model. Does `/pet3d/asset` return bytes? Does the model appear?
+   * Configure a model. Does `/vrmpet3d/asset` return bytes? Does the model appear?
    * Does the **status stream** work? The pet reacts either way, so compare: turn
      boundaries make it celebrate and notice failures, while the React status hooks
-     alone give coarser changes. `ctx.remote.pet3d` has still never been exercised
+     alone give coarser changes. `ctx.remote.vrmpet3d` has still never been exercised
      for a third-party plugin, and it is deliberately not a hard dependency — see
      the note in §4. Silence here is an expected, survivable outcome.
    * Configure a **motion** on a model of the matching kind. Does the dropdown list
@@ -3798,7 +3913,7 @@ These all cost real time. Each has a test or a comment at the site.
     instantly with that message, it is not your command.
 
 13. **esbuild tree-shakes anything `vendor/entry.js` does not list, and the browser
-    code only ever reads symbols off `__PET3D_VENDOR__`.** So a missing bag entry is
+    code only ever reads symbols off `__VRMPET3D_VENDOR__`.** So a missing bag entry is
     a missing function at runtime, with no build error. This already bit once:
     `VMDLoader.load()` returns a parsed `VmdObject`, and `buildAnimation` — the
     separate export that turns it into a playable `AnimationClip` — was imported
@@ -3831,8 +3946,8 @@ These all cost real time. Each has a test or a comment at the site.
     `scripts/verify-motion.mjs` both serve to headless Edge over loopback and pass.
     If a loopback probe hangs, suspect the launch call before the network.
 
-15. **`globalThis.__PET3D_SCENE__` is a namespace object, not the constructor.** The
-    class is `__PET3D_SCENE__.Scene`. The global itself is truthy, so a naive
+15. **`globalThis.__VRMPET3D_SCENE__` is a namespace object, not the constructor.** The
+    class is `__VRMPET3D_SCENE__.Scene`. The global itself is truthy, so a naive
     presence check passes and then construction fails with "not a constructor".
 
 16. **A `.vrma` and a VRM model are both GLB files.** They are distinguishable only
@@ -3973,23 +4088,23 @@ These all cost real time. Each has a test or a comment at the site.
 
 33. **The scene chunk must load before the vendor chunk, and the reason is not
     obvious.** The client half's `publish()` calls
-    `globalThis.__PET3D_SCENE__.requireVendor(vendor)` when the vendor lands. With
-    the vendor ordered earlier, `__PET3D_SCENE__` is still `undefined` at that
+    `globalThis.__VRMPET3D_SCENE__.requireVendor(vendor)` when the vendor lands. With
+    the vendor ordered earlier, `__VRMPET3D_SCENE__` is still `undefined` at that
     moment, the call is silently skipped, and nothing anywhere reports it — the
     scene would have read the global itself and worked anyway. Order is core,
     placeholder, **scene**, **vendor**: the scene needs the first two because it
     reads their globals when it runs, and it must precede the vendor so the
-    hand-off has a receiver. `__PET3D_CLIENT__.handedVendor()` reports what was
+    hand-off has a receiver. `__VRMPET3D_CLIENT__.handedVendor()` reports what was
     handed over, and the delivery suite asserts it is the vendor chunk's own export.
 
-34. **You cannot spy on `globalThis.__PET3D_SCENE__` from outside the client half.**
+34. **You cannot spy on `globalThis.__VRMPET3D_SCENE__` from outside the client half.**
     Two attempts failed before the assertion was written against the client's own
     record instead. A stand-in installed before `lib/client.js` is *replaced* when
     the scene chunk loads, so the hand-off hits the real scene and the spy records
     nothing; a stand-in installed after is simply never called. Anything that needs
     to observe this hand-off must be read back from the client, not intercepted.
 
-35. **A `[data-pet3d]` wrapper that never appears is not the same failure as a
+35. **A `[data-vrmpet3d]` wrapper that never appears is not the same failure as a
     plugin that never activated.** The slot renders that attribute with `loading`,
     `ready` or `error:…`. Check for its absence before concluding the entry failed
     to import — the plugin can be fully active with its slot output missing.
@@ -4010,8 +4125,8 @@ These all cost real time. Each has a test or a comment at the site.
     "connection refused" or "bad port", suspect this before the handler.
 
 37. **A suite that resolves a path inside the running profile is coupled to the
-    operator's own data.** `PET3D_MODEL_DIRS_FILE` defaults to
-    `<profile>/pet3d-model-dirs.json`, so before 2026-10-08 `verify-model.mjs` read
+    operator's own data.** `VRMPET3D_MODEL_DIRS_FILE` defaults to
+    `<profile>/vrmpet3d-model-dirs.json`, so before 2026-10-08 `verify-model.mjs` read
     whatever the live plugin had imported — and its route groups wrote the same file.
     Measured: one live import of a real model directory made the suite report three
     models where one was expected, i.e. a green suite went red for a reason that had
@@ -4029,7 +4144,7 @@ These all cost real time. Each has a test or a comment at the site.
     the operator's settings file with a fresh store's snapshot of it. The preferences survived only
     because the constructor reads before it writes, which is luck rather than design, and a group
     that POSTs a patch would have overwritten them. `settingsFileFor` now honours
-    `PET3D_SETTINGS_FILE`, both suites set it **at the top of the file, before the first `apply`**,
+    `VRMPET3D_SETTINGS_FILE`, both suites set it **at the top of the file, before the first `apply`**,
     and `check-plugin-load.mjs` asserts that the preflight wrote the scratch file. The tell worth
     remembering: **a version counter that goes backwards across a run means somebody else wrote the
     store's file.**
@@ -4049,7 +4164,7 @@ These all cost real time. Each has a test or a comment at the site.
     `cordis.patch.yml` instead" file — with the **flattened 69 KB composition of the
     bundles**. It was harmless and the plugin still activates, but the file is no
     longer what its own comment says it is, and it does not become a place to look for
-    plugin rows either: `pet3d` does not appear in it at all (its row comes from the
+    plugin rows either: `vrmpet3d` does not appear in it at all (its row comes from the
     bundle's own patch). So after any manager operation, neither "read `cordis.yml` to
     see what is composed" nor "hand-edit `cordis.yml`" is right; the patch layer to
     edit is still `cordis.patch.yml`, and the live composition is what the `Config`
@@ -4082,7 +4197,7 @@ These all cost real time. Each has a test or a comment at the site.
       rewriting these two probes onto a CDP session with real time — the `--dump-dom`
       crutch is what forces virtual time in the first place.
     * **The plugin itself is fine**: the same model bytes were streamed by the *live
-      app's* own route (`/pet3d/asset?m=…` →200, 26 MB) and the in-app loader path is
+      app's* own route (`/vrmpet3d/asset?m=…` →200, 26 MB) and the in-app loader path is
       the one that matters. `scripts/live-probe.mjs --asset <id>` checks it.
 
 41. **One field, two units: `Scene.height` was both the canvas height in pixels and the
@@ -4109,14 +4224,14 @@ These all cost real time. Each has a test or a comment at the site.
     revision — so a symbol added to `lib/client.js` can be used before the chunk that
     defines it is ever loaded.** Measured live on 2026-10-11:
     ```
-    /pet3d/state -> {"seq":53,"state":null,"error":"TypeError: this.core.SpeechMachine
-                     is not a constructor at new Pet3DWidget (client.js&rev=c7a693d3c03f:704:19)"}
+    /vrmpet3d/state -> {"seq":53,"state":null,"error":"TypeError: this.core.SpeechMachine
+                     is not a constructor at new VrmPet3DWidget (client.js&rev=c7a693d3c03f:704:19)"}
     ```
     The app had the NEW `client.js` (whose constructor builds `new
     this.core.SpeechMachine(...)`) against a `client.core.js` without that symbol — the
     chunk had not been regenerated yet when the page was loaded, or the browser served a
     cached copy under an unchanged `rev`. The widget never mounted, so the IN-APP pet was
-    gone, `/pet3d/state` published `state: null` for ever, and the floating window (which
+    gone, `/vrmpet3d/state` published `state: null` for ever, and the floating window (which
     has no session of its own) kept drawing 工作中 with its clock counting up — reported
     by the operator as "任务完成的提醒又没收到，还在显示深度求索中…".
 
@@ -4134,8 +4249,8 @@ These all cost real time. Each has a test or a comment at the site.
       rather than keep the last one; ignoring a null state is how a window lies for
       seventeen minutes.
 
-    Corollary for diagnosis: `/pet3d/state` carries the client half's own `error`, and the
-    launcher now relays `state: {drawn, published, at, error}` into `/pet3d/desktop`. The
+    Corollary for diagnosis: `/vrmpet3d/state` carries the client half's own `error`, and the
+    launcher now relays `state: {drawn, published, at, error}` into `/vrmpet3d/desktop`. The
     two halves disagreeing is a fact worth being able to read, not something to infer from
     a frozen label.
 
@@ -4151,12 +4266,12 @@ These all cost real time. Each has a test or a comment at the site.
 | `vendor/README.md` | the pinned stack, how to rebuild, the three traps |
 | `lib/core.js` | **pure logic.** No DOM, no WebGL. Start here |
 | `lib/placeholder.js` | the procedural avatar, from three.js primitives |
-| `lib/pet3d.js` | the WebGL scene, loaders, idle and authored-motion playback |
+| `lib/scene.js` | the WebGL scene, loaders, idle and authored-motion playback |
 | `lib/client.js` | the DSH client half |
 | `lib/index.js` | the DSH host half |
 | `lib/client.core.js` | generated from `lib/core.js`. **Do not edit** |
-| `lib/client.scene.js` | generated from `lib/pet3d.js`. **Do not edit** |
-| `lib/client.scene.js` | generated from `lib/pet3d.js`. **Do not edit** |
+| `lib/client.scene.js` | generated from `lib/scene.js`. **Do not edit** |
+| `lib/client.scene.js` | generated from `lib/scene.js`. **Do not edit** |
 | `lib/client.vendor.js` | generated 3D chunk. **Do not edit** |
 | `scripts/verify-all.mjs` | run everything |
 | `scripts/loopback.mjs` | bind a probe server to a port `fetch`/Chromium accept (gotcha 36) |
@@ -4211,7 +4326,7 @@ kept outside this repository, with the same 19.3851° on both the normalized and
 raw bone.
 
 **Not verified, and the reason to be careful:** none of it ran inside the real DSH
-application. The plugin has never been seen in a live GUI, and `ctx.remote.pet3d` has
+application. The plugin has never been seen in a live GUI, and `ctx.remote.vrmpet3d` has
 never been exercised for a third-party plugin. One item on this list *was* resolved
 without a restart, by asking the live host through the inspect provider: the
 composition does have a `webServer` with `register({kind, path, handler})` — see §4.
@@ -4243,7 +4358,7 @@ again, so the next attempt is a first install rather than a repair.
 The pet did not appear. The app showed one notice:
 
 ```
-pet3d: lib/pet3d.js is not loaded.
+vrmpet3d: lib/scene.js is not loaded.
 ```
 
 ### Root cause — three verified facts about DSH's own plugin loader
@@ -4262,9 +4377,9 @@ cannot see inside it, so this tool is the only way in.
    if (!CLIENT_CHUNK.test(fileName)) return void 0;                    // the resource route
    ```
 
-   `client.vendor.js` matches. **`pet3d.js`, `core.js` and `placeholder.js` never
-   match, so they are never served**, and `globalThis.__PET3D_SCENE__` /
-   `__PET3D_CORE__` / `__PET3D_PLACEHOLDER__` are therefore always undefined in the
+   `client.vendor.js` matches. **`scene.js`, `core.js` and `placeholder.js` never
+   match, so they are never served**, and `globalThis.__VRMPET3D_SCENE__` /
+   `__VRMPET3D_CORE__` / `__VRMPET3D_PLACEHOLDER__` are therefore always undefined in the
    real app. `lib/client.js` reads exactly those globals (lines 261-262) and throws
    the message above. This is the whole of the reported failure.
 
@@ -4284,7 +4399,7 @@ cannot see inside it, so this tool is the only way in.
    * relative resolution **drops the query string**, losing the `?rev=` that fact 2
      requires; and
    * the plugin entry is loaded through a *combo* URL
-     (`/plugins/??dsh-plugin-pet3d/client.js&rev=…`), whose pathname is `/plugins/`,
+     (`/plugins/??dsh-plugin-vrmpet3d/client.js&rev=…`), whose pathname is `/plugins/`,
      so the sibling resolves to `/plugins/<id>/client.vendor.js` with the id lost — the wrong path.
 
    That route survives only as the harness fallback; the app path is the module
@@ -4315,7 +4430,7 @@ where the id is `chunkId(ownerId, fileName)` = `` `${ownerId}/${fileName}` `` (l
 477), e.g. `<pluginId>/client.vendor.js`. So each chunk file must contain
 
 ```js
-window.__ModuleLoader__.load({ id: 'dsh-plugin-pet3d/client.<name>.js', factory: function () { /* — */ } });
+window.__ModuleLoader__.load({ id: 'dsh-plugin-vrmpet3d/client.<name>.js', factory: function () { /* — */ } });
 ```
 
 **The `id` is mandatory and there is no shorter form.** `register` (line 566) reads
@@ -4336,7 +4451,7 @@ treated as an absolute module id.
 ### Why every suite missed it
 
 Every browser harness **inlines the sources itself** with `<script>` tags
-(`scripts/verify-browser.mjs` pulls in `core.js`, `placeholder.js`, `pet3d.js`
+(`scripts/verify-browser.mjs` pulls in `core.js`, `placeholder.js`, `scene.js`
 directly), so the 37 `client`, 13 `browser` and 13 `mmd` checks all exercise a
 delivery path that does not exist in the app. `check-plugin-load.mjs` tests the
 **host** half only. So no test in this repository could ever have caught this, and
@@ -4356,7 +4471,7 @@ What is in place:
 
 * **`scripts/client-chunks.mjs`** generates `lib/client.core.js`,
   `lib/client.scene.js` from
-  `lib/core.js`, `lib/placeholder.js` and `lib/pet3d.js`. Each generated file is the
+  `lib/core.js`, `lib/placeholder.js` and `lib/scene.js`. Each generated file is the
   original **verbatim** plus a registration block that republishes the global the
   original already sets. `--check` fails if a copy has drifted, and the same script
   asserts that the owner id it writes, the id `lib/client.js` registers under, and
@@ -4364,7 +4479,7 @@ What is in place:
   fetched, with no runtime complaint.
 * **`vendor/entry.js` + `scripts/vendor-build.mjs`** now emit `lib/client.vendor.js`
   with **both** deliveries: the module-system registration *and* the
-  `globalThis.__PET3D_VENDOR__` assignment the inline harnesses read. The build
+  `globalThis.__VRMPET3D_VENDOR__` assignment the inline harnesses read. The build
   asserts both survived, because esbuild tree-shakes whatever the entry does not
   list.
 * **`lib/client.js`** asks for all four chunks through
@@ -4373,7 +4488,7 @@ What is in place:
   global fallback per chunk so the inlined harnesses still pass. `loadChunks`
   collects every failure and names the files DSH refused, so a future delivery
   regression reports *which* chunk is missing instead of a bare "not loaded".
-* **`lib/pet3d.js`** gained `requireVendor(vendor)` and a three-argument
+* **`lib/scene.js`** gained `requireVendor(vendor)` and a three-argument
   `loadVendor(baseUrl, timeoutMs, require)`: the module system is tried first, and
   the old `<script src>` route survives as the harness path and as a fallback if a
   future loader drops `require.async`. `lib/client.js` hands the vendor it already
@@ -4396,7 +4511,7 @@ which it hands to the loader's transport as payload strings rather than inlining
 them as `<script>` tags — so the URL the loader composes is observable and the
 assertion about it means something. It then:
 
-* boots the module system over a boot wire whose pet3d row keeps the combo URL shape
+* boots the module system over a boot wire whose vrmpet3d row keeps the combo URL shape
   `chunkUrl` requires;
 * asserts the client entry registered under the package name, materializes it, and
   gets back a plugin with `inject` and `apply`;
@@ -4405,7 +4520,7 @@ assertion about it means something. It then:
 * asserts every requested URL carries the current `rev` **and** is a per-package
   `client.<name>.js` path — the two things the old path got wrong;
 * asserts the client half **handed the vendor graph to the scene**, read back from
-  `__PET3D_CLIENT__.handedVendor()` because spying on `__PET3D_SCENE__` cannot work
+  `__VRMPET3D_CLIENT__.handedVendor()` because spying on `__VRMPET3D_SCENE__` cannot work
   (gotcha 34) — this is the assertion that caught the chunk-order bug above;
 * keeps four negative controls, so the page cannot pass by accident: a
   non-`client.<name>.js` request is refused, a replayed registration is a duplicate
@@ -4452,14 +4567,14 @@ otherwise, they were observed on **2026-10-08 on this machine**.
 
 | Unknown | How it shows up | What to read |
 |---|---|---|
-| Does the client half receive its four chunks? | the pet appears, or a badge names the files DSH refused | console `pet3d:` lines, and the badge text, which is built from the refused file list. **Answered: the pet rendered** |
-| Is `shell.overlay` accepting the registration? | a `data-pet3d` attribute on a wrapper div, carrying `ready` or `error:…` | inspect the DOM for `[data-pet3d]`; the live `Slots` inspect provider lists the occupants of `shell.overlay` by id. **Answered: `pet3d`, order 80, active** |
-| Do the plugin's own `webServer.register` calls succeed? | the settings panel lists models, or offers only "Built-in placeholder" | `/pet3d/catalog` in the network tab, or `node scripts/live-probe.mjs`. **Answered: all three routes answer 200 live** — this is the `ctx.inject` fix working, where 2026-10-07 got a 404 |
+| Does the client half receive its four chunks? | the pet appears, or a badge names the files DSH refused | console `vrmpet3d:` lines, and the badge text, which is built from the refused file list. **Answered: the pet rendered** |
+| Is `shell.overlay` accepting the registration? | a `data-vrmpet3d` attribute on a wrapper div, carrying `ready` or `error:…` | inspect the DOM for `[data-vrmpet3d]`; the live `Slots` inspect provider lists the occupants of `shell.overlay` by id. **Answered: `vrmpet3d`, order 80, active** |
+| Do the plugin's own `webServer.register` calls succeed? | the settings panel lists models, or offers only "Built-in placeholder" | `/vrmpet3d/catalog` in the network tab, or `node scripts/live-probe.mjs`. **Answered: all three routes answer 200 live** — this is the `ctx.inject` fix working, where 2026-10-07 got a 404 |
 | Does a **saved** model survive a reload? | the pet falls back to the placeholder with an "unknown model id" badge | `node scripts/live-probe.mjs --id-race`. **Answered: no** — the defect of §11, fixed in the source, needs a restart to reach the app |
 | Does a real model load and display in the app? | the placeholder is replaced by the VRM/PMX | pick one in the settings panel; the two VRMs in `F:\SynologyDrive\FatFish-pet\Models` are importable now |
-| Does `ctx.remote.pet3d` bind for a third-party plugin? | turn boundaries arrive, or the pet only reacts to session status | the pet works without it — deliberately not a hard dependency, so silence is survivable |
+| Does `ctx.remote.vrmpet3d` bind for a third-party plugin? | turn boundaries arrive, or the pet only reacts to session status | the pet works without it — deliberately not a hard dependency, so silence is survivable |
 | Is the pet positioned and sized correctly? | visible but clipped, tiny, or off-screen | the `Placement` fractions and `--page framing-diag` |
-| Can a user import a model directory from the panel? | nothing in the settings panel offers it | `/pet3d/models` exists and is verified over HTTP, but `lib/client.js` never calls it — see the Known limit in `docs/ARCHITECTURE.md` |
+| Can a user import a model directory from the panel? | nothing in the settings panel offers it | `/vrmpet3d/models` exists and is verified over HTTP, but `lib/client.js` never calls it — see the Known limit in `docs/ARCHITECTURE.md` |
 
 **Nothing in this repository can answer the rendering questions** — only the app can — and the delivery suite must not be read as though it could: it proves the chunks are
 deliverable and requested correctly, which is exactly the thing that was silently
@@ -4468,7 +4583,7 @@ false before.
 Parts of it can be answered without reading a screen, and that is now the cheap first
 move: `scripts/live-probe.mjs` reports the host half's routes over loopback, the client
 `Slots` inspect provider reports the live occupants of `shell.overlay`, and the host
-`Config` provider reports whether the Loader composed the `pet3d` entry at all.
+`Config` provider reports whether the Loader composed the `vrmpet3d` entry at all.
 
 ---
 
@@ -4482,34 +4597,34 @@ the running app that this session is itself attached to.
 
 ```powershell
 # 1. Back up the two profile files the manager rewrites.
-Copy-Item "$HOME\.dsh\profiles\desktop\package.json"     "...\package.json.bak-pet3d-2026-10-08T09-15-28"
-Copy-Item "$HOME\.dsh\profiles\desktop\cordis.patch.yml" "...\cordis.patch.yml.bak-pet3d-2026-10-08T09-15-28"
+Copy-Item "$HOME\.dsh\profiles\desktop\package.json"     "...\package.json.bak-vrmpet3d-2026-10-08T09-15-28"
+Copy-Item "$HOME\.dsh\profiles\desktop\cordis.patch.yml" "...\cordis.patch.yml.bak-vrmpet3d-2026-10-08T09-15-28"
 ```
 
 2. `plugin_manager set_bundle dsh-plugin-whale-pet enabled=false` — both pets own
    `shell.overlay`, so only one can be debugged at a time.
-3. `plugin_manager install_bundle link:F:\SynologyDrive\FatFish-pet\dsh-plugin-pet3d`
+3. `plugin_manager install_bundle link:F:\SynologyDrive\FatFish-pet\dsh-plugin-vrmpet3d`
    →`"application": "applied"`. **No restart.** pnpm took 1m54s because it re-checked
    the registry for the *other* dependency in the profile; the install itself was
    offline-capable.
 4. Verified, without looking at the screen:
-   * client `Slots` →`shell.overlay` occupants: `pet3d` at order 80, `active: true`
+   * client `Slots` →`shell.overlay` occupants: `vrmpet3d` at order 80, `active: true`
      (and no `whale-pet`);
-   * host `Config` →one entry, `id: include:pet3d`, `name: dsh-plugin-pet3d`,
+   * host `Config` →one entry, `id: include:vrmpet3d`, `name: dsh-plugin-vrmpet3d`,
      `status: absent` (which means "declares no Config schema", not "not loaded" —     shipped entries show the same);
-   * `curl http://127.0.0.1:19387/pet3d/{catalog,motions,models}` →**200 with real
+   * `curl http://127.0.0.1:19387/vrmpet3d/{catalog,motions,models}` →**200 with real
      payloads**, while `/` →401. The plugin's routes need no auth; the index does.
      Scripted as `scripts/live-probe.mjs`.
-5. `POST /pet3d/models {add: "F:\SynologyDrive\FatFish-pet\Models"}` →`200`,
+5. `POST /vrmpet3d/models {add: "F:\SynologyDrive\FatFish-pet\Models"}` →`200`,
    `persisted: true`, `modelCount: 2`. This is the first real use of the new route, and
    it is how the picker got something to offer.
-6. Confirmed the byte route streams the 26 MB VRM (`GET /pet3d/asset?m=…` →200).
+6. Confirmed the byte route streams the 26 MB VRM (`GET /vrmpet3d/asset?m=…` →200).
 7. Asked the operator: **the pet appeared, rendering the procedural placeholder.** The
    delivery fix that was written on 2026-10-07 and never tested is now tested.
 
 ### What it found: model ids were re-minted on every catalog read
 
-`/pet3d/catalog` calls `rebuildModels()` on **every** request, and `mintModelId()` was
+`/vrmpet3d/catalog` calls `rebuildModels()` on **every** request, and `mintModelId()` was
 a bare counter rather than a path-keyed map (the motion path already did it right).
 The live sequence, reproducible with `node scripts/live-probe.mjs --id-race`:
 
@@ -4552,7 +4667,7 @@ used on this machine):
 | after a pose reset | −.9662 (stand restored) | −.0823 |
 
 The fix derives the rotation from the rig instead of hardcoding signs
-(`core.aimDownQuaternion`, unit-tested in `verify.mjs`; `dropArm` in `lib/pet3d.js`
+(`core.aimDownQuaternion`, unit-tested in `verify.mjs`; `dropArm` in `lib/scene.js`
 applies it in the bone's own local space and clamps it to 75°), records the result as the
 rest pose every additive write builds on, and **re-applies it after every
 `resetNormalizedPose()`** — otherwise every drag would snap the pet back into a T.
@@ -4567,7 +4682,7 @@ bone but translation only for the hips**, so the old chest-*lift* breath could n
 been visible no matter how often the sync ran. The VRM breath is now a chest **pitch** — measured on the same model: the skinned chest turns 0.54° over ten idle frames, with
 0.0008 of positional drift.
 
-Both fixes live in `lib/core.js` + `lib/pet3d.js`, and therefore in the generated
+Both fixes live in `lib/core.js` + `lib/scene.js`, and therefore in the generated
 `lib/client.{core,scene}.js` chunks, which were regenerated.
 
 ### What it also found: the suite read the operator's real profile
@@ -4576,7 +4691,7 @@ While the live import was in place, the host suite reported three models where o
 expected — because it resolved the imported-directory list from the **running profile**
 by default. A user's own imports could therefore turn a green suite red for reasons
 that have nothing to do with the code under test, and the route groups could write the
-user's list. The suite now redirects `PET3D_MODEL_DIRS_FILE` to a scratch file at the
+user's list. The suite now redirects `VRMPET3D_MODEL_DIRS_FILE` to a scratch file at the
 top of the file, before any group applies the plugin. See gotcha 37.
 
 ### The interaction round: wheel zoom, view orbit, size reset, wall bounces
@@ -4734,7 +4849,7 @@ the placeholder, so no asset is needed): `pitchUp −.1848` against the VRM fixt
 The reason is structural, not a sign to flip. There were two paths:
 
 * avatars whose wrap recorded a rest **quaternion** (VRM, MMD, glTF) →the derived axes;
-* everything else →`pet3dRestRot`, a local **euler** (`rotation.x = rest.x + pitch`,
+* everything else →`vrmpet3dRestRot`, a local **euler** (`rotation.x = rest.x + pitch`,
   `rotation.y = rest.y + yaw`) — the original assumption, verbatim.
 
 The placeholder took the second, so "measuring the axes" had only ever fixed one of the two
@@ -4788,7 +4903,7 @@ screen. **Not from inside the plugin**, and the reasons are structural, not effo
   detectable and vulnerable to updates.
 
 **What does work, verified by probe rather than by reading docs** (probe app in `%TEMP%`, result
-kept as `%TEMP%\pet3d-electron\app\result.json`; nothing downloaded, nothing in the installation
+kept as `%TEMP%\vrmpet3d-electron\app\result.json`; nothing downloaded, nothing in the installation
 modified, no stray process left):
 
 | route | result |
@@ -4830,7 +4945,7 @@ Asked for and delivered the same day, on the strength of §12's measurements. Wh
 | the launcher | `desktop/` (`main.js`, `preload.js`, `package.json`) | an Electron app: the transparent always-on-top window, cursor polling, the click-through policy, the parent watchdog, and a `--self-test` mode that proves the window and writes a JSON report |
 | the runtime | `lib/desktop.js` | builds a bare-Electron directory beside the installation out of **hard links**, sanitises the child environment, spawns and stops the launcher, and reports every outcome |
 | the page | `lib/desktop-page.html` + `lib/desktop-page.js` | the pet on the screen-sized frame: the same `Placement`, `Scene`, gaze and physics the overlay uses, plus the rectangle the launcher needs |
-| the routes | `lib/index.js` | `GET /pet3d/window`, `GET /pet3d/window/lib/<name>` (a whitelist of six files), `GET|POST /pet3d/desktop` |
+| the routes | `lib/index.js` | `GET /vrmpet3d/window`, `GET /vrmpet3d/window/lib/<name>` (a whitelist of six files), `GET|POST /vrmpet3d/desktop` |
 | the switch | `lib/client.js` | the panel's **Floating window** checkbox, which asks the host and shows what it answered (on / off / starting / why it failed) |
 | the coverage | `scripts/verify-desktop.mjs` (83 checks) + the `client-test` page | the runtime plan, the spawn environment, the lifecycle, the page's interactions — and **a real Electron window** told to prove itself |
 
@@ -4857,7 +4972,7 @@ pixels=1392055 transparent=6625865 webgl2=true electron=44.0.0` — 1.39 M paint
    rather than to reimplement it — a parallel implementation of an existing method, again.
 5. **A throw inside the frame loop was invisible.** The page had already reported ready, so a
    failure in frame 2 ended the loop and nothing said why. The loop is now guarded and publishes
-   `window.__PET3D_DESKTOP_STATE__` (frames, last error, placement, rectangle); the launcher
+   `window.__VRMPET3D_DESKTOP_STATE__` (frames, last error, placement, rectangle); the launcher
    collects console messages and reads that state during its self-test.
 
 Two smaller ones worth knowing: the launcher's config omitted the screen's `x`/`y`, so the page
@@ -4865,7 +4980,7 @@ computed `undefined + 2202 = NaN` for every rectangle — and the launcher's `Nu
 turned that into `0,0`, i.e. a pet whose click-through hit area was nowhere near the pet. And the
 suite's first runtime directory was placed **inside this repository**, which is a Synology-synced
 tree: 17 entries including a hard link to a 244 MB executable, handed to the sync client. It now
-lives beside the installation (`F:\DeepSeek\pet3d-desktop-runtime`), which is also where the host
+lives beside the installation (`F:\DeepSeek\vrmpet3d-desktop-runtime`), which is also where the host
 half puts it, and the workspace stays clean.
 
 ### The sixth trap, found by using it: "I turned it on and nothing happened"
@@ -4873,7 +4988,7 @@ half puts it, and the workspace stays clean.
 The first live report after the window was built, and the suite was green when it happened. Cause:
 
 **A prefix route registered with a trailing slash can never match.** The page's sources were
-registered as `prefix /pet3d/window/lib/`, and DSH's matcher decides a prefix hit with
+registered as `prefix /vrmpet3d/window/lib/`, and DSH's matcher decides a prefix hit with
 
 ```js
 if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) continue;
@@ -4893,7 +5008,7 @@ Two things made it survive a green suite, and both are now closed:
   as the string: no prefix route may end in a slash.
 * **"Running" was reported as success.** The host knew only that the process was alive, so a
   window whose page had died looked exactly like a working pet. The launcher now prints one
-  machine-readable line (`pet3d-desktop: {"ready":true,"webgl2":true,…}`), the host parses it out
+  machine-readable line (`vrmpet3d-desktop: {"ready":true,"webgl2":true,…}`), the host parses it out
   of the child's stdout — carrying across chunk boundaries — and the panel has three distinct
   states: on, starting (no page verdict yet), and **on but not drawing** (with the page's own
   error text). The prefix is duplicated in the two processes on purpose; the suite asserts the two
@@ -5002,7 +5117,7 @@ Asked for: *"parse 蓝色小肥鱼vrm — it is rich, expressions included."* Th
 model-parameter window, which needs to know what a model HAS before it can offer switches for it.
 
 * **The parse lives in the host half** (`lib/vrm-info.js`), reachable as
-  `GET /pet3d/model-info?m=<id>`. A renderer-side answer would only exist while the pet is
+  `GET /vrmpet3d/model-info?m=<id>`. A renderer-side answer would only exist while the pet is
   running, and the window is exactly the place you open when it is not.
 * **Findings about the actual model** (`docs/models/蓝色小肥鱼md`): VRM 1.0 from VRM Add-on for
   Blender 4.5.0; 53 humanoid bones; **19 expressions** (all 18 presets plus a custom `TiePen`)
@@ -5013,7 +5128,7 @@ model-parameter window, which needs to know what a model HAS before it can offer
 * **The unnamed-morph-target trap.** The model's morph targets have no `targetNames`, so
   `morphTargetDictionary['blink']` does not exist and target #0 is only knowable through the VRM
   expression table. The fixture was extended to carry the same situation on purpose, so the tests
-  take that path: `build/fixtures/vrma/pet3d-minimal.vrm` now has three unnamed morph targets,
+  take that path: `build/fixtures/vrma/vrmpet3d-minimal.vrm` now has three unnamed morph targets,
   four expressions (one of them empty) and two spring chains with different physics.
 * **Both MToon shapes.** Reading only `materialProperties` (MToon 0.x) makes a 1.0 model look
   as if it had no toon settings at all; `VRMC_materials_mtoon` writes named fields instead.
@@ -5047,30 +5162,30 @@ numbers snapshotted per joint at install time — that snapshot is what "default
 ### The settings window, and testing it against a real model
 
 The window is three pieces: a page ({{bt}}lib/config-page.html{{bt}} + {{bt}}lib/config-page.js{{bt}}), a host
-route that serves it ({{bt}}/pet3d/config{{bt}}), and a launcher mode that puts a real window around it
+route that serves it ({{bt}}/vrmpet3d/config{{bt}}), and a launcher mode that puts a real window around it
 ({{bt}}--config{{bt}}). It opens from either panel; without Electron the same page opens as a tab.
 
 Two traps, both found by the tests rather than by reading:
 
-* **A settings window has no preload, so it never sends {{bt}}pet3d:ready{{bt}}.** The launcher waits for that
+* **A settings window has no preload, so it never sends {{bt}}vrmpet3d:ready{{bt}}.** The launcher waits for that
   message in pet mode; in config mode the first version therefore wrote no self-test at all and the suite
   timed out waiting for one. Its verdict is now written when the page has LOADED, and its definition of
   working is its own: loaded, an ordinary window, not pretending to be the pet.
 * **Testing the page against the default placeholder proves nothing.** The first live check pointed the
-  window at a page whose {{bt}}/pet3d/catalog{{bt}} and {{bt}}/pet3d/model-info{{bt}} answered 404, so it was
+  window at a page whose {{bt}}/vrmpet3d/catalog{{bt}} and {{bt}}/vrmpet3d/model-info{{bt}} answered 404, so it was
   configuring the built-in avatar: the expression and spring tables were legitimately empty and the check
   passed anyway. The suite now serves BOTH routes out of the committed VRM fixture through the plugin's own
-  parser, names that model in the URL ({{bt}}/pet3d/config?model=fixture{{bt}} - the same parameter the host
+  parser, names that model in the URL ({{bt}}/vrmpet3d/config?model=fixture{{bt}} - the same parameter the host
   fills in with the model the pet is showing), and asserts what the PAGE rendered: 4 expressions, 2 spring
   chains, a row per expression and a control block per chain.
 
-The settings page publishes {{bt}}__PET3D_CONFIG_STATE__{{bt}} for exactly that reason, the way the pet page
+The settings page publishes {{bt}}__VRMPET3D_CONFIG_STATE__{{bt}} for exactly that reason, the way the pet page
 publishes its own state: 'the window opened' and 'the window has something in it' are different claims.
 ### Verifying and undoing it
 
 * `node scripts/verify-desktop.mjs` — 114 checks; the live windows are skipped (not failed) when
-  there is no installation to borrow from, and `PET3D_DESKTOP_RUNTIME` points it at a standalone
-  Electron instead. `PET3D_CLEAN_DESKTOP=1` removes the borrowed runtime afterwards.
+  there is no installation to borrow from, and `VRMPET3D_DESKTOP_RUNTIME` points it at a standalone
+  Electron instead. `VRMPET3D_CLEAN_DESKTOP=1` removes the borrowed runtime afterwards.
 * Turning it off in the panel stops the process; unloading the plugin does too (`ctx.effect`).
 * Deleting the runtime directory is always safe — it is rebuilt on the next start, at zero disk
   cost, because every file in it is a hard link.
@@ -5100,16 +5215,16 @@ node scripts/live-probe.mjs --asset m2                                    # the 
 
 | Claim | Evidence, from the running host |
 |---|---|
-| the import route works live | `POST /pet3d/models {add}` →200, `persisted: true`, `modelCount: 2` — `HatsuneMikuNT.vrm` (26 306 676 B, `m1`) and `蓝色小肥鱼vrm` (18 480 432 B, `m2`) |
+| the import route works live | `POST /vrmpet3d/models {add}` →200, `persisted: true`, `modelCount: 2` — `HatsuneMikuNT.vrm` (26 306 676 B, `m1`) and `蓝色小肥鱼vrm` (18 480 432 B, `m2`) |
 | **the model-id fix is live** | `--id-race` →`PASS`: `m1` read from the catalog, bytes served, the catalog read again (which rebuilds the store), and the **same id still serves 200**. Before the 20:08 restart this printed `m9` →`mb` →404 |
-| the asset route streams real bytes | `/pet3d/asset?m=m2` →200, 18 480 432 bytes, `model/type gltf-binary` — byte-for-byte the file's size |
-| a surface picks a change up without a restart | `POST /pet3d/settings {preferences:{modelId:"m1"}}` →`version 5`, and both the app's pet and the floating window follow the host store's version (the floating window's own rect changed within the poll interval) |
+| the asset route streams real bytes | `/vrmpet3d/asset?m=m2` →200, 18 480 432 bytes, `model/type gltf-binary` — byte-for-byte the file's size |
+| a surface picks a change up without a restart | `POST /vrmpet3d/settings {preferences:{modelId:"m1"}}` →`version 5`, and both the app's pet and the floating window follow the host store's version (the floating window's own rect changed within the poll interval) |
 | **a real VRM renders in the floating window** | a real launcher self-test against the LIVE page with `--model-id=m1`: `checks.canvasPixels` →`avatar: "vrm"`, `painted: 27 884 / 111 540`, `stageChildren: 2`, `modelHeight: 0.62`, no page errors, `perPixelHitTest: true`, `panelHitTest: true` |
 
 Two labels that look like evidence and are not, worth knowing before the next session trusts them:
-`GET /pet3d/desktop →modelId` comes from the launcher's `--model-id` argv (a spawn-time value), and
+`GET /vrmpet3d/desktop →modelId` comes from the launcher's `--model-id` argv (a spawn-time value), and
 `live.app` / `live.window` are pushed when a surface *starts* or when the panel writes
-(`Pet3DWidget.followHostSettings` reports once). All three stay `placeholder` after the pet
+(`VrmPet3DWidget.followHostSettings` reports once). All three stay `placeholder` after the pet
 successfully loads another model. The page's own `canvasPixels.avatar` is the honest field.
 
 ### The three launcher bugs this round found, all from one probe
@@ -5149,7 +5264,7 @@ otherwise measures.
 * **A probe against the LIVE page writes the operator's settings.** The self-test's wheel probe
   drives the real page, and the page pushes zoom to the host store — so a probe run against the live
   route changed the user's stored `size` from 100 to 184. Point a probe at the suite's own server
-  (which answers `/pet3d/settings` with 404, so the page never pushes) when the point is the
+  (which answers `/vrmpet3d/settings` with 404, so the page never pushes) when the point is the
   launcher, and restore `size` afterwards when the point is the live page. This is gotcha 37's rule
   one layer out: a test may not write state it does not own.
 
@@ -5163,7 +5278,7 @@ and how it is locked down.
 
 | Ask, in the user's words | What was wrong | What changed |
 |---|---|---|
-| 去掉单眼眨眼 (remove the single-eye blink) | `Scene.pickBlinkExpression` picked `blinkLeft`/`blinkRight` **a quarter of the time**, on purpose ("a pet that only ever blinks symmetrically looks mechanical") | always `blink` when the model has it; the single names survive only as a fallback for a model with no `blink` (`lib/pet3d.js`) |
+| 去掉单眼眨眼 (remove the single-eye blink) | `Scene.pickBlinkExpression` picked `blinkLeft`/`blinkRight` **a quarter of the time**, on purpose ("a pet that only ever blinks symmetrically looks mechanical") | always `blink` when the model has it; the single names survive only as a fallback for a model with no `blink` (`lib/scene.js`) |
 | 去掉微动，去掉高度的移动，只构造左右的微动 (keep breathing, drop the vertical motion) | `core.idlePose` returned a whole-body `bob` — `sin(2θ) × 0.0025` of a viewport height — and the frame step wrote `stage.position.y = baseY + bob` | the `bob` channel and its per-state multipliers are **gone**; the idle writes `yaw` (left-right sway) and `breathScale` (the chest pitch) only. `verify.mjs` asserts the ABSENCE of a vertical channel, over a whole period, because that is the kind of thing a refactor reintroduces |
 | 缩放限制：最小长边≥40 px，最大不超过屏幕最短边 (zoom limits from the frame) | the wheel clamped to a fixed `SIZE_RANGE` of 40 %–60 %, and `Placement.setSize` had hard floors of 80 × 100 px that made the promised 40 px unreachable | new pure function `core.sizeLimits({baseWidth, baseHeight, viewportWidth, viewportHeight, slotFraction})` →`{min, max}` with `min` = the percent whose long edge is 40 px and `max` = the frame's shortest edge, reduced by the surface's own slot fraction first. `Placement.zoomLimits()` uses it; both surfaces' wheels clamp to that. On a 1920 × 1032 work area that is **14 % — 344 %** against the old 40 %–60 %; the app overlay keeps its 55 %×60 % hit-area cap, so its ceiling is 206 % on that frame. `SIZE_RANGE` is now the STORAGE bound only (10–400) |
 | 拖动时的表情/动画应在按下开始位移时就切换(react when the drag starts, not when it ends) | both surfaces called `scene.noteInteraction('drag')` on **pointerup**, so the drag reaction arrived as the pet was already falling — it read as a landing reaction | the widget and the floating window fire it on the **first movement** of the press, once per drag (`dragReactionFired` / `drag.reacted`), and only a press that never moved is a `click` on release. Asserted in `client-test.js` for both surfaces, by recording what the page told the scene and reading it BEFORE the release |
@@ -5182,7 +5297,7 @@ the inset from the **live** window's own report (`checks.inset === 1`, and its b
 minus two pixels). The suite is 114 checks now (§16 changed what "the window" means).
 
 **Not yet proven: that they fix it.** The running window was restarted by hand
-(`POST /pet3d/desktop {action:"disable"}` then `{"action":"enable","modelId":"m1"}`) so the new launcher
+(`POST /vrmpet3d/desktop {action:"disable"}` then `{"action":"enable","modelId":"m1"}`) so the new launcher
 and page are live, and the freeze only appears when a real click activates it. The test is: click the
 model. If the desktop behind it still freezes, step 4 (a window only as big as the pet) is the
 structural answer and the user has approved it.
@@ -5191,7 +5306,7 @@ structural answer and the user has approved it.
 
 `action: 'restart'` stops the window and starts a new one, and the OLD process's exit event lands
 *after* the new start. `DesktopWindow`'s `exit` handler wrote the status unconditionally, so
-`GET /pet3d/desktop` answered `{state: "stopped", reason: "signal SIGTERM", pid: null}` while the new
+`GET /vrmpet3d/desktop` answered `{state: "stopped", reason: "signal SIGTERM", pid: null}` while the new
 window was on screen and drawing — and the panel's switch reads exactly that state, so it showed the
 pet as off while it floated over the desktop. The same payload's `page.ready: true` is what gave it
 away: "stopped" and "the page just reported a frame" cannot both be true.
@@ -5218,9 +5333,9 @@ cause was not the switches at all.
 
 | Piece | Where | What it is |
 |---|---|---|
-| `check.ps1` | `%TEMP%\pet3d-freeze-probe\` | captures a screen rectangle twice, 1 s apart, and says FROZEN when the two are byte-identical |
+| `check.ps1` | `%TEMP%\vrmpet3d-freeze-probe\` | captures a screen rectangle twice, 1 s apart, and says FROZEN when the two are byte-identical |
 | `experiment.ps1` | the same directory | restarts the pet window, **waits until the pet is really painted**, moves the cursor to a PAINTED pixel, clicks, then samples the rectangle above 8 times |
-| the reference window | `%TEMP%\pet3d-freeze-probe\app\` | an ordinary Electron window that repaints a counter every 80 ms, always-on-top, at a fixed spot |
+| the reference window | `%TEMP%\vrmpet3d-freeze-probe\app\` | an ordinary Electron window that repaints a counter every 80 ms, always-on-top, at a fixed spot |
 
 Two traps in the rig itself, both paid for: the reference window must NOT pass
 `disable-backgrounding-occluded-windows` or `backgroundThrottling: false` (they make it immune to the
@@ -5267,7 +5382,7 @@ exist on this machine without it.
 ### The fix
 
 **The pet's window is the pet's own box and follows it.** `desktop/main.js` creates a 240 × 320 window
-and then, on every `pet3d:rect` report, sizes and places it on the rectangle the page reports — unioned
+and then, on every `vrmpet3d:rect` report, sizes and places it on the rectangle the page reports — unioned
 with the settings panel while that is open, because the panel is DOM and has to be inside the window to
 be visible. `lib/desktop-page.js` keeps working in the VIRTUAL work-area frame it always used, so
 placement, drag, zoom anchoring, gaze and the panel needed no rewrite: only the canvas offset and the
@@ -5388,14 +5503,14 @@ supported VRMA (`buildVrmaRecord` →`createVRMAnimationClip`), so the work was 
    (`vrm` →`.vrma`, `mmd` →`.vmd`), fetch bytes once, build clips per avatar, drop them on a model switch,
    and publish `motion: {kind, format, mapped, playing, available, reason}` so a silent failure is readable.
 2. **A `.vrma` could only be used by editing the profile config and restarting DSH.** `config.motionDirs` was
-   the only source. Now there is an imported list too — plugin-owned `pet3d-motion-dirs.json` beside the
+   the only source. Now there is an imported list too — plugin-owned `vrmpet3d-motion-dirs.json` beside the
    settings, unioned with the configured dirs, and the catalog is rebuilt **per request**, so an import is live
-   on the next fetch. `PET3D_MOTION_DIRS_FILE` redirects it in tests (gotcha 37: a suite must not write the
+   on the next fetch. `VRMPET3D_MOTION_DIRS_FILE` redirects it in tests (gotcha 37: a suite must not write the
    operator's file).
 
 ### The wave, and why it is a test rather than an example
 
-`scripts/make-vrma-fixtures.mjs` now also writes `build/fixtures/vrma/pet3d-wave.vrma`: 2.0 s, 7 channels,
+`scripts/make-vrma-fixtures.mjs` now also writes `build/fixtures/vrma/vrmpet3d-wave.vrma`: 2.0 s, 7 channels,
 61 keys at 30 fps, the right arm raised ~66° with the forearm swinging ±26° over exactly three cycles. Two
 properties make a generated file portable between models, and they are the ones to copy when authoring:
 
@@ -5406,8 +5521,8 @@ properties make a generated file portable between models, and they are the ones 
   position at any proportions. (Omitting the channel also works for an in-place clip; a wrong constant is what
   makes a pet float or sink.)
 
-Measured, not judged by eye: `node scripts/verify-motion.mjs --model build/fixtures/vrma/pet3d-minimal.vrm
---motion build/fixtures/vrma/pet3d-wave.vrma` →**18 checks passed**, `format vrma`, `7 tracks`, `2.0 s`, six
+Measured, not judged by eye: `node scripts/verify-motion.mjs --model build/fixtures/vrma/vrmpet3d-minimal.vrm
+--motion build/fixtures/vrma/vrmpet3d-wave.vrma` →**18 checks passed**, `format vrma`, `7 tracks`, `2.0 s`, six
 driven humanoid bones, the right upper arm 146.5° from rest, largest per-frame change 29.1° on the forearm.
 The browser probe drives the WINDOW'S own path with the same bytes and asserts a bone's rotation changes
 between two frames (`boneMoved 0.0374`) while the published state says `playing: "a1"`.
@@ -5430,7 +5545,7 @@ a fight over one bone.
 
 ### The resting pose, authored from the rig's signs rather than by feel
 
-`build/fixtures/vrma/pet3d-rest.vrma` (6.0 s, 41 channels, ~25 kB) is the pose a pet sits in when nothing is
+`build/fixtures/vrma/vrmpet3d-rest.vrma` (6.0 s, 41 channels, ~25 kB) is the pose a pet sits in when nothing is
 happening: arms hanging, elbows and fingers relaxed, the body turning slowly. A VRM rests in a T-pose with the
 left arm along +X and every normalized node's rotation at identity, which fixes every sign analytically — "arm down" is Z **−0 (left) / +80 (right)**, the elbow's forward bend is about the carried **Y** axis (which
 for a lowered arm is roughly the world X axis, so it tips the forearm forward), and the fingers curl about
@@ -5453,7 +5568,7 @@ look right" is not evidence that the clip is playing):
 
 The host half is new code: the motion-dirs import, and the gaze settings from §17. The renderer half (the page,
 the chunks) is re-read per window start and is already live. So the live wave appears after the next DSH
-restart — and to make that one step productive, `pet3d-motion-dirs.json` was written pointing at
+restart — and to make that one step productive, `vrmpet3d-motion-dirs.json` was written pointing at
 `D:\SynologyDrive\FatFish-pet\Motions` (with the wave in it) and `motions: {resting: "a1"}` was set through the
 settings route, so the pet waves as soon as the new host serves the catalog. Plainly: **the wave is proven in a
 real renderer (Chromium, the real loader, the real mixer) but not yet in the operator's own window.**
@@ -5486,10 +5601,10 @@ change while the state holds.
 ### `loop` is a property of the clip, and a one-shot hands the pose back
 
 A `.vrma` says how the bones move; it cannot say whether it is a six-second ambient loop or a two-second
-wave. So a motion directory may carry its own `pet3d-motions.json`:
+wave. So a motion directory may carry its own `vrmpet3d-motions.json`:
 
 ```json
-{ "clips": { "pet3d-wave.vrma": { "loop": false } } }
+{ "clips": { "vrmpet3d-wave.vrma": { "loop": false } } }
 ```
 
 `buildMotionCatalog` reads it once per directory, keys are file names RELATIVE to that directory (never
@@ -5513,7 +5628,7 @@ was measured or is one line away:
 ### The UI
 
 * **The settings window (模型参数) gained a 动作 section.** One collapsible box set per state, the clips
-  listed from `/pet3d/motions` (so an import is live without a restart), each labelled `循环` or `播放一次`,
+  listed from `/vrmpet3d/motions` (so an import is live without a restart), each labelled `循环` or `播放一次`,
   and a summary line that says how many are ticked or 程序化待机. Unticking the last box deletes the key —
   that IS the procedural idle, which is why there is no "procedural idle" checkbox to explain. It publishes
   `motions: {controls, offered, oneShot, rows, ticked}` for the live suite.
@@ -5525,11 +5640,11 @@ was measured or is one line away:
 ### The generator, and the clips that make the feature visible
 
 `scripts/make-vrma-fixtures.mjs` gained a table-driven gesture builder (`buildGestureVrma`) sharing the
-wave's and the rest clip's world-axis language, and a table of four gestures: `pet3d-look-around`,
-`pet3d-weight-shift`, `pet3d-stretch` (all loops, written as functions of `sin`/`cos` so the loop has no
-seam) and `pet3d-happy-hop` (a one-shot: a hop, then a settle back toward rest). It writes the manifest
+wave's and the rest clip's world-axis language, and a table of four gestures: `vrmpet3d-look-around`,
+`vrmpet3d-weight-shift`, `vrmpet3d-stretch` (all loops, written as functions of `sin`/`cos` so the loop has no
+seam) and `vrmpet3d-happy-hop` (a one-shot: a hop, then a settle back toward rest). It writes the manifest
 beside them, declaring the wave and the hop as one-shots. A generated clip is verified on a REAL model the
-same way the wave is: `verify-motion.mjs --motion build/fixtures/vrma/pet3d-look-around.vrma` loads it (10
+same way the wave is: `verify-motion.mjs --motion build/fixtures/vrma/vrmpet3d-look-around.vrma` loads it (10
 tracks, 5 s) and drives the pose.
 
 Note for anyone adding gestures: the fixture VRM has no `chest` bone, so that track is dropped in the probe
@@ -5537,7 +5652,7 @@ Note for anyone adding gestures: the fixture VRM has no `chest` bone, so that tr
 
 ### What needs a DSH restart
 
-**The host half**: the manifest read and the `loop` field in the catalog. Until the restart, `/pet3d/motions`
+**The host half**: the manifest read and the `loop` field in the catalog. Until the restart, `/vrmpet3d/motions`
 serves entries with no `loop`, the page treats that as "loops", and the manifest is ignored. Everything else
 in this round — the cleaner/list contract, the draw, the one-shot end state, both panels, the settings
 section — is renderer-half code, live on the next window or page load.
@@ -5626,7 +5741,7 @@ a wiring one, and the resolved aim is the number to look at.
 Two settings, both persisted and both in the 动作 section:
 
 * **`motionLoop: { [motionId]: boolean }`** — the play mode belongs to the CLIP, so the window lists each
-  catalog clip **once** with a 循环/单次 menu. The motion directory's `pet3d-motions.json` stays the
+  catalog clip **once** with a 循环/单次 menu. The motion directory's `vrmpet3d-motions.json` stays the
   declaration; this is the user's override of it, and `motionLoopFor(prefs, id, declared)` is the one place
   the two are combined. A mapped clip whose mode changed is **re-loaded** (the surfaces already cache by
   `(id, mode)`), because the flag only reaches the renderer with the bytes.
@@ -5643,7 +5758,7 @@ window starts from the END of the reaction, and a state with no window never fir
 
 ### 20.6 Diagnostics the launcher now publishes
 
-`GET /pet3d/desktop` gained `page.gaze` (the curve, spans and the aim the last frame fed the head),
+`GET /vrmpet3d/desktop` gained `page.gaze` (the curve, spans and the aim the last frame fed the head),
 `page.physics` (`enabled`, `error`, the preference, `chains`, `joints`, `skipped`) and `loop` on every
 `page.motion.available[]` entry. All three exist because this round's two hardest questions — "is the curve
 reaching the renderer" and "is the spring solver running" — could not be answered from outside without them.
@@ -5666,8 +5781,8 @@ reaching the renderer" and "is the spring solver running" — could not be answe
   6. the floating window: the launcher, the borrowed runtime, the window routes and the panel's
      switch — **both halves**, so this one needed the restart more than any of the others.
 
-  Confirmed live against the running host at 20:17 (not inferred): `/pet3d/{catalog,motions,models,
-  settings,config,window,desktop}` →200, and `/pet3d/desktop` →`state: running` with the page
+  Confirmed live against the running host at 20:17 (not inferred): `/vrmpet3d/{catalog,motions,models,
+  settings,config,window,desktop}` →200, and `/vrmpet3d/desktop` →`state: running` with the page
   reporting `ready: true, webgl2: true` on this machine's RTX 2060.
 
   **Still to check by eye, not by probe:** `node scripts/live-probe.mjs --id-race` should print
@@ -5676,18 +5791,18 @@ reaching the renderer" and "is the spring solver running" — could not be answe
   **outside** the pet's box on both models — the fish's pitch was the one that was wrong — and the
   floating window should stay correct when the pet is clicked (the open freeze bug at the top).
   **The catalog is empty here because `D:\SynologyDrive\FatFish-pet\Models` has never been imported
-  into this profile** — the two VRMs are on disk but absent from `/pet3d/models`, so the pet is
+  into this profile** — the two VRMs are on disk but absent from `/vrmpet3d/models`, so the pet is
   showing the placeholder right now.
 * **Confirm the animation in the app.** The model loads and is visible; the T-pose report
   answered "does it move at all", and this fix is what makes the answer yes.
 * **Step 2 of the floating window**, listed at the end of §13: a panel of its own, the session
   state stream, and multi-monitor.
-* **Then** consider the `/pet3d/models` settings UI (`docs/ARCHITECTURE.md`, Known
+* **Then** consider the `/vrmpet3d/models` settings UI (`docs/ARCHITECTURE.md`, Known
   limits), which would make the import step possible without this repository at all.
-* To undo everything on this machine: `plugin_manager remove_bundle dsh-plugin-pet3d`,
+* To undo everything on this machine: `plugin_manager remove_bundle dsh-plugin-vrmpet3d`,
   `set_bundle dsh-plugin-whale-pet enabled=true`, then restore the two `.bak` files
   above if the manager's own rewrite is not wanted. The borrowed Electron runtime
-  (`F:\DeepSeek\pet3d-desktop-runtime`, or wherever `PET3D_DESKTOP_HOST_DIR` points) is
+  (`F:\DeepSeek\vrmpet3d-desktop-runtime`, or wherever `VRMPET3D_DESKTOP_HOST_DIR` points) is
   disposable: delete it and it is rebuilt on the next start.
 
 ## 21. The VRoid garment, and what "call vrm.update" really means (2026-10-09, evening)
@@ -5771,7 +5886,7 @@ the renderer's own account (`chains` matched, `skipped` unmatched):
 
 The fish is the interesting one: its chains are named `DaiMao`, `LiuHai`, `LiuHai.L`, `LiuHai.R`, `FaBing.L` —
 **names with dots**, which is exactly what `sanitizeNodeName` (§20.2) has to fold before they can be matched; 16
-of the 22 were invisible to the renderer before that fix. `/pet3d/desktop` publishes `page.physics`
+of the 22 were invisible to the renderer before that fix. `/vrmpet3d/desktop` publishes `page.physics`
 (`chains`, `joints`, `skipped`, `enabled`, `error`), so a chain the renderer cannot match can never hide again:
 it shows up as `skipped` instead of as a slider that does nothing.
 
@@ -5791,7 +5906,7 @@ The report was "the gaze curve doesn't seem to take effect live". It did — the
 bumps its version, and both surfaces feed `preferences.gazeCurve` into `core.pointerAim` every frame — but at
 10 % of full deflection a curve of 0.4 turns the head ~22 % while a curve of 1.0 turns it ~10 %, so the effect is
 genuinely small near the pet, and nothing in the window said which curve the head was using. The section now
-carries one line, refreshed every 2 s from `/pet3d/desktop`:
+carries one line, refreshed every 2 s from `/vrmpet3d/desktop`:
 
 > 渲染器正在使用：曲率 0.20 · 满偏 1707×320 px · 当前视线 -0.86, -0.81
 
@@ -5808,7 +5923,7 @@ Two defects that no assertion had covered, both found by screenshotting the wind
 1. The 表情 hint still said **"一项都不勾选表示'这个模型能显示的都可以'"** — the semantics §20.3 replaced. The
    table was right (「无」 ticked everywhere) and the sentence beside it described the old behaviour, which is
    the worst kind of stale text: the page contradicts itself. Rewritten to say what 「无」 does.
-2. A deep link into a long page did not work: `…/pet3d/config#spring-list` stays at the top, because the
+2. A deep link into a long page did not work: `…/vrmpet3d/config#spring-list` stays at the top, because the
    sections are rebuilt by `renderAll` after load and the browser's fragment jump happens before the target
    exists. `?scroll=spring-list` now does it, AFTER the render — which is what let the spring layout and the
    视线 line below be checked by eye at all.
@@ -5821,9 +5936,9 @@ one-shots plus an interval line per state.
 ### 22.3 The interval, and the four bugs it took to make it real
 
 `motionEvery: { resting: { min: 20, max: 80 } }` is set on this profile deliberately: the pet's 静息态 is mapped
-to `a1 = pet3d-happy-hop.vrma`, which the catalog declares as a one-shot, so the pet hops once somewhere in
-every 20–80 seconds. Setting `max` to 0 in the window turns it off; mapping `a4 = pet3d-stretch.vrma` (伸懒腰)
-or `a5 = pet3d-wave.vrma` alongside it is how to vary what appears.
+to `a1 = vrmpet3d-happy-hop.vrma`, which the catalog declares as a one-shot, so the pet hops once somewhere in
+every 20–80 seconds. Setting `max` to 0 in the window turns it off; mapping `a4 = vrmpet3d-stretch.vrma` (伸懒腰)
+or `a5 = vrmpet3d-wave.vrma` alongside it is how to vary what appears.
 
 Getting there took **four** fixes, all found by watching the real pet rather than by reasoning, and three of them
 are now checks in `verify-motion.mjs` (Phase D2/D3/D4 — the suite went from 38 to 42 checks):
@@ -5902,7 +6017,7 @@ no key is empty. The label is separate from the key: an unnamed chain is shown b
   clip's expression/mouth the slot the emotion would have used, which is what "覆盖表情的口型" means.
 * **UI**: inside each state's box set, every TICKED clip gets three dropdowns (循环/单次, 表情, 口型, each with a
   "跟随" default so a choice can be undone). The old per-clip mode table is gone: the play mode is per state now.
-* **Preview**: a separate host channel, `/pet3d/preview` — **in memory only, never persisted**, with its own
+* **Preview**: a separate host channel, `/vrmpet3d/preview` — **in memory only, never persisted**, with its own
   `seq` counter so a cleared preview is distinguishable from a stale one. `POST {}` clears; both pet surfaces
   poll it (400 ms) through `core.watchHostPreview`, load the previewed clip on demand, and LOOP it (a one-shot
   would end after a second and read as broken). The scene's `setPreview` forgets the draw, so clearing puts the
@@ -5913,7 +6028,7 @@ no key is empty. The label is separate from the key: an unnamed chain is shown b
   and clearing hands the pet back; and the page's `modeRows`/`faceRows` counts in `verify-desktop.mjs` (whose
   stub now serves settings, because a control only exists for a TICKED clip).
 
-**⚠️ This section needs a DSH restart to be live**: `/pet3d/preview` is a new host route and `motionClips` a new
+**⚠️ This section needs a DSH restart to be live**: `/vrmpet3d/preview` is a new host route and `motionClips` a new
 preference the host's cleaner has to keep. Until the app is restarted the framework is inert — the dropdowns
 render and their writes are dropped by the older cleaner, and `watchHostPreview` reports itself unsupported and
 the pets carry on normally. That graceful degradation is deliberate: a missing channel must not look like a
@@ -5987,7 +6102,7 @@ turns the head when nothing suppresses it.
 That is a LATCHED gesture: the drag survived a release it never observed, so the first move after coming back
 turned the view without any button held. Two things were done about it.
 
-**First, the state of the running app was checked rather than assumed.** `GET /pet3d/preview` answered
+**First, the state of the running app was checked rather than assumed.** `GET /vrmpet3d/preview` answered
 `{"seq":42}` on the live host — so the host half IS the new one (§23 had been restarted into) — and the
 `lib/client.js` the host serves does contain `beginWindowGesture`, the buttons check and the removed
 `lostpointercapture` binding. The client half is fetched once per page load, so a page that was already open
@@ -6195,7 +6310,7 @@ things, and that difference was invisible.
   and the status line says so. A fake pet dressed as a model was the thing being removed.
 
 **What is NOT done yet, stated plainly**: `lib/placeholder.js` (504 lines) and the `kind: 'placeholder'` path in
-`lib/pet3d.js` are still in the tree. They are now unreachable from the product — no list entry, no default, no
+`lib/scene.js` are still in the tree. They are now unreachable from the product — no list entry, no default, no
 fallback — but the module and its code path remain, and so do the suites that exercise it directly (the client
 probe mounts it deliberately, `verify-browser.mjs` loads it as a chunk). Deleting them is a follow-up that has to
 rewire `scripts/client-chunks.mjs`, the delivery chunk list, and four suites; doing it half-way would leave the
@@ -6413,7 +6528,7 @@ the 26 MB VRM *shipped* inside the plugin instead, that is a separate decision t
 `lib/placeholder.js` **stays in the tree**, and the reason is worth stating: it is the only model-free avatar the
 geometry suites have. The browser suite inlines it directly to test framing, the gaze algorithm and the render
 loop, and the client probe uses `Scene.usePlaceholder()` for the same purpose. Deleting it would delete those
-checks. It is unreachable from the product (nothing defines `globalThis.__PET3D_PLACEHOLDER__` in a shipped
+checks. It is unreachable from the product (nothing defines `globalThis.__VRMPET3D_PLACEHOLDER__` in a shipped
 plugin), and `usePlaceholder`'s comment says exactly that so nobody has to rediscover it.
 
 **Two consequences that only showed up in the live suites**, both worth remembering:

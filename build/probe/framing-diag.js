@@ -4,9 +4,9 @@
 // Kept in the repo because "the cloned bounding box disagrees with the original"
 // is exactly the kind of thing that gets misdiagnosed as a framing bug.
 (function () {
-  var V = globalThis.__PET3D_VENDOR__;
-  var P = globalThis.__PET3D_PLACEHOLDER__;
-  var C = globalThis.__PET3D_CORE__;
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var P = globalThis.__VRMPET3D_PLACEHOLDER__;
+  var C = globalThis.__VRMPET3D_CORE__;
   var THREE = V.THREE;
   var out = {};
 
@@ -32,7 +32,7 @@
     if (!node.isMesh || !node.geometry) return;
     node.geometry.computeBoundingBox();
     var own = new THREE.Box3().copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld);
-    var name = node.name || node.userData.pet3dRole || 'mesh';
+    var name = node.name || node.userData.vrmpet3dRole || 'mesh';
     if (own.min.x < extremes.minX) { extremes.minX = own.min.x; owners.minX = name; }
     if (own.max.x > extremes.maxX) { extremes.maxX = own.max.x; owners.maxX = name; }
     if (own.min.z < extremes.minZ) { extremes.minZ = own.min.z; owners.minZ = name; }
@@ -93,7 +93,7 @@
     if (!node.isMesh || !node.geometry) return;
     node.geometry.computeBoundingBox();
     var own = new THREE.Box3().copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld);
-    var name = node.name || node.userData.pet3dRole || 'mesh';
+    var name = node.name || node.userData.vrmpet3dRole || 'mesh';
     if (own.min.z < stagedExtremes.minZ) { stagedExtremes.minZ = own.min.z; stagedOwners.minZ = name; }
     if (own.max.z > stagedExtremes.maxZ) { stagedExtremes.maxZ = own.max.z; stagedOwners.maxZ = name; }
   });

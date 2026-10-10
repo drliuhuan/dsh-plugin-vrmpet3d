@@ -33,10 +33,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listenOnUsablePort } from './loopback.mjs';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT_DIR = join(ROOT, 'build', 'fixtures', 'motions');
-const OUTPUT = join(OUTPUT_DIR, 'pet3d-test.vmd');
+const OUTPUT = join(OUTPUT_DIR, 'vrmpet3d-test.vmd');
 
 /**
  * The model whose skeleton the clip must bind to. Same env override and same
@@ -47,7 +49,7 @@ const MODEL = process.env.MMD_FIXTURE || join(ROOT, 'build', 'fixtures', 'miku',
 
 /** Candidate Chromium-based browsers, in the same preference order as verify-browser.mjs. */
 const BROWSER_CANDIDATES = [
-  process.env.PET3D_BROWSER,
+  envVar('BROWSER'),
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -308,7 +310,7 @@ function buildVmd(encoder) {
   const signatureBytes = Buffer.alloc(30);
   signatureBytes.write(signature, 0, 'latin1');
   push(signatureBytes);
-  sjis('pet3d-test', 20);
+  sjis('vrmpet3d-test', 20);
 
   // --- bone keyframes -----------------------------------------------------
   // rest -> peak -> rest, so the clip interpolates away from the rest pose and
@@ -374,7 +376,7 @@ console.log(`  wrote ${OUTPUT} (${vmd.length} bytes)`);
 // Step 2: parse it back in Node, structurally
 //
 // This is a Node-side sanity check only. `VmdObject` lives inside the browser
-// chunk (it needs `TextDecoder` and is published on `__PET3D_VENDOR__`), so the
+// chunk (it needs `TextDecoder` and is published on `__VRMPET3D_VENDOR__`), so the
 // authoritative parse happens in step 3; what is checked here is that the byte
 // offsets and counts match the format description, which is what makes a failure
 // in step 3 diagnosable.
@@ -431,7 +433,7 @@ function readVmdBack(buffer) {
 const readBack = readVmdBack(vmd);
 ok(readBack.signature === 'Vocaloid Motion Data 0002',
   `the signature reads back as "Vocaloid Motion Data 0002"`, readBack.signature);
-ok(readBack.modelName === 'pet3d-test', 'the model name survives the Shift-JIS round trip', readBack.modelName);
+ok(readBack.modelName === 'vrmpet3d-test', 'the model name survives the Shift-JIS round trip', readBack.modelName);
 ok(readBack.bones.length === MOVES.length * 3, `there are ${MOVES.length * 3} bone keyframes`, readBack.bones.length);
 ok(readBack.morphs.length === 0, 'there are no morph keyframes');
 ok(readBack.cameraCount === 0 && readBack.lightCount === 0 &&
@@ -516,8 +518,8 @@ function buildPage() {
 // to the REAL buildAnimation so the bone-name matching that decides whether the
 // clip does anything at all is the shipped one, not a reimplementation.
 (function () {
-  var V = globalThis.__PET3D_VENDOR__;
-  var C = globalThis.__PET3D_CORE__;
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var C = globalThis.__VRMPET3D_CORE__;
   var report = { stage: 'start', errors: [] };
 
   function finish() {
@@ -543,7 +545,7 @@ function buildPage() {
     return { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w };
   }
 
-  if (!V || !V.MMD) { bail('vendor', new Error('__PET3D_VENDOR__.MMD is missing')); return; }
+  if (!V || !V.MMD) { bail('vendor', new Error('__VRMPET3D_VENDOR__.MMD is missing')); return; }
   report.hasCore = Boolean(C);
   report.stages = ['vendor', 'core'];
   report.stages.push(V.MMD.VmdObject ? 'VmdObject' : 'NO-VmdObject');
@@ -718,7 +720,7 @@ async function startFixtureServer() {
  * so the DOM is the signal and the status is not.
  */
 async function runBrowser(browser, url) {
-  const outPath = join(tmpdir(), `pet3d-motion-probe.${process.pid}.html`);
+  const outPath = join(tmpdir(), `vrmpet3d-motion-probe.${process.pid}.html`);
   const outFd = openSync(outPath, 'w');
   try {
     const child = spawn(browser, [
@@ -783,9 +785,9 @@ const browser = findBrowser();
 // and 4 never ran, so the fixture is written but unproven.
 if (!browser) {
   console.error('No Chromium-based browser found.');
-  console.error('Set PET3D_BROWSER to a chrome/msedge/chromium executable and retry.');
+  console.error('Set VRMPET3D_BROWSER to a chrome/msedge/chromium executable and retry.');
   console.error('This step is not skippable: it is the only way to run the MMD pipeline.');
-  failures.push('no Chromium-based browser found (set PET3D_BROWSER)');
+  failures.push('no Chromium-based browser found (set VRMPET3D_BROWSER)');
 } else if (!existsSync(MODEL)) {
   console.error(`the model fixture is missing: ${MODEL}`);
   console.error('  fetch it with: node scripts/verify-model.mjs --fetch');

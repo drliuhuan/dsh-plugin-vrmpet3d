@@ -1,8 +1,8 @@
 // Browser integration test for the client half.
 //
-// Exercises the real Pet3DWidget against a real DOM, a real WebGL context and a
+// Exercises the real VrmPet3DWidget against a real DOM, a real WebGL context and a
 // real frame clock: mounting, the drag → fall → land sequence, preference
-// persistence, state changes, and disposal. The host's `/pet3d/*` routes do not
+// persistence, state changes, and disposal. The host's `/vrmpet3d/*` routes do not
 // exist here, so this also proves the widget degrades to the built-in
 // placeholder instead of leaving an empty box when the routes are missing.
 (function () {
@@ -71,10 +71,10 @@
     pending.push(queued);
   }
 
-  var CLIENT = globalThis.__PET3D_CLIENT__;
-  var CORE = globalThis.__PET3D_CORE__;
-  var SCENE = globalThis.__PET3D_SCENE__;
-  var VENDOR = globalThis.__PET3D_VENDOR__;
+  var CLIENT = globalThis.__VRMPET3D_CLIENT__;
+  var CORE = globalThis.__VRMPET3D_CORE__;
+  var SCENE = globalThis.__VRMPET3D_SCENE__;
+  var VENDOR = globalThis.__VRMPET3D_VENDOR__;
 
   /**
    * Wait out a completion's SETTLE window, on the same clock the widget runs on.
@@ -360,7 +360,7 @@
   /** One entry of the OPEN menu, by the id `lib/menu.js` gives it. */
   function menuItem(id) {
     if (!widget.menu) return null;
-    var nodes = widget.menu.element.querySelectorAll('.pet3d-menu-item');
+    var nodes = widget.menu.element.querySelectorAll('.vrmpet3d-menu-item');
     for (var i = 0; i < nodes.length; i += 1) {
       if (nodes[i].getAttribute('data-item') === id) return nodes[i];
     }
@@ -381,7 +381,7 @@
   }
 
   check('widget constructs and mounts its DOM', function () {
-    widget = new CLIENT.Pet3DWidget(host, { language: 'en' });
+    widget = new CLIENT.VrmPet3DWidget(host, { language: 'en' });
     globalThis.__widget = widget;
     return Boolean(widget.root && widget.canvas && widget.pet && widget.menu);
   });
@@ -393,7 +393,7 @@
    * This is the failure that was live on 2026-10-11: the app loaded a NEW `lib/client.js` against a core chunk
    * the browser had cached under an unchanged revision, so `new this.core.SpeechMachine(...)` threw inside the
    * widget's constructor, the widget never mounted, and the floating window — which has no session of its own —
-   * kept drawing the last state it had been told (工作中, clock counting up) while `/pet3d/state` carried
+   * kept drawing the last state it had been told (工作中, clock counting up) while `/vrmpet3d/state` carried
    * `state: null` and that TypeError for seventeen minutes.
    *
    * The check removes BOTH optional globals (`SpeechMachine` and the shared panel module) and builds a widget
@@ -401,11 +401,11 @@
    * throwing.
    */
   check('a stale delivery costs the voice and the menu, never the pet', function () {
-    var coreApi = globalThis.__PET3D_CORE__;
-    var menuApi = globalThis.__PET3D_MENU__;
+    var coreApi = globalThis.__VRMPET3D_CORE__;
+    var menuApi = globalThis.__VRMPET3D_MENU__;
     var savedSpeech = coreApi.SpeechMachine;
     delete coreApi.SpeechMachine;
-    delete globalThis.__PET3D_MENU__;
+    delete globalThis.__VRMPET3D_MENU__;
     // Its own host: the widget owns `root`, and a second mount in the same div is not what a second
     // delivery looks like.
     var host2 = document.createElement('div');
@@ -414,7 +414,7 @@
     var mounted = false;
     var rightClickSafe = false;
     try {
-      stale = new CLIENT.Pet3DWidget(host2, { language: 'en' });
+      stale = new CLIENT.VrmPet3DWidget(host2, { language: 'en' });
       stale.initScene();
       stale.tick(1 / 60);
       mounted = Boolean(stale.root && stale.canvas && stale.pet) && stale.menu === null;
@@ -425,7 +425,7 @@
       if (stale && typeof stale.dispose === 'function') { try { stale.dispose(); } catch (_error) { /* gone */ } }
       host2.remove();
       coreApi.SpeechMachine = savedSpeech;
-      globalThis.__PET3D_MENU__ = menuApi;
+      globalThis.__VRMPET3D_MENU__ = menuApi;
     }
     report.staleDelivery = {
       mounted: mounted,
@@ -457,7 +457,7 @@
    * deleting the whole module (the check above) is a different failure and was already covered.
    */
   check('an older menu chunk loses the 重力 mark, not the menu', function () {
-    var menuApi = globalThis.__PET3D_MENU__;
+    var menuApi = globalThis.__VRMPET3D_MENU__;
     var savedSetChecked = menuApi.setChecked;
     delete menuApi.setChecked;
     var host3 = document.createElement('div');
@@ -467,7 +467,7 @@
     var rows = [];
     var threw = null;
     try {
-      older = new CLIENT.Pet3DWidget(host3, { language: 'en' });
+      older = new CLIENT.VrmPet3DWidget(host3, { language: 'en' });
       older.initScene();
       try {
         opened = older.openMenuAt(40, 40) === true && older.menu.isOpen() === true;
@@ -605,18 +605,18 @@
     });
     widget.tick(1 / 60);
 
-    var label = widget.pet.querySelector('.pet3d-status');
-    var texts = label ? label.querySelectorAll('.pet3d-status-text') : [];
-    var icon = label ? label.querySelector('.pet3d-status-icon') : null;
-    var decoration = label ? label.querySelector('.pet3d-status-decoration') : null;
+    var label = widget.pet.querySelector('.vrmpet3d-status');
+    var texts = label ? label.querySelectorAll('.vrmpet3d-status-text') : [];
+    var icon = label ? label.querySelector('.vrmpet3d-status-icon') : null;
+    var decoration = label ? label.querySelector('.vrmpet3d-status-decoration') : null;
     var shown = texts[0] ? texts[0].getAttribute('data-shimmer-text') : null;
-    var fontPx = label ? label.style.getPropertyValue('--pet3d-status-font') : null;
+    var fontPx = label ? label.style.getPropertyValue('--vrmpet3d-status-font') : null;
     var path = icon ? icon.querySelector('path') : null;
     /**
      * The animated half of DSH's mark: a span masked through the APNG the host serves. Asserted because the
      * operator's own words were "dsh的鲸鱼尾巴是动画" — a static outline is the fallback, not the feature.
      */
-    var animated = icon ? icon.querySelector('.pet3d-whale-animated') : null;
+    var animated = icon ? icon.querySelector('.vrmpet3d-whale-animated') : null;
     var animatedStyle = animated && globalThis.getComputedStyle ? globalThis.getComputedStyle(animated) : null;
     report.inAppStatus = {
       text: shown,
@@ -638,7 +638,7 @@
       && report.inAppStatus.iconDrawn === true
       && report.inAppStatus.iconPath === 'M8.844 1'
       // The animated layer is ACTIVE in this browser (alpha masks, motion allowed) and points at the route.
-      && String(report.inAppStatus.animatedMask).indexOf('pet3d/whale') !== -1
+      && String(report.inAppStatus.animatedMask).indexOf('vrmpet3d/whale') !== -1
       && report.inAppStatus.animatedDisplay !== 'none'
       && report.inAppStatus.decorationVisible === true
       && report.inAppStatus.fontPx === report.inAppStatus.expectedFontPx;
@@ -657,8 +657,8 @@
    */
   check('the app draws 任务达成 in gold and bold, and 出错 in red', async function () {
     var readStyle = function () {
-      var node = widget.pet.querySelector('.pet3d-status');
-      var text = node ? node.querySelector('.pet3d-status-text') : null;
+      var node = widget.pet.querySelector('.vrmpet3d-status');
+      var text = node ? node.querySelector('.vrmpet3d-status-text') : null;
       var style = globalThis.getComputedStyle ? globalThis.getComputedStyle(node) : null;
       return {
         // The words live in `data-shimmer-text` and are drawn by `content:attr(...)`: the span itself is empty.
@@ -709,7 +709,7 @@
    * line, an expired hold clears it, and an idle pet does not immediately invent a new one.
    */
   check('the pet says a shipped line of its own, once, and then goes quiet', async function () {
-    var node = widget.pet.querySelector('.pet3d-speech');
+    var node = widget.pet.querySelector('.vrmpet3d-speech');
     var running = {
       connected: true,
       scope: 'global',
@@ -739,7 +739,7 @@
     var text = node ? node.textContent : null;
     // The 状态 prompt is up as well (工作中), and the bubble is offset above it rather than on top of it.
     var promptUp = Boolean(widget.statusNode) && widget.statusNode.hidden === false;
-    var offset = node ? node.style.getPropertyValue('--pet3d-speech-offset') : null;
+    var offset = node ? node.style.getPropertyValue('--vrmpet3d-speech-offset') : null;
     var abovePrompt = Number(String(offset).replace('px', '')) > 0;
     // One line at a time: another frame keeps exactly the same words.
     widget.tick(1 / 60);
@@ -804,12 +804,12 @@
    * staying up until the answer arrives rather than the bubble going empty in the meantime.
    */
   asyncCheck('with AI 碎碎念 on, the widget asks the host once and then says what came back', function () {
-    var node = widget.pet.querySelector('.pet3d-speech');
+    var node = widget.pet.querySelector('.vrmpet3d-speech');
     var realFetch = globalThis.fetch;
     var calls = [];
     globalThis.fetch = function (url, options) {
       var href = String(url);
-      if (href.indexOf('/pet3d/say') === -1) {
+      if (href.indexOf('/vrmpet3d/say') === -1) {
         return realFetch
           ? realFetch.apply(globalThis, arguments)
           : Promise.reject(new Error('unexpected fetch ' + href));
@@ -884,7 +884,7 @@
     var calls = [];
     globalThis.fetch = function (url, options) {
       var href = String(url);
-      if (href.indexOf('/pet3d/say') === -1) {
+      if (href.indexOf('/vrmpet3d/say') === -1) {
         return realFetch
           ? realFetch.apply(globalThis, arguments)
           : Promise.reject(new Error('unexpected fetch ' + href));
@@ -1000,7 +1000,7 @@
     widget.machine.reset();
     widget.tick(1 / 60);
 
-    var label = widget.pet.querySelector('.pet3d-status');
+    var label = widget.pet.querySelector('.vrmpet3d-status');
     if (!label || label.hidden) {
       report.wheelGesture = { shown: false };
       return false;
@@ -1022,7 +1022,7 @@
     var scaleBefore = CORE.statusScaleFor(widget.preferences, modelId);
 
     // Dispatched ON the element the pointer would be over, so the browser's own bubbling decides who hears it:
-    // the prompt for the text gesture, the canvas for the pet gesture. Both reach the `.pet3d-pet` listener.
+    // the prompt for the text gesture, the canvas for the pet gesture. Both reach the `.vrmpet3d-pet` listener.
     function wheelOn(node, x, y, deltaY) {
       node.dispatchEvent(new WheelEvent('wheel', {
         deltaY: deltaY, clientX: x, clientY: y, bubbles: true, cancelable: true,
@@ -1070,7 +1070,7 @@
       textOnly: textOnly,
       onPet: onPet,
       pushedScale: pushedPatch ? pushedPatch.statusScale : null,
-      whiteSpace: globalThis.getComputedStyle(widget.pet.querySelector('.pet3d-status-text')).whiteSpace,
+      whiteSpace: globalThis.getComputedStyle(widget.pet.querySelector('.vrmpet3d-status-text')).whiteSpace,
       promptRect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width) },
     };
 
@@ -1216,13 +1216,13 @@
    * the change is persisted so it survives a reload.
    *
    * 重置大小 is NOT asserted here any more: it is a MENU entry now (the panel and its
-   * `.pet3d-size-reset` button went with the panel), and the menu check below clicks the real item.
+   * `.vrmpet3d-size-reset` button went with the panel), and the menu check below clicks the real item.
    * What this one adds is the other half — that no size control was left behind on the pet's own
    * chrome, which a leftover stepper would have been.
    */
   check('the size slider is gone and the wheel zooms the pet', function () {
     var ranges = widget.root.querySelectorAll('input[type=range]');
-    var leftovers = widget.root.querySelectorAll('.pet3d-size-reset, .pet3d-stepper, .pet3d-model-cycle');
+    var leftovers = widget.root.querySelectorAll('.vrmpet3d-size-reset, .vrmpet3d-stepper, .vrmpet3d-model-cycle');
     widget.resetSize();
     var before = widget.placement.width;
     var rect = widget.pet.getBoundingClientRect();
@@ -1342,12 +1342,12 @@
    * The two settings entries ask the HOST for a window, with the model that is on screen.
    *
    * They are the only way to reach the settings from the pet now, so the action names and the model in the
-   * body are asserted against the route the host reads (`POST /pet3d/desktop`), not against a label.
+   * body are asserted against the route the host reads (`POST /vrmpet3d/desktop`), not against a label.
    */
   asyncCheck('the settings entries ask the host for the right page', function () {
     var asked = [];
     var restoreFetch = stubFetch({
-      '/pet3d/desktop': function (url, options) {
+      '/vrmpet3d/desktop': function (url, options) {
         asked.push({ url: String(url), method: (options && options.method) || 'GET', body: options && options.body });
         return { ok: true, json: function () { return Promise.resolve({ state: 'config-open' }); } };
       },
@@ -1760,7 +1760,7 @@
    * trusted here.
    */
   asyncCheck('the gaze tips the head up on a model oriented either way round', function () {
-    var base64 = globalThis.__PET3D_VRM_BASE64__;
+    var base64 = globalThis.__VRMPET3D_VRM_BASE64__;
     if (!base64) return Promise.resolve(false);
     var canvas = document.createElement('canvas');
     canvas.width = 128;
@@ -1802,7 +1802,7 @@
       // are dropped so they are measured again for the new orientation — which is what a
       // freshly loaded model of the other version gets.
       probe.avatar.root.rotateY(Math.PI);
-      delete probe.avatar.bones.head.userData.pet3dGazeAxes;
+      delete probe.avatar.bones.head.userData.vrmpet3dGazeAxes;
       var flipped = effect(0, 0.3);
       var flippedYaw = effect(0.4, 0);
 
@@ -1831,7 +1831,7 @@
    * sequence is injected: the check has to be strict, not lucky.
    */
   asyncCheck('the scene applies spring-chain and expression settings', function () {
-    var base64 = globalThis.__PET3D_VRM_BASE64__;
+    var base64 = globalThis.__VRMPET3D_VRM_BASE64__;
     if (!base64) return Promise.resolve(false);
     var canvas = document.createElement('canvas');
     canvas.width = 128;
@@ -2279,15 +2279,15 @@
    * whole contract, so a stale menu — or the previous delivered chunk — fails here rather than at a right-click.
    */
   check('the right-click menu is the shared definition, with the operator\'s entries', function () {
-    var menuApi = globalThis.__PET3D_MENU__;
+    var menuApi = globalThis.__VRMPET3D_MENU__;
     widget.closeMenu();
     var opened = widget.openMenuAt(120, 140);
     var items = widget.menu ? widget.menu.items() : [];
     var ids = items.map(function (item) { return item.id; });
     // The module's own record, by class: a surface that hand-rolled a look-alike would fail here even if the
     // labels happened to match.
-    var sharedClass = Boolean(widget.menu) && widget.menu.element.classList.contains('pet3d-menu');
-    var stylesheet = Boolean(document.getElementById('pet3d-menu-style'));
+    var sharedClass = Boolean(widget.menu) && widget.menu.element.classList.contains('vrmpet3d-menu');
+    var stylesheet = Boolean(document.getElementById('vrmpet3d-menu-style'));
     var surfaceRow = items.filter(function (item) { return item.id === 'surface'; })[0] || null;
     // This pet hands the pet OUT, and the operator's own words for that row are asserted from the module's
     // table rather than from a surface's strings — one definition, so it cannot differ between the two pets.
@@ -2936,7 +2936,7 @@
     document.body.appendChild(canvas);
     var probe = new SCENE.Scene(canvas, { assetBase: '/asset', modelId: 'chains', onError: function () {} });
     probe.resize(128, 128);
-    var base64 = globalThis.__PET3D_VRM_BASE64__;
+    var base64 = globalThis.__VRMPET3D_VRM_BASE64__;
     var bytes = Uint8Array.from(atob(base64), function (c) { return c.charCodeAt(0); });
     return probe.parse(bytes.buffer, 'chains').then(function (parsed) {
       if (!parsed.ok) throw new Error('fixture did not load: ' + parsed.error);
@@ -3318,7 +3318,7 @@
     var ok = false;
     var detail = {};
     try {
-      old = new CLIENT.Pet3DWidget(host, { language: 'en' });
+      old = new CLIENT.VrmPet3DWidget(host, { language: 'en' });
       var spans = {
         x: Math.max(1, window.innerWidth - old.placement.width),
         y: Math.max(1, window.innerHeight - old.placement.height)
@@ -3468,7 +3468,7 @@
   // at once made the first version of those checks measure that reload instead of
   // their own action.
   var modelFallback = check('a model select with a bad id falls back to the placeholder', function () {
-    // No /pet3d/asset route exists in this page, so the fetch must fail and the
+    // No /vrmpet3d/asset route exists in this page, so the fetch must fail and the
     // widget must keep rendering rather than blank out.
     return widget.loadModel('m-does-not-exist').then(function (status) {
       return status && status.ok === false && widget.scene.kind === 'placeholder';
@@ -3509,7 +3509,7 @@
      * widget is mounted in Chinese (and disposed) for the one string that has to be 显示宠物. A literal in both
      * languages here would pass while the product showed the wrong one.
      */
-    var menuApi = globalThis.__PET3D_MENU__;
+    var menuApi = globalThis.__VRMPET3D_MENU__;
     var rowWordsRight = rowLabel === menuApi.strings(widget.language).closePetApp
       && menuApi.strings('zh').closePetApp === '隐藏宠物';
     var zhHost = document.createElement('div');
@@ -3517,7 +3517,7 @@
     var zhWidget = null;
     var zhButtonLabel = null;
     try {
-      zhWidget = new CLIENT.Pet3DWidget(zhHost, { language: 'zh' });
+      zhWidget = new CLIENT.VrmPet3DWidget(zhHost, { language: 'zh' });
       zhButtonLabel = String(zhWidget.restore.textContent);
     } finally {
       if (zhWidget && typeof zhWidget.dispose === 'function') { try { zhWidget.dispose(); } catch (_error) { /* gone */ } }
@@ -3534,7 +3534,7 @@
   // --- authored motion picker ----------------------------------------------
   //
   // The scene half of this contract (loadMotion / setMotionMap / describeMotions
-  // / clearMotions) is implemented in lib/pet3d.js by a separate change, so
+  // / clearMotions) is implemented in lib/scene.js by a separate change, so
   // these checks install spies over it. That is the point, not a shortcut: this
   // page tests the WIDGET's half of the boundary — which rows exist, what is
   // offered for a given avatar, what gets persisted, and what the widget calls —
@@ -3645,7 +3645,7 @@
     var real = window.fetch;
     window.fetch = function (url, options) {
       var path = String(url).split('?')[0];
-      if (path === '/pet3d/motion') {
+      if (path === '/vrmpet3d/motion') {
         var match = /[?&]m=([^&]*)/.exec(String(url));
         var id = match ? decodeURIComponent(match[1]) : '';
         spies.fetches[id] = (spies.fetches[id] || 0) + 1;
@@ -3672,16 +3672,30 @@
     widget.motionCatalog = { motions: MOTIONS };
     setKind('vrm');
     var vrm = widget.compatibleMotions().map(function (entry) { return entry.id; });
-    setKind('mmd');
-    var mmd = widget.compatibleMotions().map(function (entry) { return entry.id; });
+    // A plain glTF has no humanoid contract and the procedural placeholder is gone (2026-10-10), so both
+    // answer "nothing can drive this avatar" — the `other` notice. The `mmd` case that used to sit here
+    // went with MMD support on 2026-10-12: no avatar can be one any more.
+    setKind('gltf');
+    var gltf = widget.compatibleMotions().map(function (entry) { return entry.id; });
     setKind('placeholder');
     var placeholder = widget.compatibleMotions().map(function (entry) { return entry.id; });
     var placeholderNote = widget.motionNotice;
+    // And the VRM branch's own reason, which is the one that NAMES the format: with nothing but a `.vmd`
+    // entry in the catalogue, a VRM is offered nothing and the note says why. That is the VRM-only rule —
+    // a `.vmd` can never be offered to anything, whatever is loaded.
+    widget.motionCatalog = { motions: [MOTIONS[2]] };
     setKind('vrm');
-    report.motionFilter = { vrm: vrm, mmd: mmd, placeholder: placeholder, placeholderNote: placeholderNote };
+    var vmdOnly = widget.compatibleMotions().map(function (entry) { return entry.id; });
+    var vrmNote = widget.motionNotice;
+    widget.motionCatalog = { motions: MOTIONS };
+    setKind('vrm');
+    report.motionFilter = {
+      vrm: vrm, gltf: gltf, placeholder: placeholder, placeholderNote: placeholderNote,
+      vmdOnly: vmdOnly, vrmNote: vrmNote,
+    };
     return vrm.indexOf('mv-vrma') !== -1 && vrm.indexOf('mv-vrma2') !== -1 && vrm.indexOf('mv-vmd') === -1
-      && mmd.indexOf('mv-vmd') !== -1 && mmd.indexOf('mv-vrma') === -1
-      && placeholder.length === 0
+      && gltf.length === 0 && placeholder.length === 0
+      && vmdOnly.length === 0 && /\.vrma/.test(String(vrmNote))
       && /skeleton/i.test(String(placeholderNote));
   });
 
@@ -3744,14 +3758,20 @@
    *
    * Which formats are offered is a property of the MODEL, so loading a different one can strand a saved pick.
    * Silently dropping it would leave the preference feeding a clip nothing can build — the pet simply idle,
-   * with no explanation anywhere.
+   * with no explanation anywhere. The case that became the common one on 2026-10-12 is a profile written
+   * while MMD still played: it holds a `.vmd` id that no avatar can be driven by any more.
    */
   check('a saved clip this model cannot drive is reported and not fed to the scene', function () {
     widget.motionCatalog = { motions: MOTIONS };
     var restoreFetch = stubFetch({});
-    setKind('mmd');
-    chooseMotion('working', 'mv-vmd');
+    // A profile written before MMD was implementation-removed (2026-10-12) can still hold a `.vmd` id:
+    // that is what every existing user's stored map looks like. Loading a VRM must NAME that pick rather
+    // than silently hand the scene a clip nothing can build.
     setKind('vrm');
+    chooseMotion('working', 'mv-vmd');
+    // Recomputed here rather than trusted from whatever the previous check left behind: the notice is the
+    // answer under test, so it has to be derived from this state.
+    widget.refreshMotionNotice();
     var stale = widget.staleMotionIds();
     var noticed = /cannot drive/i.test(String(widget.motionNotice));
     report.motionStale = { stale: stale, notice: widget.motionNotice };
@@ -3778,8 +3798,8 @@
       spies.maps.length = 0;
       spies.fetches = {};
       var restoreFetch = stubFetch({
-        '/pet3d/motion': function () { return okBytes(64); },
-        '/pet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve({ motions: MOTIONS }); } }; },
+        '/vrmpet3d/motion': function () { return okBytes(64); },
+        '/vrmpet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve({ motions: MOTIONS }); } }; },
       });
       chooseMotion('working', 'mv-vrma');
       return waitFor(function () {
@@ -3821,8 +3841,8 @@
     spies.loads.length = 0;
     spies.fetches = {};
     var restoreFetch = stubFetch({
-      '/pet3d/motion': function () { return okBytes(64); },
-      '/pet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve({ motions: MOTIONS }); } }; },
+      '/vrmpet3d/motion': function () { return okBytes(64); },
+      '/vrmpet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve({ motions: MOTIONS }); } }; },
     });
     widget.preferences.motions = { done: ['mv-vrma2'] };
     widget.applyMotions();
@@ -3854,7 +3874,7 @@
     widget.motionPending = {};
     spies.loads.length = 0;
     spies.fetches = {};
-    var restoreFetch = stubFetch({ '/pet3d/motion': function () { return okBytes(64); } });
+    var restoreFetch = stubFetch({ '/vrmpet3d/motion': function () { return okBytes(64); } });
     chooseMotion('working', 'mv-vrma');
     return waitFor(function () { return spies.loads.length === 1; })
       .then(function () {
@@ -3909,7 +3929,7 @@
         stillMounted: widget.root !== null,
       };
       return !threw && result === null && widget.root !== null
-        && /pet3d\/motions|unavailable/i.test(String(notice));
+        && /vrmpet3d\/motions|unavailable/i.test(String(notice));
     }, function (error) {
       window.fetch = real;
       throw error;
@@ -3929,7 +3949,7 @@
     // Only the catalog route answers; the byte route is absent, so the failure has to be reported per clip
     // rather than mistaken for a missing catalog.
     var restoreFetch = stubFetch({
-      '/pet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve({ motions: MOTIONS }); } }; },
+      '/vrmpet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve({ motions: MOTIONS }); } }; },
     });
     chooseMotion('done', 'mv-vrma2');
     return waitFor(function () { return /mv-vrma2/.test(widget.badge.textContent || ''); })
@@ -3976,7 +3996,7 @@
     var asked = [];
 
     var restore = stubFetch({
-      '/pet3d/desktop': function (url, options) {
+      '/vrmpet3d/desktop': function (url, options) {
         asked.push({ url: url, method: (options && options.method) || 'GET', body: options && options.body });
         if (options && options.method === 'POST') {
           return {
@@ -4005,7 +4025,7 @@
 
         // A host that refuses: the state must not claim success and the note must say why.
         var restoreFail = stubFetch({
-          '/pet3d/desktop': function () {
+          '/vrmpet3d/desktop': function () {
             return { ok: false, status: 500, json: function () { return Promise.resolve({ error: 'no Electron to borrow' }); } };
           },
         });
@@ -4021,7 +4041,7 @@
 
             // The state that used to be invisible: the process is running but its page never rendered.
             var restoreNoRender = stubFetch({
-              '/pet3d/desktop': function () {
+              '/vrmpet3d/desktop': function () {
                 return {
                   ok: true,
                   json: function () {
@@ -4040,7 +4060,7 @@
 
               // Running, with the page not having reported yet: honest, not triumphant.
               var restorePending = stubFetch({
-                '/pet3d/desktop': function () {
+                '/vrmpet3d/desktop': function () {
                   return { ok: true, json: function () { return Promise.resolve({ state: 'running', running: true, page: null }); } };
                 },
               });
@@ -4096,7 +4116,7 @@
   asyncCheck('调试模式 shows the floating window and the in-app pet at once', function () {
     var asked = [];
     var restore = stubFetch({
-      '/pet3d/desktop': function (url, options) {
+      '/vrmpet3d/desktop': function (url, options) {
         asked.push({ url: url, method: (options && options.method) || 'GET', body: options && options.body });
         return {
           ok: true,
@@ -4238,9 +4258,9 @@
    * and the pinned expression took its weight, with no reload and no polling.
    */
   asyncCheck('a settings change reaches the running pet through storage', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
-    var base64 = globalThis.__PET3D_VRM_BASE64__;
+    var base64 = globalThis.__VRMPET3D_VRM_BASE64__;
     if (!base64) return Promise.resolve(false);
     var bytes = Uint8Array.from(atob(base64), function (c) { return c.charCodeAt(0); });
 
@@ -4263,7 +4283,7 @@
       setItem: function (key, value) { stored[key] = value; },
     };
     var restoreFetch = stubFetch({
-      '/pet3d/asset': function () {
+      '/vrmpet3d/asset': function () {
         return { ok: true, arrayBuffer: function () { return Promise.resolve(bytes.buffer); } };
       },
     });
@@ -4271,7 +4291,7 @@
       canvas: canvas,
       bridge: { reportRect: function () {}, ready: function () {}, onCursor: function () {} },
       modelId: 'settings',
-      assetBase: '/pet3d/asset',
+      assetBase: '/vrmpet3d/asset',
       screen: { x: 0, y: 0, width: 900, height: 600 },
       storage: storage,
     });
@@ -4331,7 +4351,7 @@
   });
 
   asyncCheck('the desktop page drags, zooms, orbits and follows the launcher cursor', async function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -4364,7 +4384,7 @@
      * section above already decodes.
      */
     var fixtureBytes = (function () {
-      var encoded = globalThis.__PET3D_VRM_BASE64__;
+      var encoded = globalThis.__VRMPET3D_VRM_BASE64__;
       if (!encoded) return null;
       var binary = atob(encoded);
       var out = new Uint8Array(binary.length);
@@ -4372,7 +4392,7 @@
       return out.buffer;
     })();
     var restorePageFetch = fixtureBytes ? stubFetch({
-      '/pet3d/asset': function () {
+      '/vrmpet3d/asset': function () {
         return { ok: true, arrayBuffer: function () { return Promise.resolve(fixtureBytes); } };
       },
     }) : null;
@@ -4481,7 +4501,7 @@
       var afterBox = placement.pixels();
       setCursor(afterBox.left + Math.round(placement.width / 2), afterBox.top + Math.round(placement.height / 2));
       var clicksBefore = interactions.filter(function (reason) { return reason === 'click'; }).length;
-      var speechNode = document.querySelector('.pet3d-desktop-speech');
+      var speechNode = document.querySelector('.vrmpet3d-desktop-speech');
       pointer('pointerdown', afterBox.left + Math.round(placement.width / 2), afterBox.top + Math.round(placement.height / 2));
       pointer('pointerup', afterBox.left + Math.round(placement.width / 2), afterBox.top + Math.round(placement.height / 2));
       found.clickReaction = interactions.filter(function (reason) { return reason === 'click'; }).length;
@@ -4541,7 +4561,7 @@
       pointer('pointerdown', sayAt.x, sayAt.y);
       pointer('pointerup', sayAt.x, sayAt.y);
       pet.publish();
-      var published = globalThis.__PET3D_DESKTOP_STATE__ || null;
+      var published = globalThis.__VRMPET3D_DESKTOP_STATE__ || null;
       found.pressSpeech = {
         text: speechNode ? speechNode.textContent : null,
         hidden: speechNode ? speechNode.hidden : null,
@@ -4587,7 +4607,7 @@
       var sayCalls = 0;
       var realSayFetch = window.fetch;
       window.fetch = function (url, options) {
-        if (String(url).split('?')[0] === '/pet3d/say') {
+        if (String(url).split('?')[0] === '/vrmpet3d/say') {
           sayCalls += 1;
           return Promise.resolve({
             ok: true,
@@ -4612,7 +4632,7 @@
       pointer('pointerdown', aiAt.x, aiAt.y);
       pointer('pointerup', aiAt.x, aiAt.y);
       pet.publish();
-      var aiPublished = globalThis.__PET3D_DESKTOP_STATE__ || null;
+      var aiPublished = globalThis.__VRMPET3D_DESKTOP_STATE__ || null;
       found.shippedPressAi = {
         text: speechNode ? speechNode.textContent : null,
         hidden: speechNode ? speechNode.hidden : null,
@@ -4807,7 +4827,7 @@
        */
       var sizeBeforeEntry = pet.preferences.windowSize;
       var entry = Array.prototype.filter.call(
-        pet.menu().querySelectorAll('.pet3d-menu-item'),
+        pet.menu().querySelectorAll('.vrmpet3d-menu-item'),
         function (node) { return node.getAttribute('data-item') === 'resetSize'; },
       )[0];
       if (entry) entry.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -4823,7 +4843,7 @@
        * The module closes itself before it calls the surface back, so a page listening for an outside press and
        * an Escape key never hears about this third way out. It matters because `menuOpen` is what the WINDOW is
        * sized from: with the flag stuck true, the launcher kept the extra room for a menu that was already gone
-       * and `__PET3D_DESKTOP_STATE__.menu.open` kept reporting it. This assertion is the one that caught it
+       * and `__VRMPET3D_DESKTOP_STATE__.menu.open` kept reporting it. This assertion is the one that caught it
        * (2026-10-12) — every earlier menu check here called `closeMenu()` instead of clicking an entry.
        */
       found.closedByEntry = pet.isMenuOpen() === false;
@@ -4900,7 +4920,7 @@
          * The status prompt: the one thing this page cannot work out for itself.
          *
          * It has no session data — no catalog, no statuses, no boundary stream — so the state arrives from the
-         * in-app pet over `/pet3d/state`, and `setState` is that arrival without a network. What is asserted
+         * in-app pet over `/vrmpet3d/state`, and `setState` is that arrival without a network. What is asserted
          * is the three-part contract the window depends on: the text is drawn, the blue sweep exists for the
          * animated state, and the prompt is drawn WHERE IT SAYS IT IS.
          *
@@ -4910,7 +4930,7 @@
          * `layoutStatus` had already centred, drawing the prompt one full height ABOVE the window's top edge
          * and making the reported box describe somewhere nothing was. The launcher sizes the window from that
          * box, so the prompt stayed invisible and nothing failed. For a day. Measured live on 2026-10-09:
-         * `/pet3d/desktop` reported `status.rect` at (1633, 832) inside a window at (1584, 838, 288x393) —
+         * `/vrmpet3d/desktop` reported `status.rect` at (1633, 832) inside a window at (1584, 838, 288x393) —
          * a box that claims to be inside the window while the element sat 24px above its top.
          *
          * So the assertion is now against the DOM: `getBoundingClientRect` includes any CSS transform, and the
@@ -4921,22 +4941,22 @@
         var statusRect = pet.status();
         /**
          * The page's own account of itself. `publish()` does not return it — it assigns it to
-         * `__PET3D_DESKTOP_STATE__`, the very global the launcher's self-test reads back — so the readout is
+         * `__VRMPET3D_DESKTOP_STATE__`, the very global the launcher's self-test reads back — so the readout is
          * taken from there, right after the `setState` above republished it.
          */
         pet.publish();
-        var statusReadout = globalThis.__PET3D_DESKTOP_STATE__;
+        var statusReadout = globalThis.__VRMPET3D_DESKTOP_STATE__;
         var statusOrigin = statusReadout && statusReadout.status ? statusReadout.status.origin : null;
-        var statusNode = document.querySelector('.pet3d-desktop-status');
+        var statusNode = document.querySelector('.vrmpet3d-desktop-status');
         // TWO copies of the line, as DSH's TextShimmer has: the real one and the masked highlight. Both read
         // their words from `data-shimmer-text`.
-        var statusTexts = statusNode ? statusNode.querySelectorAll('.pet3d-desktop-status-text') : [];
+        var statusTexts = statusNode ? statusNode.querySelectorAll('.vrmpet3d-desktop-status-text') : [];
         var statusTextNode = statusTexts[0] || null;
         var sweepTextNode = statusTexts[1] || null;
-        var statusIconNode = statusNode ? statusNode.querySelector('.pet3d-desktop-status-icon') : null;
-        var statusDecorationNode = statusNode ? statusNode.querySelector('.pet3d-desktop-status-decoration') : null;
-        var sweepNode = statusNode ? statusNode.querySelector('.pet3d-desktop-status-sweep') : null;
-        var DESKTOP_FONT_VAR = '--pet3d-desktop-status-font';
+        var statusIconNode = statusNode ? statusNode.querySelector('.vrmpet3d-desktop-status-icon') : null;
+        var statusDecorationNode = statusNode ? statusNode.querySelector('.vrmpet3d-desktop-status-decoration') : null;
+        var sweepNode = statusNode ? statusNode.querySelector('.vrmpet3d-desktop-status-sweep') : null;
+        var DESKTOP_FONT_VAR = '--vrmpet3d-desktop-status-font';
         /** The ordinary line's colour, for the tone check below: 工作中 is a state with no tone of its own. */
         var ordinaryStatusColor = statusNode && globalThis.getComputedStyle
           ? globalThis.getComputedStyle(statusNode).color
@@ -4984,7 +5004,7 @@
           /**
            * The model's own text-size correction, which the wheel ON THE TEXT drives.
            *
-           * The page publishes it so the LAUNCHER can relay it to `/pet3d/desktop`; the launcher copies a
+           * The page publishes it so the LAUNCHER can relay it to `/vrmpet3d/desktop`; the launcher copies a
            * fixed list of fields, so a field missing from that list was invisible from outside the window —
            * "the text gesture did nothing" and "it worked and the size is right" looked identical. The
            * launcher's half of that is asserted in `scripts/verify-desktop.mjs`; this is the page's.
@@ -4996,7 +5016,7 @@
         var scaleExpected = CORE.statusScaleFor(pet.preferences, scaleModel);
         pet.preferences.statusScale = CORE.setStatusScale(pet.preferences, scaleModel, 1.3);
         pet.publish();
-        found.status.scaleAfterCorrection = globalThis.__PET3D_DESKTOP_STATE__.status.scale;
+        found.status.scaleAfterCorrection = globalThis.__VRMPET3D_DESKTOP_STATE__.status.scale;
         found.status.scaleExpected = scaleExpected;
         var statusScaleOk = found.status.scale === scaleExpected
           && Math.abs(found.status.scaleAfterCorrection - 1.3) < 1e-9;
@@ -5041,10 +5061,10 @@
          */
         var toneStyleOf = function (state) {
           pet.setState(state);
-          var node = document.querySelector('.pet3d-desktop-status');
+          var node = document.querySelector('.vrmpet3d-desktop-status');
           var style = node && globalThis.getComputedStyle ? globalThis.getComputedStyle(node) : null;
-          var text = node ? node.querySelector('.pet3d-desktop-status-text') : null;
-          var readout = globalThis.__PET3D_DESKTOP_STATE__.status || {};
+          var text = node ? node.querySelector('.vrmpet3d-desktop-status-text') : null;
+          var readout = globalThis.__VRMPET3D_DESKTOP_STATE__.status || {};
           return {
             text: text ? text.getAttribute('data-shimmer-text') : null,
             tone: node ? node.getAttribute('data-tone') : null,
@@ -5070,7 +5090,7 @@
          * And a channel that reports NO STATE clears the prompt rather than freezing the last one.
          *
          * This is the live failure of 2026-10-11, in one assertion: the app's pet died with a TypeError,
-         * `/pet3d/state` carried `state: null` for seventeen minutes, and this page kept drawing 工作中 with the
+         * `/vrmpet3d/state` carried `state: null` for seventeen minutes, and this page kept drawing 工作中 with the
          * clock counting up — because an invalid state was IGNORED. The state, the prompt and the published
          * readout must all agree that nothing is being reported.
          */
@@ -5080,8 +5100,8 @@
         found.status.noState = {
           promptCameBack: promptCameBack,
           cleared: pet.status() === null && pet.rect().status === null,
-          published: globalThis.__PET3D_DESKTOP_STATE__.state.published,
-          error: globalThis.__PET3D_DESKTOP_STATE__.state.error,
+          published: globalThis.__VRMPET3D_DESKTOP_STATE__.state.published,
+          error: globalThis.__VRMPET3D_DESKTOP_STATE__.state.error,
         };
         var noStateClears = promptCameBack === true && found.status.noState.cleared === true
           && found.status.noState.published === null;
@@ -5110,7 +5130,7 @@
             var afterRelease = interactions.filter(function (reason) { return reason === 'hold'; }).length - holdsBefore;
             var clicksAfterHold = interactions.filter(function (reason) { return reason === 'click'; }).length
               - clicksBeforeHold;
-            var state = globalThis.__PET3D_DESKTOP_STATE__ || null;
+            var state = globalThis.__VRMPET3D_DESKTOP_STATE__ || null;
             found.longPress = {
               holdMs: Math.round(bounds.holdSeconds * 1000),
               whileHeld: whileHeld,
@@ -5130,16 +5150,16 @@
         /**
          * And the STREAM-LESS clock: the window must still show a 用时 when no turn frames ever arrive.
          *
-         * `'state'` is the sentinel the app sends in that deployment (measured live: `GET /pet3d/state` → `clock: null`
+         * `'state'` is the sentinel the app sends in that deployment (measured live: `GET /vrmpet3d/state` → `clock: null`
          * for ever, and the label therefore lost its duration — "深度求索中的时间也没了"). Driven here rather than assumed,
          * because the window is a different page with its own reading of the relay.
          */
         pet.setState('working', 'state');
         var stateClockText = (function () {
-          var node = document.querySelector('.pet3d-desktop-status-text');
+          var node = document.querySelector('.vrmpet3d-desktop-status-text');
           return node ? node.getAttribute('data-shimmer-text') : null;
         })();
-        var stateClockReadout = (globalThis.__PET3D_DESKTOP_STATE__ || {}).state || {};
+        var stateClockReadout = (globalThis.__VRMPET3D_DESKTOP_STATE__ || {}).state || {};
         var stateClockOk = Boolean(stateClockText)
           && stateClockText.indexOf('深度求索中，用时 ') === 0 && /秒 ···$/.test(stateClockText)
           && stateClockReadout.clock === 'state';
@@ -5199,7 +5219,7 @@
    * window used to overwrite the app pet's value.
    */
   asyncCheck('the floating window sizes itself from its own preference, never the app pet’s', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5215,7 +5235,7 @@
     host.appendChild(canvas);
 
     var fixtureBytes = (function () {
-      var encoded = globalThis.__PET3D_VRM_BASE64__;
+      var encoded = globalThis.__VRMPET3D_VRM_BASE64__;
       if (!encoded) return new ArrayBuffer(64);
       var binary = atob(encoded);
       var out = new Uint8Array(binary.length);
@@ -5234,9 +5254,9 @@
     };
     var restoreFetch = stubFetch({
       // 404 stops the host poll, which is what "this page keeps its own storage" looks like.
-      '/pet3d/settings': function () { return { status: 404, ok: false }; },
-      '/pet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
-      '/pet3d/asset': function () {
+      '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
+      '/vrmpet3d/asset': function () {
         return { ok: true, arrayBuffer: function () { return Promise.resolve(fixtureBytes); } };
       },
     });
@@ -5357,8 +5377,8 @@
    *     transparent area, so a menu outside that rectangle is clipped.
    */
   asyncCheck('the floating window builds its menu from the shared definition', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
-    var menuApi = globalThis.__PET3D_MENU__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
+    var menuApi = globalThis.__VRMPET3D_MENU__;
     if (!desktop || !desktop.mount || !menuApi) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5374,9 +5394,9 @@
     host.appendChild(canvas);
 
     var restoreFetch = stubFetch({
-      '/pet3d/settings': function () { return { status: 404, ok: false }; },
-      '/pet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
-      '/pet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
+      '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
+      '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
     });
     var pet = desktop.mount({
       canvas: canvas,
@@ -5393,8 +5413,8 @@
       var items = api ? api.items() : [];
       var ids = items.map(function (item) { return item.id; });
       // The module's own record, by class, and its stylesheet: a page that hand-rolled a look-alike fails here.
-      var sharedClass = Boolean(element) && element.classList.contains('pet3d-menu');
-      var stylesheet = Boolean(document.getElementById('pet3d-menu-style'));
+      var sharedClass = Boolean(element) && element.classList.contains('vrmpet3d-menu');
+      var stylesheet = Boolean(document.getElementById('vrmpet3d-menu-style'));
       /**
        * 这个界面**没有** 切换行 —— 而它以前有的那一行（切换回窗口内）现在由 关闭独立宠物 承担。
        *
@@ -5465,7 +5485,7 @@
    * one thing a preference that never reached `placement.throwEnabled` cannot fake.
    */
   asyncCheck('the floating window\'s 重力 switch drives its own physics, on its own key', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5489,15 +5509,15 @@
      * app pet's answer, and the assertion below (`appKeySurvived`) is what a single shared key could not pass.
      */
     var stored = {};
-    stored[globalThis.__PET3D_CORE__.STORAGE_KEY] = JSON.stringify({ gravity: false });
+    stored[globalThis.__VRMPET3D_CORE__.STORAGE_KEY] = JSON.stringify({ gravity: false });
     var store = {
       getItem: function (key) { return Object.prototype.hasOwnProperty.call(stored, key) ? stored[key] : null; },
       setItem: function (key, value) { stored[key] = String(value); },
     };
     var restoreFetch = stubFetch({
-      '/pet3d/settings': function () { return { status: 404, ok: false }; },
-      '/pet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
-      '/pet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
+      '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
+      '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
     });
     var pet = desktop.mount({
       canvas: canvas,
@@ -5541,7 +5561,7 @@
       var airborneAfterOff = placement.isAirborne();
 
       // The APP's key, which this page must never write or re-derive.
-      var appKeySurvived = JSON.parse(stored[globalThis.__PET3D_CORE__.STORAGE_KEY] || '{}').gravity === false;
+      var appKeySurvived = JSON.parse(stored[globalThis.__VRMPET3D_CORE__.STORAGE_KEY] || '{}').gravity === false;
 
       report.windowGravity = {
         shipsOff: shipsOff, afterOn: afterOn, menuClosed: menuClosed,
@@ -5570,7 +5590,7 @@
    * 2026-10-12). The three cases below are the whole rule: still press, wobbling press, real orbit.
    */
   asyncCheck('the floating window opens its menu for a wobbling right-click, not just a still one', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5586,9 +5606,9 @@
     host.appendChild(canvas);
 
     var restoreFetch = stubFetch({
-      '/pet3d/settings': function () { return { status: 404, ok: false }; },
-      '/pet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
-      '/pet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
+      '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
+      '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
     });
     /**
      * 旋转取锁这条链的记录器 —— 页面向启动器要"放开焦点"，启动器回答之后再请求锁。
@@ -5762,7 +5782,7 @@
    * 越顶之后为正、落地那一帧为 0。
    */
   asyncCheck('a throw in the floating window feeds the flight into the rig, like the in-app pet', async function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5779,15 +5799,15 @@
 
     /** 出厂关闭的重力，在这条检查里打开 —— 否则这个窗根本不会飞。 */
     var stored = {};
-    stored[globalThis.__PET3D_CORE__.STORAGE_KEY] = JSON.stringify({ windowGravity: true });
+    stored[globalThis.__VRMPET3D_CORE__.STORAGE_KEY] = JSON.stringify({ windowGravity: true });
     var store = {
       getItem: function (key) { return Object.prototype.hasOwnProperty.call(stored, key) ? stored[key] : null; },
       setItem: function (key, value) { stored[key] = String(value); },
     };
     var restoreFetch = stubFetch({
-      '/pet3d/settings': function () { return { status: 404, ok: false }; },
-      '/pet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
-      '/pet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
+      '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
+      '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
     });
     var pet = desktop.mount({
       canvas: canvas,
@@ -5872,7 +5892,7 @@
    *     click-through, while a point on the prompt stays interactive.
    */
   asyncCheck('the floating window shows the pet’s remark above the prompt and out of the click path', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5888,9 +5908,9 @@
     host.appendChild(canvas);
 
     var restoreFetch = stubFetch({
-      '/pet3d/settings': function () { return { status: 404, ok: false }; },
-      '/pet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
-      '/pet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
+      '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
+      '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
     });
     var pet = desktop.mount({
       canvas: canvas,
@@ -5906,15 +5926,15 @@
       var promptBox = pet.status();
       var line = '开始干活了';
       var returned = pet.setSpeech(line);
-      var node = document.querySelector('.pet3d-desktop-speech');
+      var node = document.querySelector('.vrmpet3d-desktop-speech');
       /** Read the DOM NOW: the clear below hides it, which is what `cleared` asserts. */
       var drawnText = node ? node.textContent : null;
       var wasVisible = Boolean(node) && node.hidden === false;
       var box = pet.speech();
       var reported = pet.rect() ? pet.rect().speech : null;
       var domRect = node && typeof node.getBoundingClientRect === 'function' ? node.getBoundingClientRect() : null;
-      var origin = reported && globalThis.__PET3D_DESKTOP_STATE__ && globalThis.__PET3D_DESKTOP_STATE__.speech
-        ? globalThis.__PET3D_DESKTOP_STATE__.speech.origin
+      var origin = reported && globalThis.__VRMPET3D_DESKTOP_STATE__ && globalThis.__VRMPET3D_DESKTOP_STATE__.speech
+        ? globalThis.__VRMPET3D_DESKTOP_STATE__.speech.origin
         : null;
       // The page reports its rectangles in the VIRTUAL frame; the element's page position is that rectangle
       // minus the origin the page also publishes — the same conversion the prompt's own check does, and the
@@ -5938,7 +5958,7 @@
         text: drawnText,
         visible: wasVisible,
         returned: returned,
-        nodes: document.querySelectorAll('.pet3d-desktop-speech').length,
+        nodes: document.querySelectorAll('.vrmpet3d-desktop-speech').length,
         box: box,
         reported: reported,
         drawnWhereReported: drawnWhereReported,
@@ -5972,9 +5992,9 @@
    * two frames.
    */
   asyncCheck('the floating window plays a mapped VRMA on a real avatar', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
-    var waveBase64 = globalThis.__PET3D_WAVE_BASE64__;
-    var vrmBase64 = globalThis.__PET3D_VRM_BASE64__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
+    var waveBase64 = globalThis.__VRMPET3D_WAVE_BASE64__;
+    var vrmBase64 = globalThis.__VRMPET3D_VRM_BASE64__;
     if (!desktop || !desktop.mount || !waveBase64 || !vrmBase64) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -5991,7 +6011,7 @@
 
     var waveBytes = Uint8Array.from(atob(waveBase64), function (c) { return c.charCodeAt(0); });
     var vrmBytes = Uint8Array.from(atob(vrmBase64), function (c) { return c.charCodeAt(0); });
-    var restBase64 = globalThis.__PET3D_REST_BASE64__;
+    var restBase64 = globalThis.__VRMPET3D_REST_BASE64__;
     var restBytes = restBase64
       ? Uint8Array.from(atob(restBase64), function (c) { return c.charCodeAt(0); })
       : waveBytes;
@@ -6018,15 +6038,15 @@
     var realFetch = globalThis.fetch;
     globalThis.fetch = function (url) {
       var path = String(url);
-      if (path.indexOf('/pet3d/motions') === 0) {
+      if (path.indexOf('/vrmpet3d/motions') === 0) {
         return Promise.resolve(new Response(JSON.stringify({
           motions: [
-            { id: 'a1', name: 'pet3d-wave.vrma', format: 'vrma' },
-            { id: 'a2', name: 'pet3d-rest.vrma', format: 'vrma' },
+            { id: 'a1', name: 'vrmpet3d-wave.vrma', format: 'vrma' },
+            { id: 'a2', name: 'vrmpet3d-rest.vrma', format: 'vrma' },
           ],
         }), { status: 200, headers: { 'content-type': 'application/json' } }));
       }
-      if (path.indexOf('/pet3d/motion?m=') === 0) {
+      if (path.indexOf('/vrmpet3d/motion?m=') === 0) {
         var id = path.slice(path.indexOf('m=') + 2);
         return Promise.resolve(new Response(id === 'a2' ? restBytes : waveBytes, { status: 200 }));
       }
@@ -6055,14 +6075,14 @@
       })
       .then(function (parsed) {
         found.parsed = parsed && parsed.ok === true && parsed.kind === 'vrm';
-        return globalThis.__PET3D_DESKTOP_MOTIONS__();
+        return globalThis.__VRMPET3D_DESKTOP_MOTIONS__();
       })
       .then(function () { return nextFrame(); })
       .then(function () {
         // The bone this clip drives, before and after a frame of playback. Read on the NORMALIZED rig,
         // which is what a VRMA writes, so this is the same bone the clip addresses.
         var bone = pet.scene.avatar.vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-        var rig = globalThis.__PET3D_DESKTOP_STATE__;
+        var rig = globalThis.__VRMPET3D_DESKTOP_STATE__;
         var described = pet.scene.describeMotions();
         found.motion = rig && rig.motion ? rig.motion : null;
         found.describe = described;
@@ -6095,7 +6115,7 @@
         // The node the GAZE writes, and therefore the one installAvatar recorded the rest quaternion on:
         // vatar.bones.head, which is not the humanoid rig's normalized node (a different tree).
         var gazeHead = scene.avatar.bones && scene.avatar.bones.head ? scene.avatar.bones.head : null;
-        var rest = gazeHead ? gazeHead.userData.pet3dRestQuat : null;
+        var rest = gazeHead ? gazeHead.userData.vrmpet3dRestQuat : null;
         var projected = new THREE.Vector3();
         var extreme = 0;
 
@@ -6183,7 +6203,7 @@
           for (var i = 0; i < 4; i += 1) moved += Math.abs(now[i] - found.boneAtStart[i]);
         }
         found.boneMoved = +moved.toFixed(4);
-        var rig = globalThis.__PET3D_DESKTOP_STATE__;
+        var rig = globalThis.__VRMPET3D_DESKTOP_STATE__;
         found.motionAtEnd = rig && rig.motion ? rig.motion : null;
         var published = found.motionAtEnd || {};
         var available = Array.isArray(published.available) ? published.available : [];
@@ -6208,7 +6228,7 @@
         /**
          * And the per-state MOTION, which this window used to ignore entirely.
          *
-         * `setState` is what the host's `/pet3d/state` poll leads to, so this is the whole path from "DSH is
+         * `setState` is what the host's `/vrmpet3d/state` poll leads to, so this is the whole path from "DSH is
          * thinking" to "the floating pet plays the clip 工作中 is mapped to". What is read is the SCENE's own
          * account (`describeMotions`) rather than the page's readout, because the scene is what draws; the
          * readout is published on demand and is only asked for after the frames have settled, so the two
@@ -6220,7 +6240,7 @@
         return nextFrame().then(nextFrame).then(nextFrame).then(function () {
           var after = pet.scene.describeMotions();
           pet.publish();
-          var readout = globalThis.__PET3D_DESKTOP_STATE__;
+          var readout = globalThis.__VRMPET3D_DESKTOP_STATE__;
           found.stateSwitch = {
             drawn: pet.scene.state,
             readout: readout ? readout.state : null,
@@ -6283,9 +6303,9 @@
    * declared curl on every finger joint read out of the GLB's own JSON.
    */
   asyncCheck('the resting clip hangs the arms down, bends the elbows and turns the body slowly', function () {
-    var desktop = globalThis.__PET3D_DESKTOP__;
-    var restBase64 = globalThis.__PET3D_REST_BASE64__;
-    var vrmBase64 = globalThis.__PET3D_VRM_BASE64__;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
+    var restBase64 = globalThis.__VRMPET3D_REST_BASE64__;
+    var vrmBase64 = globalThis.__VRMPET3D_VRM_BASE64__;
     if (!desktop || !desktop.mount || !restBase64 || !vrmBase64) return Promise.resolve(false);
 
     var host = document.createElement('div');
@@ -6313,12 +6333,12 @@
     var realFetch = globalThis.fetch;
     globalThis.fetch = function (url) {
       var path = String(url);
-      if (path.indexOf('/pet3d/motions') === 0) {
+      if (path.indexOf('/vrmpet3d/motions') === 0) {
         return Promise.resolve(new Response(JSON.stringify({
-          motions: [{ id: 'a2', name: 'pet3d-rest.vrma', format: 'vrma' }],
+          motions: [{ id: 'a2', name: 'vrmpet3d-rest.vrma', format: 'vrma' }],
         }), { status: 200, headers: { 'content-type': 'application/json' } }));
       }
-      if (path.indexOf('/pet3d/motion?m=') === 0) {
+      if (path.indexOf('/vrmpet3d/motion?m=') === 0) {
         return Promise.resolve(new Response(restBytes, { status: 200 }));
       }
       return realFetch.apply(globalThis, arguments);
@@ -6340,7 +6360,7 @@
         return pet.ready;
       })
       .then(function () { return pet.scene.parse(vrmBytes.buffer, 'rest-fixture'); })
-      .then(function () { return globalThis.__PET3D_DESKTOP_MOTIONS__(); })
+      .then(function () { return globalThis.__VRMPET3D_DESKTOP_MOTIONS__(); })
       // The clip is BUILT by that call but not PLAYING until the page's frame loop resolves the state
       // against the map — measuring straight away reads the procedural stand (which is exactly why the first
       // version of this check "passed" while measuring the idle pose: 75 degrees is VRM_ARM_DROP_LIMIT).
@@ -6456,20 +6476,20 @@
    * The plugin's OWN route from DSH's session hooks to the pet — the one path nothing else in
    * this file can see.
    *
-   * Every check above drives a `Pet3DWidget` directly, and drives its aggregate with `setInput`.
+   * Every check above drives a `VrmPet3DWidget` directly, and drives its aggregate with `setInput`.
    * None of them can fail when the PLUGIN forgets to wire the widget to the store, and that is
-   * exactly what happened: `apply` registered `Pet3DRoot`, the component read
+   * exactly what happened: `apply` registered `VrmPet3DRoot`, the component read
    * `props.useSessions` / `props.useSessionStatus` and pushed them in — but the aggregate's
    * `connected` flag, which gates every state except 等待确认, was written only by `setConnected`,
    * a method nothing called. The pet reported 离线 through a whole working turn (measured live
-   * 2026-10-09: `/pet3d/state` said `offline` while the agent was streaming), so 工作中 /
+   * 2026-10-09: `/vrmpet3d/state` said `offline` while the agent was streaming), so 工作中 /
    * 任务达成 / 出错 / 空闲 / 睡觉 could not be reached on screen while all ten suites were green.
    *
    * So this mounts the REAL registered component through the REAL `apply`, hands it the two hooks
    * DSH's slot machinery gives every registered component, and asserts that the widget it builds
    * is connected, resolves 工作中, and announces that state on the host channel.
    *
-   * It builds its own React rather than reusing `__PET3D_PLUGIN__`: the page's stub deliberately
+   * It builds its own React rather than reusing `__VRMPET3D_PLUGIN__`: the page's stub deliberately
    * ignores `useEffect` (it exists so the module registration can run at load), and this check is
    * about what the effects do.
    */
@@ -6515,7 +6535,7 @@
       get: function () { return undefined; },
       on: function () {},
     });
-    if (!registered || registered.row.name !== 'shell.overlay' || registered.row.id !== 'pet3d') {
+    if (!registered || registered.row.name !== 'shell.overlay' || registered.row.id !== 'vrmpet3d') {
       report.slotWiring = { registered: registered && registered.row };
       return false;
     }
@@ -6530,19 +6550,19 @@
       useSessionStatus: function (select) { return select(statuses); },
     });
 
-    // The pet announces its state by POSTing `/pet3d/state`. That is the channel the floating
+    // The pet announces its state by POSTing `/vrmpet3d/state`. That is the channel the floating
     // window polls and the one `scripts/check-profile.mjs` reads, so it is asserted end to end.
     var realFetch = globalThis.fetch;
     var posted = [];
     globalThis.fetch = function (url, init) {
       var path = String(url);
-      if (path.indexOf('/pet3d/state') === 0 && init && typeof init.body === 'string') posted.push(init.body);
-      if (path.indexOf('/pet3d/catalog') === 0) {
+      if (path.indexOf('/vrmpet3d/state') === 0 && init && typeof init.body === 'string') posted.push(init.body);
+      if (path.indexOf('/vrmpet3d/catalog') === 0) {
         return Promise.resolve(new Response(JSON.stringify({ models: [] }), {
           status: 200, headers: { 'content-type': 'application/json' },
         }));
       }
-      if (path.indexOf('/pet3d/motions') === 0) {
+      if (path.indexOf('/vrmpet3d/motions') === 0) {
         return Promise.resolve(new Response(JSON.stringify({ motions: [] }), {
           status: 200, headers: { 'content-type': 'application/json' },
         }));
@@ -6556,7 +6576,7 @@
       globalThis.fetch = realFetch;
       try { if (typeof cleanup === 'function') cleanup(); } catch (error) { /* already gone */ }
       if (widget && !widget.disposed) widget.dispose();
-      // The last check in this file asserts that no `.pet3d-root` survives disposal, so this
+      // The last check in this file asserts that no `.vrmpet3d-root` survives disposal, so this
       // mount has to be gone before it runs.
       if (slotHost.parentNode) slotHost.remove();
     }
@@ -6591,7 +6611,7 @@
     Promise.all(pending.slice()).then(function () {
       check('dispose removes the DOM and stops the loop', function () {
         widget.dispose();
-        return widget.disposed === true && widget.root === null && document.querySelector('.pet3d-root') === null;
+        return widget.disposed === true && widget.root === null && document.querySelector('.vrmpet3d-root') === null;
       });
       finish();
     }, finish);

@@ -2,7 +2,7 @@
 //
 // A thin CLI over `lib/vrm-info.js`, which is where the parsing lives: the host half needs the same
 // answers (the settings window lists a model's expressions and spring chains over
-// `/pet3d/model-info`), and two implementations of one parser drift. This file is only the
+// `/vrmpet3d/model-info`), and two implementations of one parser drift. This file is only the
 // human-readable rendering plus the thumbnail extraction.
 //
 // Usage:

@@ -28,6 +28,8 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { listenOnUsablePort } from './loopback.mjs';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -73,7 +75,7 @@ if (!existsSync(MODEL)) {
 
 /** Candidate Chromium-based browsers, matching verify-browser.mjs. */
 const BROWSER_CANDIDATES = [
-  process.env.PET3D_BROWSER,
+  envVar('BROWSER'),
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -140,12 +142,12 @@ const PROBE = `
     document.title = report.ok ? 'VRM-OK' : 'VRM-FAIL';
   }
 
-  var V = globalThis.__PET3D_VENDOR__;
-  var C = globalThis.__PET3D_CORE__;
-  // lib/pet3d.js publishes a namespace, not the constructor: the class lives at
-  // __PET3D_SCENE__.Scene. Taking the global itself yields a truthy object that is
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var C = globalThis.__VRMPET3D_CORE__;
+  // lib/scene.js publishes a namespace, not the constructor: the class lives at
+  // __VRMPET3D_SCENE__.Scene. Taking the global itself yields a truthy object that is
   // not callable, and constructing it fails with a bare "not a constructor".
-  var NS = globalThis.__PET3D_SCENE__;
+  var NS = globalThis.__VRMPET3D_SCENE__;
   var Scene = NS && NS.Scene;
   check('vendor chunk, core and scene are present', function () { return Boolean(V && C && typeof Scene === 'function'); });
   if (!V || !C || typeof Scene !== 'function') { finish(); return; }
@@ -384,7 +386,7 @@ function buildPage() {
 <script>${inlineScript(join(ROOT, 'lib', 'client.vendor.js'))}</script>
 <script>${inlineScript(join(ROOT, 'lib', 'core.js'))}</script>
 <script>${inlineScript(join(ROOT, 'lib', 'placeholder.js'))}</script>
-<script>${inlineScript(join(ROOT, 'lib', 'pet3d.js'))}</script>
+<script>${inlineScript(join(ROOT, 'lib', 'scene.js'))}</script>
 <script>${PROBE.replace(/<\/script>/gi, '<\\/script>')}</script>
 </body>
 </html>
@@ -435,7 +437,7 @@ const server = createServer((request, response) => {
 
 const browser = findBrowser();
 if (!browser) {
-  console.error('No Chromium-based browser found. Set PET3D_BROWSER and retry.');
+  console.error('No Chromium-based browser found. Set VRMPET3D_BROWSER and retry.');
   process.exit(2);
 }
 

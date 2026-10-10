@@ -52,54 +52,26 @@ import {
   VRMSpringBoneManager,
 } from '@pixiv/three-vrm';
 
-// --- MMD (PMX / PMD / VMD / VPD) ------------------------------------------
-// MMDLoader parses itself (it bundles its own PMX/PMD reader) and assembles the
-// result into geometry, skeleton, materials and morph targets.
-//
-// `buildAnimation` and `VmdObject` are listed here for a reason that is easy to
-// undo by accident: `VMDLoader.load()` hands back a parsed `VmdObject`, NOT an
-// AnimationClip, and `buildAnimation(vmd, mesh)` is the function that turns one
-// into the other. They are only reachable through this bag, so if either is
-// dropped from the list below esbuild tree-shakes it out of the chunk and the
-// plugin is left with no route from a `.vmd` file to a playable clip — with no
-// error until a user selects a motion. `VmdObject.ParseFromBuffer` is also the
-// only in-memory VMD entry point (the loader is URL-only), which matters because
-// the pet receives its bytes from a host route, not a URL it can hand a loader.
-//
-// Physics is deliberately NOT wired. @moeru/three-mmd ships no physics engine and
-// expects the host to supply one (an `ammo.js` or spring-bone package); a
-// desktop pet wants explicit bone animation instead, because a rigid-body
-// simulation is not deterministic between runs and cannot be looped exactly.
-// VMD playback does not need one: every physics call in the package is
-// optional-chained, so an unrigged skeleton still animates. See
-// docs/ASSET-CONTRACT.md.
-import {
-  MMDLoader,
-  VMDLoader,
-  VPDLoader,
-  MMD,
-  MMDAnimationManager,
-  buildAnimation,
-  VmdObject,
-} from '@moeru/three-mmd';
+// The MMD block that used to sit here (MMDLoader / VMDLoader / VPDLoader / MMD /
+// MMDAnimationManager / buildAnimation / VmdObject, from `@moeru/three-mmd`) was
+// removed on 2026-10-12 with the rename to dsh-plugin-vrmpet3d: this plugin loads
+// VRM only now, so nothing imports that package and the chunk no longer carries
+// it. `docs/ASSET-CONTRACT.md` keeps the description of what it used to do.
 
 // --- addons ---------------------------------------------------------------
-// MMDLoader itself imports TGALoader, so it is in the graph regardless; the rest
-// are the fallbacks a user's own model files realistically need.
+// GLTFLoader is the one addon the plugin needs: a VRM is a glTF, and
+// `@pixiv/three-vrm` plugs into it. VRM only, since 2026-10-12 — the PMX/PMD
+// path (and with it the MMD stack, `MMDLoader`/`VMDLoader`/`VPDLoader` and the
+// TGA/MTL/OBJ loaders that served it) was removed with the rename to
+// dsh-plugin-vrmpet3d.
 //
 // DRACOLoader and KTX2Loader are deliberately NOT bundled. Both build their
 // decoder URLs from `import.meta.url` as a module side effect, and an IIFE
 // bundle has no `import.meta`, so merely importing them throws `TypeError:
-// Invalid URL` at load time — taking the whole chunk down. Neither is used by
-// VRM or PMX, so the fix is to omit them rather than ship a broken shim.
+// Invalid URL` at load time — taking the whole chunk down.
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { TGALoader } from 'three/addons/loaders/TGALoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-globalThis.__PET3D_VENDOR__ = {
+globalThis.__VRMPET3D_VENDOR__ = {
   THREE,
   VRM: {
     VRMLoaderPlugin,
@@ -112,7 +84,6 @@ globalThis.__PET3D_VENDOR__ = {
     VRMAnimationLoaderPlugin,
     createVRMAnimationClip,
   },
-  MMD: { MMDLoader, VMDLoader, VPDLoader, MMD, MMDAnimationManager, buildAnimation, VmdObject },
-  addons: { GLTFLoader, TGALoader, MTLLoader, OBJLoader, RGBELoader, OrbitControls },
+  addons: { GLTFLoader },
   revision: THREE.REVISION,
 };

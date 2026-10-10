@@ -1,4 +1,4 @@
-// dsh-plugin-pet3d — chunk delivery probe (browser body).
+// dsh-plugin-vrmpet3d — chunk delivery probe (browser body).
 //
 // Run:  node scripts/verify-browser.mjs --page chunk-delivery
 //
@@ -12,9 +12,9 @@
 //     /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 //
 // and only at `/plugins/<package>/<file>?rev=<current revision>`. `core.js`,
-// `placeholder.js` and `pet3d.js` matched neither rule, so they were never
+// `placeholder.js` and `scene.js` matched neither rule, so they were never
 // served, the globals the client half read were always undefined, and the pet
-// threw `pet3d: lib/pet3d.js is not loaded.`
+// threw `vrmpet3d: lib/scene.js is not loaded.`
 //
 // So this page runs the REAL module system — `@deepseek-ai/dsh-client-modules`,
 // extracted verbatim from the installed app.asar by the harness — against the
@@ -22,11 +22,11 @@
 // delivered, at a URL the server would answer.
 //
 // The page is driven from three globals the harness fills in:
-//   * `__PET3D_CHUNKS__`  { '<fileName>': '<source text>' } — the payload the
+//   * `__VRMPET3D_CHUNKS__`  { '<fileName>': '<source text>' } — the payload the
 //                         transport hands to a script element on request;
-//   * `__PET3D_BOOT__`    the boot wire, whose row URL keeps the combo shape the
+//   * `__VRMPET3D_BOOT__`    the boot wire, whose row URL keeps the combo shape the
 //                         loader rewrites into a per-chunk request;
-//   * `__PET3D_LOADER__`  the registration facade, created BEFORE any bundle
+//   * `__VRMPET3D_LOADER__`  the registration facade, created BEFORE any bundle
 //                         runs, exactly as the shell's HTML bootstrap does.
 //
 // NOTE ON SOURCE FORM: the harness inlines this file into a template literal, so
@@ -66,7 +66,7 @@
     });
   }
 
-  var FILES = globalThis.__PET3D_CHUNKS__ || {};
+  var FILES = globalThis.__VRMPET3D_CHUNKS__ || {};
   /** Every URL the loader asked its transport for, in order. */
   var requested = [];
   /** The script elements the transport appended, so delivery can be asserted. */
@@ -87,13 +87,13 @@
   // constructed once that queue is gone ("called after module-system boot"), so a
   // facade created here, at the end of the page, would have swallowed every
   // registration instead.
-  var facade = globalThis.__PET3D_LOADER__;
+  var facade = globalThis.__VRMPET3D_LOADER__;
   check('the harness installed the registration facade before the bundles',
     Boolean(facade) && Array.isArray(facade.pendingQueue),
     facade ? facade.mode : 'no facade');
 
   var CLIENT_MODULES_ID = '@deepseek-ai/dsh-client-modules';
-  var ROW_ID = 'dsh-plugin-pet3d';
+  var ROW_ID = 'dsh-plugin-vrmpet3d';
 
   // Snapshot before boot: `create` drains the facade's queue with `splice(0)`, so
   // the array this page holds a reference to is empty afterwards.
@@ -110,8 +110,8 @@
     queued.some(function (r) { return r.id === ROW_ID; }),
     queued.map(function (r) { return r.id; }).join(',') || 'none');
 
-  var boot = globalThis.__PET3D_BOOT__;
-  check('the harness supplied a boot wire with the pet3d row',
+  var boot = globalThis.__VRMPET3D_BOOT__;
+  check('the harness supplied a boot wire with the vrmpet3d row',
     Boolean(boot) && Array.isArray(boot.entries) && boot.entries.some(function (row) { return row.id === ROW_ID; }),
     boot ? boot.entries.map(function (row) { return row.id; }).join(',') : 'missing');
 
@@ -122,7 +122,7 @@
       // The real seed table is react, react-dom, cordis, the store and the slots
       // package (see the web bundle's staticModules factory). Only react is needed
       // here: this page never materialises the plugin's React tree.
-      staticModules: { react: globalThis.__PET3D_REACT_STUB__ },
+      staticModules: { react: globalThis.__VRMPET3D_REACT_STUB__ },
       loadBundle: function (url) {
         requested.push(url);
         return new Promise(function (resolve, reject) {
@@ -148,7 +148,7 @@
   }
 
   check('the module system boots over the test boot wire', Boolean(moduleSystem), errors[0] || null);
-  check('the booted graph carries the pet3d row',
+  check('the booted graph carries the vrmpet3d row',
     Boolean(moduleSystem) && Boolean(moduleSystem.graphRows.get(ROW_ID)),
     moduleSystem ? Array.from(moduleSystem.graphRows.keys()).join(',') : null);
 
@@ -179,7 +179,7 @@
     });
     if (registration) {
       plugin = registration.factory(function (spec) {
-        if (spec === 'react') return globalThis.__PET3D_REACT_STUB__;
+        if (spec === 'react') return globalThis.__VRMPET3D_REACT_STUB__;
         throw new Error('browser probe: the plugin factory required an unexpected module: ' + spec);
       });
     }
@@ -224,17 +224,17 @@
    * Whether the client half handed the 3D graph to the scene.
    *
    * Read from the client half's own record rather than by spying on
-   * `globalThis.__PET3D_SCENE__`, and that is not a shortcut: the scene chunk
+   * `globalThis.__VRMPET3D_SCENE__`, and that is not a shortcut: the scene chunk
    * REPLACES that global when it loads, so a stand-in installed earlier is gone by
    * the time the hand-off happens, and one installed later misses it entirely. Both
    * mistakes were made here before this assertion was written this way.
    *
-   * It matters because the scene also reads `__PET3D_VENDOR__` itself: a client half
+   * It matters because the scene also reads `__VRMPET3D_VENDOR__` itself: a client half
    * that never told it "the graph has arrived" would still work, and one that read
    * the global a chunk too early would read `undefined` and leave no trace.
    */
   function handedVendor() {
-    var api = globalThis.__PET3D_CLIENT__;
+    var api = globalThis.__VRMPET3D_CLIENT__;
     return api && typeof api.handedVendor === 'function' ? api.handedVendor() : undefined;
   }
 
@@ -254,14 +254,14 @@
   }
 
   var CHUNKS = [
-    { file: './client.core.js', global: '__PET3D_CORE__', api: 'cleanPreferences' },
+    { file: './client.core.js', global: '__VRMPET3D_CORE__', api: 'cleanPreferences' },
     // `./client.placeholder.js` was delivered until 2026-10-10, when the operator removed the built-in avatar
     // ("内置的占位模型还是没删掉，把Sample Model设为内置模型"). It is no longer generated, no longer loaded by the
     // client half and no longer served, so requiring it here would assert a 404.
-    { file: './client.scene.js', global: '__PET3D_SCENE__', api: 'Scene' },
+    { file: './client.scene.js', global: '__VRMPET3D_SCENE__', api: 'Scene' },
     // Last, and largest: the one the old hand-rolled script route could never
     // fetch, so it is the one that proves the module path end to end.
-    { file: './client.vendor.js', global: '__PET3D_VENDOR__', api: 'THREE' }
+    { file: './client.vendor.js', global: '__VRMPET3D_VENDOR__', api: 'THREE' }
   ];
 
   var delivered = {};

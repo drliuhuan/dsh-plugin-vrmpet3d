@@ -1,8 +1,8 @@
 {
-  "name": "dsh-plugin-pet3d",
+  "name": "dsh-plugin-vrmpet3d",
   "version": "0.1.0",
   "private": true,
-  "description": "A 3D desktop pet for DeepSeek Harness: VRM and PMX/PMD models on a transparent WebGL layer, driven by live session status.",
+  "description": "A 3D desktop pet for DeepSeek Harness: VRM models on a transparent WebGL layer, driven by live session status.",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",

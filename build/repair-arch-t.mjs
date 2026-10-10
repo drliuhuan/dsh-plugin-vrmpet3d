@@ -66,7 +66,7 @@ for (const [from, to] of TABLE) {
  * an identifier, (b) unknown, and (c) becomes KNOWN when one of its `e`s is read as a `T`, is damage.
  */
 const vocabulary = new Set();
-const sources = ['README.md', 'HANDOFF.md', 'lib/core.js', 'lib/pet3d.js', 'lib/client.js', 'lib/index.js',
+const sources = ['README.md', 'HANDOFF.md', 'lib/core.js', 'lib/scene.js', 'lib/client.js', 'lib/index.js',
   'lib/desktop-page.js', 'lib/vrm-info.js', 'lib/config-page.js', 'scripts/verify.mjs', 'scripts/verify-model.mjs',
   'scripts/verify-desktop.mjs', 'scripts/verify-motion.mjs', 'docs/ASSET-CONTRACT.md'];
 for (const source of sources) {

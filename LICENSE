@@ -29,10 +29,15 @@ file, `lib/client.vendor.js`, which bundles other MIT-licensed software:
 
   * three.js                (c) 2010-2025 three.js authors      MIT
   * @pixiv/three-vrm        (c) pixiv Inc.                      MIT
-  * @moeru/three-mmd        (c) Moeru AI                        MIT
-  * mmd-parser              (c) Takahiro                          MIT
+  * @pixiv/three-vrm-animation (c) pixiv Inc.                   MIT
+
+(@moeru/three-mmd and mmd-parser were bundled until 2026-10-12, when this project
+became VRM-only and the MMD stack left both the chunk and `vendor/package.json`.)
 
 Their license texts are preserved inline in that file's banner and comments.
 
-No 3D model file is included, and none is covered by this license. Models are
-supplied by the user and remain under their own authors' terms.
+It also ships ONE 3D model file, `assets/models/SampleModel.vrm`, whose own
+embedded metadata allows redistribution, modification and commercial use with no
+attribution required — see `assets/models/README.md`, and `check-docs.mjs` asserts
+those terms on the committed bytes. Every other model is supplied by the user and
+remains under its own author's terms.

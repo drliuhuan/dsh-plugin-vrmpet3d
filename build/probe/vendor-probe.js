@@ -1,6 +1,8 @@
 // Browser probe body, inlined after the vendor chunk by scripts/build-probe.mjs.
 // Asserts that the compiled chunk constructs a real WebGL renderer, that the
-// VRM plugin registers on GLTFLoader, and that both MMD loaders instantiate.
+// VRM plugin registers on GLTFLoader, and that the chunk carries NO MMD stack —
+// MMD was implementation-removed on 2026-10-12, so its absence is part of the
+// chunk's shape rather than an omission.
 // The result is written to #out and to document.title for --dump-dom.
 (function () {
   var result = { ok: false, checks: [], errors: [] };
@@ -17,7 +19,7 @@
     }
   }
 
-  var V = globalThis.__PET3D_VENDOR__;
+  var V = globalThis.__VRMPET3D_VENDOR__;
   check('vendor global published', function () { return !!V; });
 
   if (V) {
@@ -72,9 +74,15 @@
       return typeof V.VRM.VRMLoaderPlugin === 'function';
     });
 
-    check('MMDLoader constructs', function () { return new V.MMD.MMDLoader() instanceof V.MMD.MMDLoader; });
-    check('VMDLoader constructs', function () { return new V.MMD.VMDLoader() instanceof V.MMD.VMDLoader; });
-    check('TGALoader present (MMD dependency)', function () { return typeof V.addons.TGALoader === 'function'; });
+    check('the MMD namespace is ABSENT', function () { return V.MMD === undefined; });
+    check('no MMD loader is reachable through the addons', function () {
+      return typeof V.addons.MMDLoader === 'undefined'
+        && typeof V.addons.VMDLoader === 'undefined'
+        && typeof V.addons.TGALoader === 'undefined';
+    });
+    check('and the one addon the renderer uses is present', function () {
+      return typeof V.addons.GLTFLoader === 'function';
+    });
     check('VRM bone enum present', function () { return V.VRM.VRMHumanBoneName.Hips; });
     check('VRM spring bone manager present', function () { return typeof V.VRM.VRMSpringBoneManager === 'function'; });
 

@@ -14,7 +14,7 @@
  * follows for assets it did not make: the plugin loads them from where they already live and never copies
  * them into the tree. So the bytes are read out of the DSH installation that is running this plugin, written
  * to `assets/whale-tail.apng` (git-ignored, like every generated fixture in `build/`), and served from there
- * by the host's `/pet3d/whale` route. A checkout with no DSH to read simply has no file: the route answers
+ * by the host's `/vrmpet3d/whale` route. A checkout with no DSH to read simply has no file: the route answers
  * 404 and both prompts fall back to the static SVG, which is exactly the app's own fallback.
  *
  * `--check` verifies an already-extracted file rather than rewriting it, and is what the suites run.
@@ -23,6 +23,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'assets', 'whale-tail.apng');
@@ -34,7 +36,7 @@ const CHAT_CLIENT = 'dsh/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client
 const MARKER = 'mask:url(data:image/png;base64,';
 
 const ASAR_CANDIDATES = [
-  process.env.PET3D_DSH_ASAR,
+  envVar('DSH_ASAR'),
   'D:\\DeepSeek\\dsh\\resources\\app.asar',
   'F:\\DeepSeek\\Harness\\resources\\app.asar',
   join(process.env.LOCALAPPDATA || '', 'Programs', 'DeepSeek Harness', 'resources', 'app.asar'),
@@ -99,7 +101,7 @@ const found = extract();
 if (found.error !== undefined) {
   console.error(`whale mark: ${found.error}`);
   console.error('The static SVG mark is used instead; nothing else changes. Re-run after DSH is installed,');
-  console.error('or point PET3D_DSH_ASAR at the installation.');
+  console.error('or point VRMPET3D_DSH_ASAR at the installation.');
   process.exit(1);
 }
 mkdirSync(dirname(OUT), { recursive: true });

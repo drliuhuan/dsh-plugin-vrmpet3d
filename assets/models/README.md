@@ -1,7 +1,9 @@
 # assets/models/
 
-Drop your own `.vrm`, `.glb`, `.gltf`, `.pmx` or `.pmd` files here (or point the
-plugin at a folder elsewhere with the `modelDirs` config).
+Drop your own `.vrm`, `.glb` or `.gltf` files here (or point the
+plugin at a folder elsewhere with the `modelDirs` config). This build is **VRM and plain glTF/GLB only**
+(2026-10-12): a `.pmx`/`.pmd` is recognised by its magic bytes and refused by name, and a `.vmd` motion
+likewise, so neither belongs here.
 
 ## What ships here: exactly one model, and it is redistributable
 
@@ -37,7 +39,7 @@ The rule below is unchanged for anything you add, and it is why the assertion in
 `scripts/check-docs.mjs` now names the one bundled file instead of requiring the
 folder to be empty:
 
-* **No other model file may be committed here.** Most VRM and MMD models on the
+* **No other model file may be committed here.** Most VRM models on the
   internet forbid redistribution, and many forbid commercial use; committing one
   would make this repository undistributable.
 * Read [`../../docs/ASSET-CONTRACT.md`](../../docs/ASSET-CONTRACT.md) before adding
@@ -54,12 +56,12 @@ licensed third-party assets out of version control entirely, and it lets you kee
 several collections in their own folders.
 
 ```yaml
-- id: pet3d
-  name: dsh-plugin-pet3d
+- id: vrmpet3d
+  name: dsh-plugin-vrmpet3d
   config:
     modelDirs:
       - D:/models/vrm
-      - F:/mmd/mine
+      - F:/models/mine
 ```
 
 ## How the default is chosen
@@ -67,5 +69,7 @@ several collections in their own folders.
 `preferences.modelId` ships EMPTY, which means "resolve one". `core.resolveModelId`
 picks the catalogued model named `SampleModel.vrm` first — the bundled one, or yours
 if you have a file by that name — then the first VRM, then the first model of any
-kind. With nothing catalogued at all the pet shows nothing and says so; it does not
-fall back to a stand-in avatar (that was removed on 2026-10-10).
+kind (and the kinds it catalogues are `.vrm`, `.glb` and `.gltf`; a `.pmx`/`.pmd` is left out of the
+catalogue entirely since 2026-10-12). With nothing catalogued at all the pet shows nothing and says so; it
+does not fall back to a stand-in avatar (that was removed on 2026-10-10), and `lib/placeholder.js` survives
+only as the fixture the geometry probes and the browser suite build an avatar with.

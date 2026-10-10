@@ -43,15 +43,15 @@ const profileDir = argOf('--profile');
  * profile — and they are set HERE, before the first `apply`, not next to the assertions.
  *
  * Applying the plugin constructs the settings store, which WRITES its file immediately. Setting the
- * override later left the first `apply` writing the operator's `pet3d-settings.json` (measured
+ * override later left the first `apply` writing the operator's `vrmpet3d-settings.json` (measured
  * 2026-10-08: the live store said version 13 while the file said version 1, because this preflight's
  * apply had rewritten it). Both overrides belong above the first apply, and the model-dirs list was
  * already being set too late for the same reason.
  */
 const scratch = join(ROOT, 'build', 'probe', 'model-dirs-preflight.json');
 const settingsScratch = join(ROOT, 'build', 'probe', 'settings-preflight.json');
-process.env.PET3D_MODEL_DIRS_FILE = scratch;
-process.env.PET3D_SETTINGS_FILE = settingsScratch;
+process.env.VRMPET3D_MODEL_DIRS_FILE = scratch;
+process.env.VRMPET3D_SETTINGS_FILE = settingsScratch;
 
 let failures = 0;
 function report(ok, label, detail) {
@@ -67,7 +67,7 @@ console.log(`plugin: ${ROOT}`);
 
 // --- 1. manifest -----------------------------------------------------------
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-report(pkg.name === 'dsh-plugin-pet3d', 'package name is dsh-plugin-pet3d', pkg.name);
+report(pkg.name === 'dsh-plugin-vrmpet3d', 'package name is dsh-plugin-vrmpet3d', pkg.name);
 report(typeof pkg.main === 'string' && existsSync(join(ROOT, pkg.main)),
   `main entry exists (${pkg.main})`);
 report(Boolean(pkg.dsh?.bundle?.patch) && existsSync(join(ROOT, pkg.dsh.bundle.patch)),
@@ -88,7 +88,7 @@ report(/^\s*(?:-\s*)?insert\s*:/m.test(patch), 'the patch uses an insert operati
 // --- 2/3. host half --------------------------------------------------------
 const host = await import(pathToFileURL(join(ROOT, pkg.main)).href);
 report(typeof host.apply === 'function', 'lib/index.js exports apply()');
-report(host.name === 'pet3d', 'the plugin registers under the service name "pet3d"', host.name);
+report(host.name === 'vrmpet3d', 'the plugin registers under the service name "vrmpet3d"', host.name);
 
 const provided = new Map();
 const listeners = [];
@@ -111,12 +111,12 @@ try {
   activationError = error;
 }
 report(activated, 'apply(ctx) activates without throwing', activationError && (activationError.stack || activationError.message));
-report(provided.has('pet3d'), 'it provides the pet3d service');
+report(provided.has('vrmpet3d'), 'it provides the vrmpet3d service');
 report(listeners.some(entry => entry.event === 'session/event' && entry.options?.global === true),
   'it subscribes to session/event globally');
 report(effects.length > 0, `it registers cleanup effects (${effects.length})`);
 
-const service = provided.get('pet3d');
+const service = provided.get('vrmpet3d');
 report(Boolean(service) && typeof service.watch === 'function', 'the service exposes watch()');
 report(Boolean(service?.typertRemote), 'the service exposes its typertRemote contract');
 report(Boolean(service?.describe) && typeof service.describe === 'function', 'the service exposes describe()');
@@ -138,7 +138,7 @@ report(service?.assetRoutes === null,
   const lateCtx = {
     logger,
     get: () => undefined,
-    provide: (key, value) => { if (key === 'pet3d') lateService = value; return () => {}; },
+    provide: (key, value) => { if (key === 'vrmpet3d') lateService = value; return () => {}; },
     on: () => () => {},
     effect: (callback, label) => { const dispose = callback(); lateEffects.push({ dispose, label }); return dispose; },
     // The declarative form: keep the consumer so the test can trigger it, the way
@@ -184,23 +184,23 @@ report(service?.assetRoutes === null,
   // application it is served from (重启 / 退出 DeepSeek Harness for the pet's right-click menu).
   report(lateRegistrations.length === 17,
     `a late webServer receives all seventeen routes (${lateRegistrations.join(', ') || 'none'})`);
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/catalog'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/catalog'),
     'the catalog route is among them');
-  report(lateRegistrations.some((entry) => entry === 'prefix /pet3d/asset'),
+  report(lateRegistrations.some((entry) => entry === 'prefix /vrmpet3d/asset'),
     'the asset route is among them');
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/window'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/window'),
     "the desktop window's page route is among them");
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/model-info'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/model-info'),
     "and the route that describes a model's contents");
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/config'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/config'),
     "and the model-parameter window's page");
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/global'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/global'),
     'and the 通用设置 page, a second document rather than a hidden half of the first');
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/preview'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/preview'),
     'and the preview channel the settings window drives');
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/state'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/state'),
     'and the live state the in-app pet publishes for the floating window');
-  report(lateRegistrations.some((entry) => entry === 'exact /pet3d/whale'),
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/whale'),
     "and DSH's animated whale mark, which the status prompt masks");
 
   // The mark's path is written in three places — the route, and a mask declaration in each stylesheet, because
@@ -211,11 +211,11 @@ report(service?.assetRoutes === null,
     const clientSource = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8');
     const windowSource = readFileSync(join(ROOT, 'lib', 'desktop-page.js'), 'utf8');
     const coreSource = readFileSync(join(ROOT, 'lib', 'core.js'), 'utf8');
-    report(coreSource.includes("var STATUS_ICON_URL = '/pet3d/whale'"),
+    report(coreSource.includes("var STATUS_ICON_URL = '/vrmpet3d/whale'"),
       "the shared core publishes the mark's URL");
-    report(clientSource.includes('url(/pet3d/whale)'), "the in-app prompt's mask names it");
-    report(windowSource.includes('url(/pet3d/whale)'), "the window prompt's mask names it");
-    report(clientSource.includes('pet3d-whale-animated') && windowSource.includes('pet3d-whale-animated'),
+    report(clientSource.includes('url(/vrmpet3d/whale)'), "the in-app prompt's mask names it");
+    report(windowSource.includes('url(/vrmpet3d/whale)'), "the window prompt's mask names it");
+    report(clientSource.includes('vrmpet3d-whale-animated') && windowSource.includes('vrmpet3d-whale-animated'),
       'and both style the animated layer the shared markup emits');
   }
 
@@ -311,13 +311,13 @@ report(service?.assetRoutes === null,
     const clientSource = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8');
     const windowSource = readFileSync(join(ROOT, 'lib', 'desktop-page.js'), 'utf8');
     const menuSource = readFileSync(join(ROOT, 'lib', 'menu.js'), 'utf8');
-    report(/file: '\.\/client\.menu\.js'[\s\S]{0,80}global: '__PET3D_MENU__'/.test(clientSource),
+    report(/file: '\.\/client\.menu\.js'[\s\S]{0,80}global: '__VRMPET3D_MENU__'/.test(clientSource),
       'the app loads the shared menu definition as a chunk');
     report(existsSync(join(ROOT, 'lib', 'client.menu.js')),
       'the generated chunk the app asks for exists (run scripts/client-chunks.mjs)');
     report(/api\.createMenu\(\{/.test(clientSource) && /api\.createMenu\(\{/.test(windowSource),
       'and BOTH surfaces build their menu with the shared createMenu');
-    report(!clientSource.includes('pet3d-menu-item') && !windowSource.includes('pet3d-menu-item'),
+    report(!clientSource.includes('vrmpet3d-menu-item') && !windowSource.includes('vrmpet3d-menu-item'),
       "with neither writing the menu's markup or its labels itself");
     const list = /var ITEMS = \[([\s\S]*?)\];/.exec(menuSource);
     const ids = list ? [...list[1].matchAll(/'([a-zA-Z]+)'/g)].map((match) => match[1]) : [];
@@ -386,12 +386,12 @@ report(service?.assetRoutes === null,
      */
     report(/if \(bridge && typeof bridge\.orbit === 'function'\) \{\s*bridge\.orbit\(true\);\s*return;/.test(pageSource),
       '有启动器时，取锁整件交给它（页面只读结果），而不是自己请求');
-    report(/orbit: \(active\) => ipcRenderer\.send\('pet3d:orbit', active === true\)/.test(preloadSource)
+    report(/orbit: \(active\) => ipcRenderer\.send\('vrmpet3d:orbit', active === true\)/.test(preloadSource)
       && !/onOrbitFocus/.test(preloadSource),
       'preload 只暴露这一个方法：没有第二个回合需要页面参与');
     report(/const ORBIT_LOCK_JS/.test(launcherSource) && /ORBIT_UNLOCK_JS/.test(launcherSource),
       '启动器自己带着取锁/放锁的脚本');
-    report(/ipcMain\.on\('pet3d:orbit'/.test(launcherSource)
+    report(/ipcMain\.on\('vrmpet3d:orbit'/.test(launcherSource)
       && /win\.setFocusable\(true\)/.test(launcherSource) && /win\.focus\(\)/.test(launcherSource),
       '它先把窗口设为可聚焦并聚焦');
     report(/executeJavaScript\(ORBIT_LOCK_JS, true\)/.test(launcherSource),
@@ -441,7 +441,7 @@ report(service?.assetRoutes === null,
     report(/this\.publishState\(state, speech, touch, clock\)/.test(clientSource),
       'and publishes the line WITH the state, the press, and the TURN clock, so none of the three can be dropped on the way');
     report(/petStateLine = cleanSpeechLine\(body && body\.line\)/.test(hostSource),
-      'the host sanitises and stores the line on /pet3d/state');
+      'the host sanitises and stores the line on /vrmpet3d/state');
     // The window reads the line out of the SAME body it reads the state from (one `applyHostState` call keeps
     // the two halves of one observation together).
     report(/applyHostState\(state, body && body\.at, body && body\.line/.test(windowSource),
@@ -480,7 +480,7 @@ report(service?.assetRoutes === null,
     report(/startHeartbeat\(\)/.test(clientSource),
       'the app re-states itself on a timer, which is what makes silence mean something');
     report(/core\.hostStateView\(\{/.test(hostSource),
-      'the host ages the report out on /pet3d/state rather than serving it for ever');
+      'the host ages the report out on /vrmpet3d/state rather than serving it for ever');
     report(/petStateStale = false;/.test(hostSource),
       'and a report of any kind clears the flag, because a report is proof of life');
     report(/body && body\.error, body && body\.stale/.test(windowSource),
@@ -496,38 +496,38 @@ report(service?.assetRoutes === null,
    * request — and the UI is a folder picker plus that list. Three things have to hold, and the third is the one
    * the suites depend on: a web page cannot open a native dialog, so the LAUNCHER exposes it through the preload
    * bridge; the settings window must actually receive that bridge; and the chosen path is handed to the HOST
-   * over `/pet3d/models` rather than written by the page — which is what keeps `PET3D_MODEL_DIRS_FILE`
+   * over `/vrmpet3d/models` rather than written by the page — which is what keeps `VRMPET3D_MODEL_DIRS_FILE`
    * (gotcha 37) in force for every suite.
    */
   {
     const preloadSource = readFileSync(join(ROOT, 'desktop', 'preload.js'), 'utf8');
     const launcherSource = readFileSync(join(ROOT, 'desktop', 'main.js'), 'utf8');
     const configSource = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
-    report(/pickModelDir: \(\) => ipcRenderer\.invoke\('pet3d:pick-dir', \{ kind: 'model' \}\)/.test(preloadSource),
+    report(/pickModelDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-dir', \{ kind: 'model' \}\)/.test(preloadSource),
       'the preload bridge exposes the native folder picker');
-    report(/pickMotionDir: \(\) => ipcRenderer\.invoke\('pet3d:pick-dir', \{ kind: 'motion' \}\)/.test(preloadSource),
+    report(/pickMotionDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-dir', \{ kind: 'motion' \}\)/.test(preloadSource),
       'and a second one for motion directories, on the same channel');
-    report(/ipcMain\.handle\('pet3d:pick-dir'[\s\S]{0,900}?kind === 'motion' \? '导入动作目录' : '导入模型目录'/
+    report(/ipcMain\.handle\('vrmpet3d:pick-dir'[\s\S]{0,900}?kind === 'motion' \? '导入动作目录' : '导入模型目录'/
       .test(launcherSource),
       'the launcher titles the dialog after what is being imported, rather than calling every folder a model');
-    report(/ipcMain\.handle\('pet3d:pick-dir'[\s\S]{0,700}?defaultPath/.test(launcherSource),
+    report(/ipcMain\.handle\('vrmpet3d:pick-dir'[\s\S]{0,700}?defaultPath/.test(launcherSource),
       'which opens at the home directory rather than guessing where models live');
-    report(/fetch\('\/pet3d\/models'[\s\S]{0,260}?method: 'POST'/.test(configSource),
-      'the page hands the chosen path to the host over /pet3d/models');
+    report(/fetch\('\/vrmpet3d\/models'[\s\S]{0,260}?method: 'POST'/.test(configSource),
+      'the page hands the chosen path to the host over /vrmpet3d/models');
     report(configSource.includes('{ add: path }') && configSource.includes('{ remove: dir }'),
       "with the route's two verbs and nothing else");
     report(!/require\('node:fs'\)|writeFileSync/.test(configSource),
       'and never writes the list itself: the host is the only writer, which is what the file override needs');
     /**
-     * 动作导入, the same three rules over `/pet3d/motions`.
+     * 动作导入, the same three rules over `/vrmpet3d/motions`.
      *
      * Motions have their own route, their own list file and their own catalog — and, until this section, no way
      * in from the UI at all: the 状态 note told the user to import a directory with nothing to click. The one
      * thing that differs from the model section is what a write has to refresh, and that is asserted too: a new
      * clip has to reach the per-state checkboxes, not just a dropdown.
      */
-    report(/fetch\('\/pet3d\/motions'[\s\S]{0,260}?method: 'POST'/.test(configSource),
-      'and hands a motion directory to the host over /pet3d/motions');
+    report(/fetch\('\/vrmpet3d\/motions'[\s\S]{0,260}?method: 'POST'/.test(configSource),
+      'and hands a motion directory to the host over /vrmpet3d/motions');
     report(configSource.includes('{ add: path }') && configSource.includes('{ remove: dir }')
       && /writeImportedMotion\(\{ add: path \}\)/.test(configSource)
       && /writeImportedMotion\(\{ remove: dir \}\)/.test(configSource),
@@ -545,7 +545,7 @@ report(service?.assetRoutes === null,
    *
    * Not hypothetical: on 2026-10-11 the app loaded a new `lib/client.js` against a core chunk the browser had
    * cached under an unchanged revision, so `new this.core.SpeechMachine(...)` threw inside the widget's
-   * constructor, the widget never mounted, `/pet3d/state` carried `state: null` plus the TypeError, and the
+   * constructor, the widget never mounted, `/vrmpet3d/state` carried `state: null` plus the TypeError, and the
    * floating window — which has no session of its own — drew 工作中 with the clock counting up for seventeen
    * minutes. The menu chunk added the same day has exactly the same exposure.
    *
@@ -554,7 +554,7 @@ report(service?.assetRoutes === null,
    */
   {
     const clientSource = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8');
-    report(/var api = globalThis\.__PET3D_MENU__;[\s\S]{0,160}?if \(!api \|\| typeof api\.createMenu !== 'function'\) return null;/.test(clientSource),
+    report(/var api = globalThis\.__VRMPET3D_MENU__;[\s\S]{0,160}?if \(!api \|\| typeof api\.createMenu !== 'function'\) return null;/.test(clientSource),
       'the widget checks for the shared menu module instead of requiring it');
     report(!clientSource.includes('lib/menu.js is not loaded'),
       'and no longer throws when it is absent — the menu is a feature, the pet is the product');
@@ -597,7 +597,7 @@ report(service?.assetRoutes === null,
    *
    * Each part lives in a different file, and each can go quiet on its own: the DECISION is core's
    * (`STATUS_TONES` + `UNTIMED_STATUS_STATES`), both surfaces must WEAR it (`data-tone`/`data-bold` in
-   * `lib/client.js` and `lib/desktop-page.js`), the launcher must relay it (or `/pet3d/desktop` cannot answer
+   * `lib/client.js` and `lib/desktop-page.js`), the launcher must relay it (or `/vrmpet3d/desktop` cannot answer
    * "why is the prompt not gold"), and the settings page must not offer a 持续时间 that silently does nothing
    * for 等待确认. Nothing may pick a colour from a state name outside core — that is how the app and the window
    * end up disagreeing about which state is gold.
@@ -621,7 +621,7 @@ report(service?.assetRoutes === null,
       && /data-tone="gold"\]\[data-bold="1"\]\{font-weight:700\}/.test(windowSource),
       'and both draw 任务达成 bold, each in its own palette');
     report(/tone: lastPageState\.status\.tone \|\| null/.test(launcherSource),
-      'the launcher relays it, so /pet3d/desktop can answer "is it gold?"');
+      'the launcher relays it, so /vrmpet3d/desktop can answer "is it gold?"');
     report(/\(core\.UNTIMED_STATUS_STATES \|\| \[\]\)\.indexOf\(state\) !== -1/.test(configSource)
       && /duration\.disabled = awaitingAnswer/.test(configSource),
       'and the settings page refuses a 持续时间 for 等待确认 instead of storing a number that does nothing');
@@ -714,8 +714,8 @@ report(service?.assetRoutes === null,
 
   // Read the service THIS activation provided, not a Map entry: a second apply
   // overwrites the first, so the map holds the wrong instance.
-  report(lateService?.assetRoutes?.catalog === '/pet3d/catalog'
-      && lateService.assetRoutes.motion === '/pet3d/motion',
+  report(lateService?.assetRoutes?.catalog === '/vrmpet3d/catalog'
+      && lateService.assetRoutes.motion === '/vrmpet3d/motion',
     `the service reports its routes once they exist (${JSON.stringify(lateService?.assetRoutes ?? null)})`);
 // ---- imported model directories -------------------------------------------
 // The settings panel writes through this store, so a failure here is an import that
@@ -740,11 +740,11 @@ report(service?.assetRoutes === null,
 
   // ---- and the SETTINGS store must not have touched the operator's file -----
   // Applying the plugin constructs the settings store, and without the override that construction
-  // wrote the operator's own `pet3d-settings.json` (measured 2026-10-08: the live store said version
+  // wrote the operator's own `vrmpet3d-settings.json` (measured 2026-10-08: the live store said version
   // 13 while the file said version 1). The preferences survived by luck of ordering, so this is
   // asserted rather than reasoned about.
   const { settingsFileFor } = await import(pathToFileURL(join(ROOT, 'lib', 'settings.js')).href);
-  const settingsPath = settingsFileFor('C:\\a-profile\\pet3d-desktop');
+  const settingsPath = settingsFileFor('C:\\a-profile\\vrmpet3d-desktop');
   report(settingsPath === resolve(settingsScratch), `the settings override is honoured (${settingsPath})`);
   report(existsSync(settingsScratch), 'and applying the plugin wrote the scratch settings file');
   try { rmSync(settingsScratch, { force: true }); } catch { /* best effort */ }
@@ -768,7 +768,7 @@ if (service && typeof service.watch === 'function') {
 // Why this exists at all, measured 2026-10-09: `lib/client.js` read a bare `core` in `apply`, which under
 // `'use strict'` is a ReferenceError (not `undefined` — `typeof` does not make a property access safe).
 // `apply` threw, the client entry settled FAILED, and DSH's web boot REFUSES to start while any entry has
-// not activated: the operator got "应用无法启动 / dsh-plugin-pet3d: failed" and the application would not
+// not activated: the operator got "应用无法启动 / dsh-plugin-vrmpet3d: failed" and the application would not
 // open. Ten suites and 1212 checks were green, because the inlined browser pages load `lib/core.js` as a
 // <script> tag (so a bare `core` would still have been undeclared) and, more to the point, the one page
 // that uses the REAL client module system says in its own comment that it "does not mount the widget" —
@@ -806,7 +806,7 @@ if (service && typeof service.watch === 'function') {
     // boundary subscription touches.
     AbortController,
     Event: class Event { constructor(type) { this.type = type; } },
-    // The state reporter POSTs to /pet3d/state; nothing here needs a real answer.
+    // The state reporter POSTs to /vrmpet3d/state; nothing here needs a real answer.
     fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
     localStorage: { getItem: () => null, setItem: () => {} },
   };
@@ -875,7 +875,7 @@ if (service && typeof service.watch === 'function') {
   report(clientApplyError === null,
     'the client apply(ctx) activates with no core global yet (the real activation-time state)',
     clientApplyError && (clientApplyError.stack || clientApplyError.message));
-  report(slotRows.some((row) => row.name === 'shell.overlay' && row.id === 'pet3d'),
+  report(slotRows.some((row) => row.name === 'shell.overlay' && row.id === 'vrmpet3d'),
     `it registers into the shell.overlay slot (${JSON.stringify(slotRows)})`);
 }
 

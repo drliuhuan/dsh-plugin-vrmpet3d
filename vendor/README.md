@@ -22,7 +22,7 @@ produced them.
 
 ```bash
 cd vendor
-npm install          # esbuild + three + @pixiv/three-vrm + @pixiv/three-vrm-animation + @moeru/three-mmd + mmd-parser
+npm install          # esbuild + three + @pixiv/three-vrm + @pixiv/three-vrm-animation
 cd ..
 node scripts/vendor-build.mjs
 ```
@@ -43,9 +43,11 @@ that was not followed by a rebuild cannot be committed silently.
 | `three` | 0.186.1 | the `three/addons/*` subpath layout the entry imports from |
 | `@pixiv/three-vrm` | 3.5.5 | VRM 1.0 and 0.x, MToon, SpringBone, node constraints |
 | `@pixiv/three-vrm-animation` | 3.5.5 | `.vrma` playback: parses `VRMC_vrm_animation` and retargets a clip onto a loaded VRM. Pinned to the same version as `three-vrm` because it must agree with it about humanoid bone names |
-| `@moeru/three-mmd` | 0.2.0-beta.2 | parses PMX/PMD itself and builds VMD clips; requires `three >= 0.184` |
-| `mmd-parser` | 1.1.1 | pinned for reproducibility. `@moeru/three-mmd` bundles its own reader, so this is not in the shipped graph |
 | `esbuild` | 0.25.12 | the bundler |
+
+`@moeru/three-mmd` 0.2.0-beta.2 and `mmd-parser` 1.1.1 were pinned here until 2026-10-12, when this project became
+VRM-only: the PMX/PMD loader and the VMD clip builder left both `vendor/entry.js` and `vendor/package.json`, and the
+chunk no longer exposes an `MMD` namespace. The story they were pinned for is kept in `docs/ASSET-CONTRACT.md`.
 
 ## Three things that will bite you
 
@@ -74,13 +76,13 @@ The built chunk carries both deliveries, and neither is redundant.
   (`<package>/client.vendor.js`) because the loader reads `registration.id`
   unconditionally — a `chunk`-only registration throws, and passing both appends the
   file name twice.
-* **The `globalThis.__PET3D_VENDOR__` assignment** written by `vendor/entry.js` is what
+* **The `globalThis.__VRMPET3D_VENDOR__` assignment** written by `vendor/entry.js` is what
   the inline browser harnesses read, and what any plain `<script src>` path would see.
   A `<script src>` cannot work in the app: a relative URL drops the `?rev=` the server
   requires, and the plugin's own script is served through a combo URL whose pathname is
   `/plugins/`, so a sibling resolves with the plugin id lost.
 
-`lib/pet3d.js`'s `loadVendor()` prefers the module system and keeps the `<script src>`
+`lib/scene.js`'s `loadVendor()` prefers the module system and keeps the `<script src>`
 route as a fallback. It polls the global after `onload` rather than trusting the event:
 a chunk served from cache can fire `onload` without re-executing, and a silent
 "loaded but nothing happened" is the worst possible failure here.
@@ -92,14 +94,16 @@ alive. The browser code never imports from the packages directly — it reads th
 the global bag — so a symbol that is missing from `entry.js` is a symbol that does
 not exist at runtime.
 
-This has already bitten once. `@moeru/three-mmd`'s `VMDLoader.load()` hands back a
-parsed `VmdObject`, and the function that turns that into a playable
-`AnimationClip` is a **separate export**, `buildAnimation`. It was imported nowhere,
-so esbuild dropped it and the plugin shipped a `.vmd` parser with no way to build a
-clip from it — a failure that appears only when a user picks a motion, long after
-the build, and looks like a broken motion file rather than a missing function.
+This has already bitten once — with `@moeru/three-mmd`, before MMD support was removed on
+2026-10-12: its `VMDLoader.load()` handed back a parsed `VmdObject`, and the function that
+turns that into a playable `AnimationClip` was a **separate export**, `buildAnimation`. It
+was imported nowhere, so esbuild dropped it and the plugin shipped a `.vmd` parser with no
+way to build a clip from it — a failure that appeared only when a user picked a motion,
+long after the build, and looked like a broken motion file rather than a missing function.
+(The VRM stack's equivalent, `createVRMAnimationClip`, is in the bag for exactly this
+reason.)
 
-**Rule: every symbol the browser code reads off `__PET3D_VENDOR__` must be listed in
+**Rule: every symbol the browser code reads off `__VRMPET3D_VENDOR__` must be listed in
 `vendor/entry.js`, and the list is the contract.** When a feature starts using a new
 part of a vendored package, add the import and the bag entry in the same change, then
 confirm the name survived the build:

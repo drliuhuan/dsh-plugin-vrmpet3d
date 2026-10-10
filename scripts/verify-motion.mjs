@@ -3,15 +3,20 @@
  * Play a REAL authored motion through the plugin's own Scene and prove the bones
  * actually move.
  *
+ * ⚠ NOT WIRED INTO ANY SUITE SINCE 2026-10-12 (VRM-only rename). This file is kept on disk as the history of the
+ * authored-motion work, exactly as `build/probe/mmd-probe.js`, `scripts/make-fixtures.mjs` and
+ * `scripts/make-motion-fixtures.mjs` are — but `Scene.loadMotion` now refuses anything that is not a `.vrma`, so the
+ * `--motion ....vmd` invocation below no longer plays. Only the VRMA form works.
+ *
  * Run:  node scripts/verify-motion.mjs --model <path> --motion <path>
  *
  *   node scripts/verify-motion.mjs \
- *     --model build/fixtures/miku/miku_v2.pmd \
- *     --motion build/fixtures/motions/pet3d-test.vmd
+ *     --model build/fixtures/miku/miku_v2.pmd \        (RETIRED: a PMX is refused by name now)
+ *     --motion build/fixtures/motions/vrmpet3d-test.vmd
  *
  *   node scripts/verify-motion.mjs \
- *     --model build/fixtures/vrma/pet3d-minimal.vrm \
- *     --motion build/fixtures/vrma/pet3d-test.vrma
+ *     --model build/fixtures/vrma/vrmpet3d-minimal.vrm \
+ *     --motion build/fixtures/vrma/vrmpet3d-test.vrma
  *
  * Why a browser and a loopback server: the whole feature is "bytes -> clip ->
  * mixer -> skeleton", and none of that exists without WebGL, a real
@@ -46,6 +51,8 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { listenOnUsablePort } from './loopback.mjs';
+// VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
+import { envVar } from '../lib/env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -71,7 +78,7 @@ for (const [label, path] of [['model', MODEL], ['motion', MOTION]]) {
 
 /** Candidate Chromium-based browsers, matching verify-browser.mjs. */
 const BROWSER_CANDIDATES = [
-  process.env.PET3D_BROWSER,
+  envVar('BROWSER'),
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -246,12 +253,12 @@ const PROBE = `
   function round(value) { return Math.round(value * 10000) / 10000; }
   function quatArray(q) { return [round(q.x), round(q.y), round(q.z), round(q.w)]; }
 
-  var V = globalThis.__PET3D_VENDOR__;
-  var C = globalThis.__PET3D_CORE__;
-  // lib/pet3d.js publishes a BAG of exports, not the constructor itself, so the
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var C = globalThis.__VRMPET3D_CORE__;
+  // lib/scene.js publishes a BAG of exports, not the constructor itself, so the
   // scene class is the .Scene property of it.
-  var Pet3D = globalThis.__PET3D_SCENE__;
-  var Scene = Pet3D && Pet3D.Scene;
+  var VrmPet3D = globalThis.__VRMPET3D_SCENE__;
+  var Scene = VrmPet3D && VrmPet3D.Scene;
   var THREE = V && V.THREE;
   check('vendor chunk, core and scene are present', function () { return Boolean(V && C && Scene && THREE); });
   if (!V || !C || !Scene) { finish(); return; }
@@ -513,7 +520,7 @@ const PROBE = `
 
       // ---- Phase B: does clip TIME advance? ---------------------------------
       function phaseB() {
-        if (!globalThis.__PET3D_MOTION_VARIANT__) {
+        if (!globalThis.__VRMPET3D_MOTION_VARIANT__) {
           report.info.variantMotion = 'not supplied';
           return Promise.resolve();
         }
@@ -565,7 +572,7 @@ const PROBE = `
       // most likely user error there is, and the one that fails silently: the
       // clip builds, binds to nothing, and the pet would simply ignore it.
       function mismatchPhase() {
-        if (!globalThis.__PET3D_MOTION_MISMATCH__) {
+        if (!globalThis.__VRMPET3D_MOTION_MISMATCH__) {
           report.info.mismatchMotion = 'not supplied';
           return Promise.resolve();
         }
@@ -906,7 +913,7 @@ const PROBE = `
                * clip, the expression and the mouth and nothing else.
                */
               var head = scene.avatar && scene.avatar.gazeBone;
-              var rest = head && head.userData ? head.userData.pet3dRestQuat : null;
+              var rest = head && head.userData ? head.userData.vrmpet3dRestQuat : null;
               // Look-at has to be ON for this to mean anything, and the scene is put back exactly as it was
               // found: a leftover aim keeps turning the head, which is what broke the rest-pose check that
               // runs after this block.
@@ -1346,12 +1353,12 @@ window.addEventListener('unhandledrejection', function (event) {
   if (out) out.textContent = 'unhandled rejection: ' + (reason && (reason.message || reason));
 });
 </script>
-<script>globalThis.__PET3D_MOTION_VARIANT__ = ${variant ? 'true' : 'false'};</script>
-<script>globalThis.__PET3D_MOTION_MISMATCH__ = ${mismatch ? 'true' : 'false'};</script>
+<script>globalThis.__VRMPET3D_MOTION_VARIANT__ = ${variant ? 'true' : 'false'};</script>
+<script>globalThis.__VRMPET3D_MOTION_MISMATCH__ = ${mismatch ? 'true' : 'false'};</script>
 <script>${inlineScript(join(ROOT, 'lib', 'client.vendor.js'))}</script>
 <script>${inlineScript(join(ROOT, 'lib', 'core.js'))}</script>
 <script>${inlineScript(join(ROOT, 'lib', 'placeholder.js'))}</script>
-<script>${inlineScript(join(ROOT, 'lib', 'pet3d.js'))}</script>
+<script>${inlineScript(join(ROOT, 'lib', 'scene.js'))}</script>
 <script>${PROBE.replace(/<\/script>/gi, '<\\/script>')}</script>
 </body>
 </html>
@@ -1387,7 +1394,7 @@ const server = createServer((request, response) => {
 
 const browser = findBrowser();
 if (!browser) {
-  console.error('No Chromium-based browser found. Set PET3D_BROWSER and retry.');
+  console.error('No Chromium-based browser found. Set VRMPET3D_BROWSER and retry.');
   process.exit(2);
 }
 

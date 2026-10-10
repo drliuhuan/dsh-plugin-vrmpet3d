@@ -1,9 +1,10 @@
-// Browser test body for the pet3d 3D stack, inlined by scripts/verify-browser.mjs.
+// Browser test body for the vrmpet3d 3D stack, inlined by scripts/verify-browser.mjs.
 //
 // This is the part that cannot be checked under Node: that the placeholder
 // builds real geometry, that computeFraming on the MEASURED box produces a sane
 // transform, that a WebGL render of the real scene produces non-empty pixels,
-// and that the official VRM and MMD loader paths construct against real buffers.
+// that the official VRM loader path constructs against a real buffer, and that
+// the vendored chunk carries no MMD stack at all (removed 2026-10-12).
 (function () {
   var report = { ok: false, checks: [], errors: [] };
 
@@ -20,9 +21,9 @@
     }
   }
 
-  var V = globalThis.__PET3D_VENDOR__;
-  var P = globalThis.__PET3D_PLACEHOLDER__;
-  var C = globalThis.__PET3D_CORE__;
+  var V = globalThis.__VRMPET3D_VENDOR__;
+  var P = globalThis.__VRMPET3D_PLACEHOLDER__;
+  var C = globalThis.__VRMPET3D_CORE__;
   var THREE = V && V.THREE;
 
   check('vendor present', function () { return Boolean(V && P && C); });
@@ -278,12 +279,19 @@
     return true;
   });
 
-  check('MMDLoader assembly path is reachable', function () {
-    var loader = new V.MMD.MMDLoader();
-    // assembleMMD is the format-agnostic assembly step; the PMX parse in front of
-    // it needs a real binary file, which is what verify-pmx.mjs supplies. Here we
-    // only assert the assembly entry point exists and is callable.
-    return typeof loader.assembleMMD === 'function' && typeof loader.load === 'function';
+  check('the MMD stack is ABSENT from the vendored chunk', function () {
+    /**
+     * MMD was implementation-removed on 2026-10-12: this build loads VRM (and plain glTF/GLB) only, and
+     * `vendor/entry.js` publishes THREE, VRM and the one addon the renderer uses. Asserting ABSENCE is
+     * the check that keeps a future entry edit from quietly re-shipping a loader this build would then
+     * have to refuse at the same time as it ships.
+     */
+    return V.MMD === undefined
+      && typeof V.addons.MMDLoader === 'undefined'
+      && typeof V.addons.VMDLoader === 'undefined'
+      && typeof V.addons.TGALoader === 'undefined'
+      && typeof V.THREE.WebGLRenderer === 'function'
+      && typeof V.VRM.VRMLoaderPlugin === 'function';
   });
 
   finish();

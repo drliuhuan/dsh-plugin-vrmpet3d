@@ -7,17 +7,17 @@
 // process, or any other window.
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('pet3dDesktop', {
+contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
   /**
    * Ask for the launch configuration: which model to show, where the asset route lives.
    * Sent as an invoke so the page can await it before mounting anything.
    */
-  config: () => ipcRenderer.invoke('pet3d:config'),
+  config: () => ipcRenderer.invoke('vrmpet3d:config'),
 
   /** The global cursor position, pushed by the main process at frame rate. */
   onCursor: (callback) => {
     if (typeof callback !== 'function') return;
-    ipcRenderer.on('pet3d:cursor', (_event, point) => callback(point));
+    ipcRenderer.on('vrmpet3d:cursor', (_event, point) => callback(point));
   },
 
   /**
@@ -25,10 +25,10 @@ contextBridge.exposeInMainWorld('pet3dDesktop', {
    * passing them through. `dragging` keeps the window interactive for the whole gesture
    * rather than only while the cursor happens to be over the pet.
    */
-  reportRect: (rect) => ipcRenderer.send('pet3d:rect', rect),
+  reportRect: (rect) => ipcRenderer.send('vrmpet3d:rect', rect),
 
   /** Announce that the pet is mounted and drawing, with the facts the launcher reports. */
-  ready: (info) => ipcRenderer.send('pet3d:ready', info),
+  ready: (info) => ipcRenderer.send('vrmpet3d:ready', info),
 
   /**
    * Ask for a model directory, with a NATIVE folder picker.
@@ -36,17 +36,17 @@ contextBridge.exposeInMainWorld('pet3dDesktop', {
    * The settings page needs this and cannot do it itself: a web page cannot open a native dialog, and the
    * page has no filesystem access by design (`contextIsolation`, no Node). The launcher shows the dialog and
    * answers with the chosen path — or null when the user cancelled — and the PAGE then tells the HOST about
-   * it over `/pet3d/models`, so there is still exactly one writer of the imported-directory list.
+   * it over `/vrmpet3d/models`, so there is still exactly one writer of the imported-directory list.
    */
-  pickModelDir: () => ipcRenderer.invoke('pet3d:pick-dir', { kind: 'model' }),
+  pickModelDir: () => ipcRenderer.invoke('vrmpet3d:pick-dir', { kind: 'model' }),
 
   /**
-   * The same dialog for an imported MOTION directory (`/pet3d/motions`).
+   * The same dialog for an imported MOTION directory (`/vrmpet3d/motions`).
    *
    * A separate name rather than one `pickDirectory(kind)` because the two call sites read differently and the
    * launcher uses `kind` only for the dialog's own title; the HOST still does the writing, exactly as for models.
    */
-  pickMotionDir: () => ipcRenderer.invoke('pet3d:pick-dir', { kind: 'motion' }),
+  pickMotionDir: () => ipcRenderer.invoke('vrmpet3d:pick-dir', { kind: 'motion' }),
 
   /**
    * Tell the launcher that a VIEW ORBIT is starting or ending — and let IT take the pointer lock.
@@ -58,8 +58,8 @@ contextBridge.exposeInMainWorld('pet3dDesktop', {
    * owns both halves: it focuses the window and requests the lock with Electron's `userGesture` flag, and it
    * exits the lock when the drag ends. The page only READS the result (`pointerlockchange`).
    */
-  orbit: (active) => ipcRenderer.send('pet3d:orbit', active === true),
+  orbit: (active) => ipcRenderer.send('vrmpet3d:orbit', active === true),
 
   /** The one control the page has over its own window. */
-  quit: () => ipcRenderer.send('pet3d:quit'),
+  quit: () => ipcRenderer.send('vrmpet3d:quit'),
 });

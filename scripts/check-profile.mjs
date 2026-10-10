@@ -9,8 +9,8 @@
  * Measured on 2026-10-10, and it cost the operator the pet: the running DSH app WRITES the profile back to
  * disk — `package.json` and the materialised `cordis.yml` — from whatever composition it holds in memory,
  * and a bundle its in-memory tree does not know about is dropped on the way out. The plugin had been
- * disabled in the manager, the host rewrote the profile at 16:13:50, and `dsh-plugin-pet3d` was gone from
- * `dsh.profile.bundles`. On the NEXT restart the plugin was simply not composed: no pet, no `/pet3d/*`
+ * disabled in the manager, the host rewrote the profile at 16:13:50, and `dsh-plugin-vrmpet3d` was gone from
+ * `dsh.profile.bundles`. On the NEXT restart the plugin was simply not composed: no pet, no `/vrmpet3d/*`
  * routes, nothing to look at. "插件挂了" was, exactly, "the profile forgot it".
  *
  * Every other check in this repository starts from the SOURCE TREE and therefore cannot see this: the code
@@ -18,7 +18,7 @@
  *
  *   1. THE PROFILE: the package is a dependency, it is listed in `dsh.profile.bundles`, and the symlink
  *      under the profile's `node_modules` resolves to this checkout;
- *   2. THE RUNNING APP: the plugin's own routes answer over loopback. `/pet3d/state` speaks first because it
+ *   2. THE RUNNING APP: the plugin's own routes answer over loopback. `/vrmpet3d/state` speaks first because it
  *      can distinguish three very different failures in one request — 404 means the host half is not
  *      composed, a 200 with `state: null` and no `error` means the host is up but the CLIENT half has not
  *      run (the page needs a reload, or the client bundle failed), and a non-null `error` is the client
@@ -102,7 +102,7 @@ if (existsSync(linkPath)) {
  *
  * The verdict at the bottom turns on this number rather than on `failures.length`, and that is a fix, not a
  * detail. On 2026-10-09 the profile had just been repaired while the app was still running the composition it
- * booted with, so `/pet3d/catalog` answered 404 — and this script then reported "profile wiring: 1 FAILED,
+ * booted with, so `/vrmpet3d/catalog` answered 404 — and this script then reported "profile wiring: 1 FAILED,
  * repair it with install-desktop-plugin.mjs", pointing the operator at a repair that was already done. What
  * was actually missing was a RESTART. The two are now told apart, which is what the exit codes always
  * claimed: 1 is the profile, 2 is "the profile is right, the running app disagrees".
@@ -123,18 +123,18 @@ if (!skipHttp) {
     }
   };
 
-  const catalog = await probe('/pet3d/catalog');
+  const catalog = await probe('/vrmpet3d/catalog');
   const reachable = catalog.status !== 0;
   if (!reachable) {
     notes.push(`the app is not answering at ${base} — start it, or set DSH_WEB_URL`);
   } else {
     report(catalog.status === 200,
-      `the host half is live (/pet3d/catalog -> ${catalog.status}${catalog.status === 404 ? '; 404 means the plugin is not composed' : ''})`);
+      `the host half is live (/vrmpet3d/catalog -> ${catalog.status}${catalog.status === 404 ? '; 404 means the plugin is not composed' : ''})`);
   }
 
   if (reachable) {
-    const state = await probe('/pet3d/state');
-    report(state.status === 200, `the state channel answers (/pet3d/state -> ${state.status})`);
+    const state = await probe('/vrmpet3d/state');
+    report(state.status === 200, `the state channel answers (/vrmpet3d/state -> ${state.status})`);
     httpState = state.payload;
     if (state.status === 200 && state.payload) {
       const error = state.payload.error;
