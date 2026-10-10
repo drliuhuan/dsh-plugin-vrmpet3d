@@ -159,23 +159,41 @@ greeting feature, then another batch of VRMA.
    else. Tests: `verify.mjs` (the time formatting, the greeting table, the source rule), `verify-model.mjs` (the
    instruction on the wire carries the time), `build/probe/client-test.js` (the local line still stands while the
    model thinks).
-4. **「再生成一批VRMA。」** Operator, 2026-10-12. The generator is
-   [scripts/make-vrma-fixtures.mjs](scripts/make-vrma-fixtures.mjs): it authors keyframes in code and writes the
-   current batch into `build/fixtures/vrma/` — a minimal VRM plus rest / wave / look-around / happy-hop / stretch /
-   weight-shift / test clips, and a manifest beside them. That batch is also a SUITE input: `verify-model.mjs` and
-   [scripts/verify-motion.mjs](scripts/verify-motion.mjs) replay those files, so a new batch is a change to the
-   generator AND to whatever asserts it.
+4. **「再生成一批VRMA。」** Operator, 2026-10-12 — and there is already evidence of what "a batch" looks like: TWO
+   `.vrma` files sit in `assets/motions/`, added the same evening (23:42 / 23:51) and **currently UNTRACKED** (nothing
+   in `.gitignore` covers that folder, so a later `git add -A` would commit them — that is a decision, not an
+   accident):
 
-   **Ask which of the two it is, because they end differently:**
-   * **a motion pack for the pet to actually use** — the clips go into a folder the operator imports (通用设置 →
-     动作导入), and each one needs a decision about 循环/单次 (a manifest beside the clips, or the per-clip row in
-     状态与动作) and which states may use it. Note the tie-in with item 3: greeting motions (招手 / 鞠躬 / 点头 /
-     摇头 / 伸懒腰 / 打招呼) are exactly what the greeting event will want to play.
-   * **test fixtures** — the same files, but registered so a broken clip fails a suite: their names are cited by
-     `verify-model.mjs` group 11 and inlined by the client page, and the docs' counts move with them.
+   | file | bytes | channels | notes |
+   |---|---|---|---|
+   | `coolIdleGlance.vrma` | 20,644 | 37 | `"generator": "text-to-motion"` |
+   | `innocentStandIdle.vrma` | 18,984 | 35 | `"generator": "text-to-motion"` |
+
+   Both are real VRM animations — GLB magic, a parseable JSON chunk, `VRMC_vrm_animation` 1.0 addressing 44 humanoid
+   bones — so `Scene.loadMotion` will accept them as they are.
+
+   The generator this repo OWNS is [scripts/make-vrma-fixtures.mjs](scripts/make-vrma-fixtures.mjs): it authors
+   keyframes in code and writes the current batch into `build/fixtures/vrma/` — a minimal VRM plus rest / wave /
+   look-around / happy-hop / stretch / weight-shift / test clips and a manifest beside them. Those files are also a
+   SUITE input: `verify-model.mjs` and [scripts/verify-motion.mjs](scripts/verify-motion.mjs) replay them, so a new
+   batch is a change to the generator AND to whatever asserts it.
+
+   **Three decisions to put to the operator before writing anything:**
+   * **where a batch COMES FROM** — the same text-to-motion source that produced the two files above, more authored
+     keyframes in `scripts/make-vrma-fixtures.mjs`, or both;
+   * **what it is FOR** — either a **motion pack to ship and use**, which is a real feature and not just files: the
+     motion catalog would have to learn about a BUNDLED motions folder the way it already knows `assets/models`
+     (today it scans only `config.motionDirs` plus the imported directories, so nothing in the repo is offered out of
+     the box), each clip needs 循环/单次 (a `vrmpet3d-motions.json` manifest beside the clips, or the per-clip row in
+     状态与动作), and `.gitignore` plus `package.json`'s `files[]` need the folder — or **fixtures a suite replays**,
+     whose names are cited by `verify-model.mjs` group 11 and inlined by the client page, with the docs' counts
+     moving alongside;
+   * **whether the two files already in `assets/motions/` are the START of that pack** (they are valid, and committed
+     nowhere yet) or scratch to delete.
    Either way, remember the trap this project has paid for: a clip whose tracks bind to none of the model's bones
    parses perfectly and animates nothing, so every new clip needs a real-track check (that is what
-   `verify-motion.mjs` exists for) and a sane duration when it is a one-shot.
+   `verify-motion.mjs` exists for) and a sane duration when it is a one-shot. The two files above already pass the
+   cheap half of that check.
 
 ## 4. Frozen zones — do not touch these on the way past
 
@@ -244,6 +262,8 @@ Two habits that are not optional:
   address `check-profile.mjs` and the live probes use;
 * the operator's own VRMs live in `F:\SynologyDrive\FatFish-pet\Models` and are already imported (four models in the
   picker, §2). No motion directory is imported yet;
+* **two VRMA files the operator generated sit in `assets/motions/` and are UNTRACKED** (`coolIdleGlance.vrma` and
+  `innocentStandIdle.vrma` — §3 item 4 says what they are and what has to be decided about them);
 * the installed DSH archive is `F:\DeepSeek\Harness\resources\app.asar`; the chunk-delivery suite finds it by
   itself, and `VRMPET3D_DSH_ASAR` is only needed for an unusual install path;
 * the floating window borrows the Electron runtime from that installation by HARD LINKS into
