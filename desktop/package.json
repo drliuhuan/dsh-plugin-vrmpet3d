@@ -1,0 +1,7 @@
+{
+  "name": "pet3d-desktop-window",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Electron entry for the pet's always-on-top window, started by the plugin's host half.",
+  "main": "main.js"
+}

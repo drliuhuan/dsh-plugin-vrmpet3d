@@ -1,0 +1,55 @@
+{
+  "name": "dsh-plugin-pet3d",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A 3D desktop pet for DeepSeek Harness: VRM and PMX/PMD models on a transparent WebGL layer, driven by live session status.",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./core": "./lib/core.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "!assets/whale-tail.apng",
+    "scripts",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "HANDOFF.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "verify": "node scripts/verify-all.mjs",
+    "verify:core": "node scripts/verify.mjs",
+    "verify:model": "node scripts/verify-model.mjs",
+    "verify:load": "node scripts/check-plugin-load.mjs",
+    "verify:profile": "node scripts/check-profile.mjs",
+    "verify:vendor": "node scripts/vendor-build.mjs --check",
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "verify:whale": "node scripts/whale-asset.mjs --check",
+    "fetch:fixtures": "node scripts/verify-model.mjs --fetch",
+    "fetch:whale": "node scripts/whale-asset.mjs",
+    "vendor:build": "node scripts/vendor-build.mjs",
+    "install:profile": "node scripts/install-desktop-plugin.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

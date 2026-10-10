@@ -1,0 +1,3033 @@
+#!/usr/bin/env node
+/**
+ * Unit tests for lib/core.js — the pure logic shared by the client half.
+ *
+ * Run:  node scripts/verify.mjs
+ *
+ * These run under plain Node with no DOM and no three.js. That is the point of
+ * keeping core.js free of both: the parts most likely to be wrong (state
+ * precedence, fall physics, framing maths, path safety) are testable in
+ * milliseconds and do not need a browser or a GPU.
+ */
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// lib/core.js is a classic script (an IIFE that publishes `__PET3D_CORE__`), not
+// an ES module, because the browser half loads it with `<script src>`. This
+// package declares `"type": "module"`, so Node would parse it as ESM if we
+// imported it by path — hence the side-effect import through a file: URL and the
+// read back off the global it publishes. That is the same contract the browser
+// relies on, so the test would catch a rename of the global too.
+await import(pathToFileURL(resolve(ROOT, 'lib', 'core.js')).href);
+const core = globalThis.__PET3D_CORE__;
+if (!core) {
+  console.error('lib/core.js did not publish globalThis.__PET3D_CORE__');
+  process.exit(1);
+}
+
+let passed = 0;
+let failed = 0;
+const failures = [];
+
+function ok(condition, label) {
+  if (condition) {
+    passed += 1;
+  } else {
+    failed += 1;
+    failures.push(label);
+    console.error(`  FAIL  ${label}`);
+  }
+}
+
+function eq(actual, expected, label) {
+  const same = Object.is(actual, expected);
+  if (!same) {
+    failed += 1;
+    failures.push(label);
+    console.error(`  FAIL  ${label}\n        expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  } else {
+    passed += 1;
+  }
+}
+
+function near(actual, expected, tolerance, label) {
+  const same = Number.isFinite(actual) && Math.abs(actual - expected) <= tolerance;
+  if (!same) {
+    failed += 1;
+    failures.push(label);
+    console.error(`  FAIL  ${label}\n        expected ${expected} ±${tolerance}, got ${actual}`);
+  } else {
+    passed += 1;
+  }
+}
+
+/**
+ * Structural equality for the objects this module rebuilds on every call.
+ *
+ * `eq` compares with Object.is — reference equality for objects — so a preference map or a motion
+ * map has to be compared by serialisation instead.
+ */
+function same(actual, expected, label) {
+  eq(JSON.stringify(actual), JSON.stringify(expected), label);
+}
+
+function group(title) {
+  console.log(`\n${title}`);
+}
+
+// ---------------------------------------------------------------------------
+group('1. format detection');
+// ---------------------------------------------------------------------------
+{
+  const glb = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 0x02, 0, 0, 0]).buffer;
+  eq(core.detectFormat(glb), 'glb', 'GLB magic "glTF" detected');
+
+  const pmx = new Uint8Array([0x50, 0x4d, 0x58, 0x20, 0x00, 0x00, 0x00, 0x80]).buffer;
+  eq(core.detectFormat(pmx), 'pmx', 'PMX magic "PMX " detected');
+
+  const pmd = new Uint8Array([0x50, 0x6d, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00]).buffer;
+  eq(core.detectFormat(pmd), 'pmd', 'PMD magic "Pmd\\0" detected');
+
+  const gltf = new TextEncoder().encode('{"asset":{"version":"2.0"}}').buffer;
+  eq(core.detectFormat(gltf), 'gltf', 'JSON glTF detected from leading brace');
+
+  const bom = new Uint8Array([0xef, 0xbb, 0xbf, 0x7b]).buffer;
+  eq(core.detectFormat(bom), 'gltf', 'BOM-prefixed glTF detected');
+
+  eq(core.detectFormat(new Uint8Array([1, 2]).buffer), 'unknown', 'short buffer is unknown');
+  eq(core.detectFormat(new ArrayBuffer(0)), 'unknown', 'empty buffer is unknown');
+  eq(core.detectFormat(null), 'unknown', 'null is unknown');
+  eq(core.detectFormat(new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer), 'unknown', 'PNG is not a model');
+}
+
+// ---------------------------------------------------------------------------
+group('2. model file recognition and path sanitising');
+// ---------------------------------------------------------------------------
+{
+  ok(core.isModelFile('foo.vrm'), '.vrm recognised');
+  ok(core.isModelFile('A/B/C.PMX'), 'uppercase .PMX recognised');
+  ok(core.isModelFile('x.glb?rev=1'), 'query string stripped before matching');
+  ok(!core.isModelFile('foo.txt'), '.txt rejected');
+  ok(!core.isModelFile('foo'), 'extensionless rejected');
+  ok(!core.isModelFile(undefined), 'undefined rejected');
+
+  eq(core.sanitizeRelativePath('tex/body.png'), 'tex/body.png', 'plain relative path kept');
+  eq(core.sanitizeRelativePath('./tex/../tex/a.png'), 'tex/a.png', 'inner dot segments normalised');
+  eq(core.sanitizeRelativePath('a\\b\\c.png'), 'a/b/c.png', 'backslashes normalised');
+  eq(core.sanitizeRelativePath('../../etc/passwd'), null, 'parent traversal rejected');
+  eq(core.sanitizeRelativePath('a/../../b'), null, 'nested traversal rejected');
+  eq(core.sanitizeRelativePath('/etc/passwd'), null, 'absolute path rejected');
+  eq(core.sanitizeRelativePath('C:/Windows/system32'), null, 'drive path rejected');
+  eq(core.sanitizeRelativePath('file:///etc/passwd'), null, 'URL rejected');
+  eq(core.sanitizeRelativePath(''), null, 'empty rejected');
+  eq(core.sanitizeRelativePath(null), null, 'null rejected');
+}
+
+// ---------------------------------------------------------------------------
+group('3. fall physics');
+// ---------------------------------------------------------------------------
+{
+  // A pet released from rest at height 1.0 with floor 0 must reach the floor.
+  let state = { y: 1.0, vy: 0, floor: 0, bounces: 0 };
+  let ticks = 0;
+  let landed = false;
+  while (ticks < 600 && !landed) {
+    state = core.stepFall(state, 1 / 60);
+    landed = state.landed;
+    ticks += 1;
+  }
+  ok(landed, 'released pet lands');
+  eq(state.y, 0, 'landed pet sits exactly on the floor');
+  ok(state.bounces >= 1, 'impact produced at least one bounce');
+  ok(ticks > 6 && ticks < 400, `landing took a plausible number of frames (${ticks})`);
+
+  // Sub-stepping must survive a frame so slow it would otherwise tunnel.
+  const bigStep = core.stepFall({ y: 1.0, vy: 0, floor: 0, bounces: 0 }, 1.0);
+  ok(bigStep.y >= 0, 'a one-second frame does not tunnel through the floor');
+
+  // Never below the floor, whatever the input.
+  let s = { y: 0.05, vy: -99, floor: 0, bounces: 0 };
+  for (let i = 0; i < 200; i++) s = core.stepFall(s, 1 / 30);
+  ok(s.y >= 0, 'y never goes below the floor');
+  eq(s.vy, 0, 'at rest the vertical velocity is zero');
+  eq(s.landed, true, 'at rest the pet reports landed');
+
+  // A tiny impact must not bounce forever.
+  const tiny = core.stepFall({ y: 0.001, vy: -0.05, floor: 0, bounces: 0 }, 1 / 60);
+  eq(tiny.vy, 0, 'an impact below the bounce cutoff settles immediately');
+  eq(tiny.landed, true, 'a soft impact reports landed');
+
+  // Terminal velocity is respected.
+  let fast = { y: 100, vy: 0, floor: 0, bounces: 0 };
+  fast = core.stepFall(fast, 10);
+  ok(fast.vy >= -core.FALL_PHYSICS.maxSpeed - 1e-9, 'terminal velocity is never exceeded');
+
+  // Zero and negative dt are no-ops rather than corruption.
+  const same = core.stepFall({ y: 0.5, vy: 0, floor: 0, bounces: 0 }, 0);
+  eq(same.y, 0.5, 'dt=0 leaves the pet where it was');
+  const neg = core.stepFall({ y: 0.5, vy: 0, floor: 0, bounces: 0 }, -1);
+  eq(neg.y, 0.5, 'negative dt leaves the pet where it was');
+
+  // Determinism: identical input, identical output.
+  const a1 = core.stepFall({ y: 0.9, vy: 0, floor: 0, bounces: 0 }, 0.25);
+  const a2 = core.stepFall({ y: 0.9, vy: 0, floor: 0, bounces: 0 }, 0.25);
+  eq(a1.y, a2.y, 'physics is deterministic');
+
+  // --- side walls -----------------------------------------------------------
+  // A thrown pet used to hit the side of the frame and STAY there, riding the wall
+  // down to the floor. A wall has to return speed, like the floor does.
+  ok(core.FALL_PHYSICS.wallBounce > 0 && core.FALL_PHYSICS.wallBounce < 1,
+    'the wall restitution is a real fraction, not a stop or a perfect bounce');
+
+  const inside = core.reflectWithin(0.4, 0.5, 0, 0.8);
+  eq(inside.hit, false, 'a body inside its bounds is left alone');
+  eq(inside.x, 0.4, 'an untouched body keeps its position');
+  eq(inside.vx, 0.5, 'an untouched body keeps its speed');
+
+  const leftWall = core.reflectWithin(-0.05, -0.6, 0, 0.8);
+  eq(leftWall.hit, true, 'crossing the left bound is a hit');
+  eq(leftWall.x, 0, 'a left hit puts the body exactly on the bound');
+  ok(leftWall.vx > 0, 'a left hit sends the body back to the right');
+  near(leftWall.vx, 0.6 * core.FALL_PHYSICS.wallBounce, 1e-9, 'a left hit returns the wall restitution');
+
+  const rightWall = core.reflectWithin(0.9, 0.6, 0, 0.8);
+  eq(rightWall.hit, true, 'crossing the right bound is a hit');
+  eq(rightWall.x, 0.8, 'a right hit puts the body exactly on the bound');
+  ok(rightWall.vx < 0, 'a right hit sends the body back to the left');
+  near(Math.abs(rightWall.vx), 0.6 * core.FALL_PHYSICS.wallBounce, 1e-9,
+    'a right hit returns the wall restitution');
+
+  // Already moving inward when it is caught out of bounds: the rebound must not
+  // reverse a body that was coming back by itself (a resize does this).
+  const inward = core.reflectWithin(0.9, -0.4, 0, 0.8);
+  ok(inward.vx < 0, 'a body already heading inward keeps heading inward');
+
+  // A caller can override the restitution, and a nonsense one is clamped.
+  eq(core.reflectWithin(-1, -1, 0, 1, 1).vx, 1, 'a restitution of 1 returns the full speed');
+  eq(core.reflectWithin(-1, -1, 0, 1, 0).vx, 0, 'a restitution of 0 stops the body');
+  eq(core.reflectWithin(-1, -2, 0, 1, 5).vx, 2, 'an out-of-range restitution is clamped to 1');
+
+  // Degenerate and hostile inputs.
+  eq(core.reflectWithin(5, 5, 0, 0).vx, 0, 'a zero-width corridor cannot produce speed');
+  eq(core.reflectWithin(NaN, 1, 0, 1).vx, 1, 'a NaN position is treated as inside');
+  eq(core.reflectWithin(0.5, NaN, 0, 1).vx, 0, 'a NaN speed becomes zero rather than propagating');
+  eq(core.reflectWithin(0.5, 1, NaN, 1).hit, false, 'a NaN bound is refused rather than half-applied');
+
+  // --- the ceiling ----------------------------------------------------------
+  // The top of the frame is the floor's counterpart and has to behave the same way: a
+  // pet thrown upward BOUNCES off it. Clamping the top instead — which is what the
+  // client's clampToViewport did, and the reported bug — left the pet stuck to the top
+  // edge while the rise it was thrown with was quietly discarded.
+  ok(core.FALL_PHYSICS.ceilingBounce > 0 && core.FALL_PHYSICS.ceilingBounce <= 1,
+    'the ceiling restitution is a real fraction');
+
+  const ceiling = 0.6;
+  let thrown = { y: 0.2, vy: 3.0, floor: 0, ceiling: ceiling, bounces: 0, ceilingBounces: 0 };
+  let peak = 0;
+  let frames = 0;
+  let landedAgain = false;
+  while (!landedAgain && frames < 3000) {
+    thrown = core.stepFall(thrown, 1 / 60);
+    peak = Math.max(peak, thrown.y);
+    landedAgain = thrown.landed;
+    frames += 1;
+  }
+  ok(peak <= ceiling + 1e-9, `the pet never rises past the ceiling (peak ${peak.toFixed(4)})`);
+  eq(thrown.ceilingBounces, 1, 'a hard throw is returned by the ceiling exactly once');
+  eq(thrown.landed, true, 'and it still lands on the floor');
+  eq(thrown.y, 0, 'on the floor, not at the ceiling');
+  eq(thrown.ceiling, ceiling, 'the ceiling round-trips, so a caller can feed the state back in');
+
+  // A gentle rise must not quiver against the ceiling: gravity takes it back.
+  const gentle = core.stepFall({ y: 0.58, vy: 0.5, floor: 0, ceiling: ceiling, bounces: 0 }, 1 / 60);
+  ok(gentle.y <= ceiling + 1e-9, 'a gentle rise stops at the ceiling');
+  ok(gentle.ceilingBounces === 0 && gentle.vy >= 0, 'a gentle rise is not counted as a bounce');
+
+  // Without a ceiling the old behaviour stands: a rise is unbounded.
+  let unbounded = { y: 0.2, vy: 3.0, floor: 0, bounces: 0 };
+  let unboundedPeak = 0;
+  for (let i = 0; i < 40; i++) {
+    unbounded = core.stepFall(unbounded, 1 / 60);
+    unboundedPeak = Math.max(unboundedPeak, unbounded.y);
+  }
+  ok(unboundedPeak > ceiling, 'a caller with no ceiling still gets an unbounded rise');
+  eq(unbounded.ceiling, Infinity, 'and no ceiling is reported as none');
+
+  // Nonsense ceilings are ignored rather than freezing the pet mid-air.
+  const noCeiling = core.stepFall({ y: 0.5, vy: 1, floor: 0, ceiling: NaN, bounces: 0 }, 1 / 60);
+  ok(noCeiling.y > 0.5, 'a NaN ceiling does not trap the pet at its own height');
+}
+
+// ---------------------------------------------------------------------------
+group('4. model framing');
+// ---------------------------------------------------------------------------
+{
+  // A 1.6 m tall character centred on the origin, feet at y=0.
+  const box = { min: { x: -0.3, y: 0, z: -0.2 }, max: { x: 0.3, y: 1.6, z: 0.2 } };
+  const framing = core.computeFraming(box, { viewportHeight: 1, heightFraction: 0.8 });
+  near(framing.scale, 0.5, 1e-9, 'scale maps 1.6 model units onto 0.8 viewport units');
+  near(framing.scaled.y, 0.8, 1e-9, 'scaled height equals the requested fraction');
+  near(framing.offset.y, 0, 1e-9, 'feet already at y=0 need no vertical offset');
+  near(framing.offset.x, 0, 1e-9, 'a centred model needs no x offset');
+
+  // A model whose feet are not at the origin, and whose origin is off-centre.
+  const offsetBox = { min: { x: 5.0, y: -1.2, z: -3.0 }, max: { x: 5.6, y: 0.4, z: -2.6 } };
+  const offsetFraming = core.computeFraming(offsetBox, { viewportHeight: 1, heightFraction: 0.8 });
+  near(offsetFraming.size.y, 1.6, 1e-9, 'offset box height measured');
+  near(offsetFraming.offset.y, 1.2, 1e-9, 'offset lifts the feet to y=0');
+  near(offsetFraming.offset.x, -5.3, 1e-9, 'offset centres x');
+  near(offsetFraming.offset.z, 2.8, 1e-9, 'offset centres z');
+
+  // The two offset flavours must agree, because three.js composes T · R · S:
+  // local offset inside a scaled node, or the same offset already scaled on one
+  // node. A model that is NOT at the origin is the only case that can tell them
+  // apart, so this check is the one that catches the transform-order trap.
+  near(offsetFraming.worldOffset.y, offsetFraming.offset.y * offsetFraming.scale, 1e-12,
+    'worldOffset is the local offset scaled');
+  near(offsetFraming.worldOffset.x, offsetFraming.offset.x * offsetFraming.scale, 1e-12,
+    'worldOffset x is the local offset scaled');
+
+  // Worked example of the trap, with the numbers from the real placeholder:
+  // a model whose feet sit at y=0.0242 and a scale of 0.5554. Putting the LOCAL
+  // offset on the same node as the scale leaves the feet at
+  //   0.0242*scale + offset  =  0.0134 - 0.0242 = -0.0107
+  // i.e. sunk into the floor. The world offset lands them exactly on 0.
+  {
+    const trap = core.computeFraming(
+      { min: { x: -0.567, y: 0.0242, z: -0.3568 }, max: { x: 0.567, y: 1.4646, z: 0.3504 } },
+      { viewportHeight: 1, heightFraction: 0.8 }
+    );
+    const sunk = 0.0242 * trap.scale + trap.offset.y;
+    const correct = 0.0242 * trap.scale + trap.worldOffset.y;
+    near(correct, 0, 1e-12, 'the world offset stands the model exactly on the floor');
+    ok(sunk < -0.005, `the local offset on a single node really does sink it (${sunk.toFixed(4)})`);
+  }
+
+  // Degenerate boxes must not produce NaN or Infinity.
+  const degenerate = core.computeFraming({ min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } });
+  ok(Number.isFinite(degenerate.scale) && degenerate.scale > 0, 'a zero-height box still yields a finite scale');
+
+  // Larger viewport ⇒ larger scale, same fraction of the frame.
+  const small = core.computeFraming(box, { viewportHeight: 1 });
+  const large = core.computeFraming(box, { viewportHeight: 2 });
+  near(large.scale / small.scale, 2, 1e-9, 'scale is proportional to viewport height');
+  eq(small.heightFraction, large.heightFraction, 'height fraction is viewport independent');
+
+  // Camera distance grows with model size and shrinks with a wider FOV.
+  const near1 = core.computeCameraDistance(box, 1, 30, 1.15);
+  const far1 = core.computeCameraDistance({ min: { x: -0.6, y: 0, z: -0.4 }, max: { x: 0.6, y: 3.2, z: 0.4 } }, 1, 30, 1.15);
+  ok(far1 > near1, 'a bigger model needs more camera distance');
+  const wide = core.computeCameraDistance(box, 1, 60, 1.15);
+  ok(wide < near1, 'a wider field of view needs less distance');
+  ok(Number.isFinite(near1) && near1 > 0, 'camera distance is finite and positive');
+}
+
+// ---------------------------------------------------------------------------
+group('5. preferences');
+// ---------------------------------------------------------------------------
+{
+  const defaults = core.cleanPreferences(null);
+  eq(defaults.scope, 'global', 'default scope');
+  // The operator, 2026-10-10: "移除内置替身，默认模型设置为SampleModel". Empty means AUTOMATIC, and the
+  // resolver is what turns it into SampleModel — see the model-choice group below.
+  eq(defaults.modelId, '', 'the default model is AUTOMATIC rather than a built-in avatar');
+  eq(defaults.motion, true, 'motion on by default');
+  eq(defaults.physics, true, 'physics on by default');
+
+  const dirty = core.cleanPreferences({
+    scope: 'current', size: 9999, motion: false, modelId: 'x'.repeat(900),
+    modelScale: -5, yaw: 99, sway: 99, sleepAfterMs: 7, hidden: 'yes', x: 'nope',
+  });
+  eq(dirty.scope, 'current', 'valid scope kept');
+  eq(dirty.size, core.SIZE_RANGE.max, 'size clamped to the maximum');
+  eq(dirty.motion, false, 'explicit motion=false kept');
+  eq(dirty.modelId.length, 512, 'over-long model id truncated');
+  eq(dirty.modelScale, 0.2, 'model scale clamped to the minimum');
+  eq(dirty.yaw, Math.PI, 'yaw clamped to π');
+  eq(dirty.sway, 0.6, 'sway clamped to its maximum');
+  eq(dirty.sleepAfterMs, core.DEFAULTS.sleepAfterMs, 'unknown nap timeout falls back to the default');
+  eq(dirty.hidden, false, 'a truthy non-boolean does not enable hidden');
+  eq(dirty.x, null, 'a non-numeric x position becomes null');
+  eq(dirty.y, null, 'a non-numeric y position becomes null');
+
+  /**
+   * 显示位置, including the DEBUG value.
+   *
+   * `both` is the switch that puts the floating window AND the pet inside the app on screen together, so the
+   * cleaner has to KEEP it: the host store cleans every patch with this function, and a value it does not
+   * recognise is rewritten to `auto`. That is the failure this asserts against, and it is a quiet one — the box
+   * ticks, the store answers `auto`, and the next snapshot untickes it, so the switch reads as broken rather
+   * than as refused.
+   */
+  eq(core.cleanPreferences({}).petSurface, 'auto', 'the pet starts on 自动');
+  eq(core.cleanPreferences({ petSurface: 'both' }).petSurface, 'both',
+    'the debug mode is a value the cleaner keeps rather than one it rewrites');
+  eq(core.cleanPreferences({ petSurface: 'everywhere' }).petSurface, 'auto',
+    'and an unknown surface still falls back rather than reaching the launcher');
+
+  /**
+   * 重力, in two keys, and they must not be able to move together.
+   *
+   * The menu's 重力 switch is per surface (operator, 2026-10-12: 「内置宠物和外置宠物的重力开关状态完全独立」),
+   * and the shipped defaults are the behaviour each surface already had: the app overlay's pet throws and
+   * bounces, and the floating window has been "drag and place" since 2026-10-10. The one assertion that matters
+   * most is the LAST pair: writing one key must leave the other exactly as it was, because a cleaner that
+   * defaulted both from one value would silently recouple two switches the user was promised were separate.
+   */
+  eq(core.cleanPreferences({}).gravity, true, 'the app pet ships with 重力 on, as it always threw');
+  eq(core.cleanPreferences({}).windowGravity, false,
+    'and the floating window ships with it off, which is its drag-and-place behaviour');
+  eq(core.cleanPreferences({ gravity: false }).gravity, false, 'an explicit off is kept for the app pet');
+  eq(core.cleanPreferences({ windowGravity: true }).windowGravity, true,
+    'and for the window, so the switch can turn throwing back on out there');
+  eq(core.cleanPreferences({ gravity: false }).windowGravity, false,
+    'turning the app pet\'s 重力 off does not turn the window\'s on');
+  eq(core.cleanPreferences({ windowGravity: true }).gravity, true,
+    'and turning the window\'s on does not turn the app pet\'s off');
+
+  /**
+   * The floating window's own parking spot, as `placementX`/`placementY`.
+   *
+   * The page has written these on every drag since the "a desktop pet that returns to its corner on every
+   * restart is a toy" round, but the cleaner did not know them — so its own `readPreferences` dropped them and
+   * the window went back to 0.86/0 on every reload. `null` is "never dragged", which is a different thing from
+   * fraction 0 (the left/top edge) and is what the page's default corner keys off.
+   */
+  eq(core.cleanPreferences({}).placementX, null, 'the window has no stored position until it is dragged');
+  eq(core.cleanPreferences({}).placementY, null, 'and none vertically either');
+  eq(core.cleanPreferences({ placementX: 0.25, placementY: 0.1 }).placementX, 0.25,
+    'a dragged position survives cleaning');
+  eq(core.cleanPreferences({ placementX: 0.25, placementY: 0.1 }).placementY, 0.1, 'on both axes');
+  eq(core.cleanPreferences({ placementX: 0 }).placementX, 0,
+    'zero is a real position, not an absent one');
+  eq(core.cleanPreferences({ placementY: 'nonsense' }).placementY, null,
+    'and a non-numeric one reads as never dragged rather than as NaN');
+
+  // The two gaze settings the 模型参数 window writes. Cleaning them matters more than most: the curve is a
+  // divisor's partner, so an absurd stored slope would distort or flatten the whole response, and a
+  // hand-edited span must not collapse to zero (which `resolveGazeSpan` would read as auto anyway, but a
+  // stored -4000 should never reach the renderer).
+  const gazeDirty = core.cleanPreferences({ gazeCurve: 99, gazeSpanX: 99999, gazeSpanY: -4000 });
+  eq(gazeDirty.gazeCurve, core.GAZE_CURVE_RANGE.max, 'the curve slope is clamped at the top');
+  eq(gazeDirty.gazeSpanX, core.GAZE_SPAN_RANGE.max, 'an absurd span is clamped at the top');
+  eq(gazeDirty.gazeSpanY, core.GAZE_SPAN_RANGE.min, 'a negative span is clamped to auto');
+  eq(core.cleanPreferences({ gazeCurve: 0.001 }).gazeCurve, core.GAZE_CURVE_RANGE.min,
+    'a near-zero slope is clamped: the response curve has a floor');
+  eq(core.cleanPreferences({}).gazeCurve, core.DEFAULTS.gazeCurve, 'the shipped curve is the default');
+  eq(core.cleanPreferences({}).gazeSpanX, 0, 'the shipped span is auto, so the frame decides');
+  eq(core.cleanPreferences({ gazeCurve: 'x' }).gazeCurve, core.DEFAULTS.gazeCurve,
+    'a non-numeric slope falls back rather than becoming NaN');
+
+  const negative = core.cleanPreferences({ size: -100, modelScale: 100, yaw: -99 });
+  eq(negative.size, core.SIZE_RANGE.min, 'size clamped to the minimum');
+  eq(negative.modelScale, 4, 'model scale clamped to the maximum');
+  eq(negative.yaw, -Math.PI, 'yaw clamped to -π');
+
+  // The size range is the STORAGE contract: it has to be wide enough to hold everything the wheel
+  // can reach in any frame, and this cleans a stored preference from an older build.
+  ok(core.SIZE_RANGE.min >= 5 && core.SIZE_RANGE.max >= 400,
+    `the size range can hold every zoom the wheel can reach (${core.SIZE_RANGE.min}..${core.SIZE_RANGE.max})`);
+  ok(core.WHEEL_ZOOM_STEP > 1 && core.WHEEL_ZOOM_STEP < 1.5,
+    'one wheel notch is a modest zoom, not a jump');
+  eq(core.cleanPreferences({ size: 9999 }).size, core.SIZE_RANGE.max, 'an absurd stored size is brought into range');
+  eq(core.cleanPreferences({ size: 100 }).size, 100, 'an ordinary size survives cleaning');
+
+  /**
+   * The FLOATING WINDOW's own size.
+   *
+   * The two surfaces are framed differently — the app overlay's pet lives in DSH's window, the floating
+   * window's frame is the whole screen — and they used to share `size`. Reloading DSH then let the in-app pet
+   * push its percentage over the window's (measured 2026-10-10: 202×276 instead of 396×540), so this is the
+   * key that keeps them apart, plus the MIGRATION: a profile written before the split has only `size`, and the
+   * window must keep the value it was already showing rather than jump to a default.
+   */
+  eq(core.cleanPreferences({}).windowSize, core.DEFAULTS.windowSize,
+    'the floating window has a size preference of its own');
+  eq(core.cleanPreferences({ size: 180 }).windowSize, 180,
+    'a profile written before the split keeps the window exactly where it was');
+  eq(core.cleanPreferences({ size: 180 }).size, 180, 'while the in-app pet keeps the same value');
+  eq(core.cleanPreferences({ size: 180, windowSize: 320 }).size, 180,
+    'once both are stored, the app pet’s size is not dragged along by the window’s');
+  eq(core.cleanPreferences({ size: 180, windowSize: 320 }).windowSize, 320,
+    'and the window’s survives cleaning as its own number');
+  eq(core.cleanPreferences({ windowSize: 9999 }).windowSize, core.SIZE_RANGE.max,
+    'an absurd window size is clamped into the same storage range as the app pet’s');
+  eq(core.cleanPreferences({ windowSize: -5 }).windowSize, core.SIZE_RANGE.min,
+    'and a negative one is brought up to the floor');
+  eq(core.cleanPreferences({ windowSize: 'nonsense' }).windowSize, core.DEFAULTS.size,
+    'an unparseable window size falls back instead of becoming NaN');
+  eq(dirty.windowSize, core.SIZE_RANGE.max,
+    'a profile with one clamped size gives the window that same clamped value');
+
+  // The WHEEL's limits are derived from the frame, and they are the user's two rules: the pet's long
+  // edge never goes below 40 px, and never above the frame's shortest edge. The app overlay's own
+  // slot fraction is applied first, because there it is the harder limit.
+  {
+    const base = { baseWidth: 220, baseHeight: 300 };
+    const big = core.sizeLimits({ ...base, viewportWidth: 1920, viewportHeight: 1032 });
+    const px = (percent) => Math.round((300 * percent) / 100);
+    ok(px(big.min) >= core.ZOOM_MIN_LONG_EDGE,
+      `the smallest wheel size is at least a 40 px long edge (${px(big.min)} px at ${big.min}%)`);
+    ok(px(big.max) <= Math.min(1920, 1032),
+      `the largest wheel size is no bigger than the frame's shortest edge (${px(big.max)} px at ${big.max}%)`);
+    ok(big.min < big.max, `the range is usable (${big.min}%..${big.max}%)`);
+
+    // A small frame shrinks the ceiling with it, and the overlay's slot fraction caps it further.
+    const small = core.sizeLimits({ ...base, viewportWidth: 480, viewportHeight: 360 });
+    ok(small.max < big.max, `a smaller frame has a lower ceiling (${small.max}% vs ${big.max}%)`);
+    const capped = core.sizeLimits({
+      ...base, viewportWidth: 1920, viewportHeight: 1032, slotFraction: { width: 0.55, height: 0.6 },
+    });
+    ok(capped.max < big.max, `a slot fraction caps the ceiling further (${capped.max}% vs ${big.max}%)`);
+    ok(px(capped.max) <= Math.round(1032 * 0.6),
+      `and the cap is the fraction of the frame, not of the model (${px(capped.max)} px)`);
+
+    // A degenerate frame (a window smaller than the base pet) still yields a usable range rather
+    // than a max below its own min.
+    const tiny = core.sizeLimits({ ...base, viewportWidth: 100, viewportHeight: 80 });
+    ok(tiny.max >= tiny.min, `a tiny frame still yields a usable range (${tiny.min}%..${tiny.max}%)`);
+  }
+
+  // The camera orbit, and the reason it needs limits at all: an unbounded pitch puts
+  // the camera under the floor or straight over the pet's head.
+  eq(core.DEFAULTS.viewYaw, 0, 'the view starts looking straight at the pet');
+  eq(core.DEFAULTS.viewPitch, 0, 'and level with it');
+  const orbited = core.cleanPreferences({ viewYaw: 99, viewPitch: -99 });
+  near(orbited.viewYaw, core.VIEW_LIMITS.yaw, 1e-9, 'yaw is clamped to a half turn');
+  near(orbited.viewPitch, core.VIEW_LIMITS.pitchMin, 1e-9, 'pitch is clamped at the bottom');
+  eq(core.cleanPreferences({ viewPitch: 99 }).viewPitch, core.VIEW_LIMITS.pitchMax, 'pitch is clamped at the top');
+  ok(core.VIEW_LIMITS.pitchMax < Math.PI / 2 && core.VIEW_LIMITS.pitchMin > -Math.PI / 2,
+    'the pitch never reaches straight up or straight down');
+
+  // ---- expression settings -------------------------------------------------
+  // The manual weights and the two behaviours. Everything here is stored, so everything here has to
+  // survive a hand-edited or older blob: the panel and the renderer both trust cleanPreferences.
+  const expressionDefaults = core.cleanPreferences({}).expressions;
+  same(expressionDefaults.weights, {}, 'no expression is pinned by hand until the user pins one');
+  eq(expressionDefaults.blink.enabled, true, 'blinking is on by default');
+  eq(expressionDefaults.blink.minSeconds, 2, 'and it starts at the short end of the authored range');
+  eq(expressionDefaults.blink.maxSeconds, 6, 'and reaches the long end');
+  eq(expressionDefaults.emotion.enabled, true, 'emotions are on by default');
+  eq(expressionDefaults.emotion.idleMinSeconds, 20, 'the idle interval starts at twenty seconds');
+  eq(expressionDefaults.emotion.idleMaxSeconds, 60, 'and ends at sixty');
+  same(core.EMOTION_TRIGGERS, ['idle', 'drag', 'click', 'hold'],
+    'and there is one row per situation, in the order the window shows them');
+  eq(expressionDefaults.emotion.triggers.idle.enabled, true, 'the idle row is on');
+  eq(expressionDefaults.emotion.triggers.drag.enabled, true, 'and so is the drag row');
+  same(expressionDefaults.emotion.triggers.idle.emotions, [],
+    'and it names NO emotions — an EMPTY row is the 无 choice, deliberately silent');
+  eq(expressionDefaults.emotion.triggers.idle.holdSeconds, 0,
+    'an idle mood is HELD: zero means until something replaces it, which is what a mood is');
+  eq(expressionDefaults.emotion.triggers.drag.holdSeconds, 0, 'a dragged mood is held too');
+  eq(expressionDefaults.emotion.triggers.click.holdSeconds, core.EMOTION_LIMITS.holdSeconds,
+    'while a click is a reaction with a duration');
+  eq(expressionDefaults.emotion.triggers.hold.holdSeconds, core.EMOTION_LIMITS.holdSeconds,
+    'and the long press is the same kind of reaction as a click');
+
+  /**
+   * The PARTS table, and the shared gesture bounds.
+   *
+   * A part is the user's own row now: a label, the structures it owns, an emotion row and a 碎碎念 box. The
+   * shipped rows are the defaults, seeded from the LEGACY per-region emotion table — so a profile that set up
+   * "click its eye → surprised" before parts existed keeps it, and a profile that never heard of parts behaves
+   * exactly as it did. The bounds themselves live in core so the two surfaces and the suites cannot drift.
+   */
+  same(core.STRUCTURE_REGIONS,
+    ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+    'one shipped region row per default region, in the order the window shows them');
+  const partDefaults = core.cleanPreferences({}).parts.items;
+  same(partDefaults.map(function (item) { return item.id; }),
+    ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+    'and the cleaner hands back all ten, whatever was stored');
+  same(partDefaults.map(function (item) { return item.region; }),
+    ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+    'each carrying the region it answers for by default');
+  /**
+   * The five the operator added on 2026-10-12 sit BETWEEN 身体 and 尾巴, which is the order they asked for, and
+   * their boxes ship EMPTY even though 胸部 and 屁股 have something to say — the defaults live in the tables below
+   * the user's own settings, not in them ("匹配词写进系统底层，不显示").
+   */
+  same(partDefaults.slice(3).map(function (item) { return item.label; }),
+    ['身体', '大腿', '小腿', '脚', '胸部', '屁股', '尾巴'],
+    'the new parts come after 身体 and before 尾巴, labelled as the operator named them');
+  eq(partDefaults.every(function (item) {
+    return item.enabled === true && item.emotions === undefined && item.match.length === 0
+      && item.emotion.emotions.length === 0 && item.speech.lines.length === 0 && item.speech.prompt === '';
+  }), true,
+  'each silent, structureless and with an EMPTY 碎碎念 box by default — the shipped voice is not stored as if the user wrote it');
+  eq(core.partSpeechLines(partDefaults[7]).join('/'), '变态！/大色狼！',
+    'while 胸部 answers a press with its shipped lines');
+  /**
+   * …and only while the pet is speaking from the BUILT-IN source. The shipped table IS the built-in source, so the
+   * same `tableAllowed` switch that turns the state table off (operator, 2026-10-11) turns this one off too — the
+   * second half of 「如果设置了AI碎碎念，就停止输出内置的碎碎念」, which the fortieth pass left out because these
+   * lines did not exist yet.
+   */
+  eq(core.partSpeechLines(partDefaults[7], false).length, 0,
+    'and says nothing from the shipped table once the source is not 内置短语');
+  eq(core.partSpeechPrompt(partDefaults[8]), '被主人摸到屁股了，必须要傲娇的回骂这个摸人家屁股的变态主人才行。',
+    'and 屁股 has a shipped instruction for the model');
+  eq(core.partSpeechLines(partDefaults[3]).length + core.partSpeechPrompt(partDefaults[3]).length, 0,
+    'a shipped part with no table entry of its own still answers nothing at all');
+  // The user's own box wins over every shipped one — the operator's own condition: "如果输入了，则以输入的为准".
+  const chestOwn = core.cleanPartSpeech({ lines: ['别碰'], prompt: '我自己的提示词' });
+  eq(core.partSpeechLines({ region: 'chest', speech: chestOwn }).join(''), '别碰',
+    'and a user box replaces the shipped lines');
+  eq(core.partSpeechPrompt({ region: 'chest', speech: chestOwn }), '我自己的提示词',
+    'as well as the shipped instruction');
+
+  /**
+   * The default REGION of a name is a heuristic, and the settings page says so. `null` means "this name matched
+   * nothing" and is kept apart from `'body'`, because `Spine` IS the body while `LiuHai` is a name the table has
+   * never seen — the operator's 蓝色小肥鱼 has 34 head structures (刘海/呆毛/发鬓/耳朵) and a 尾巴 in exactly that
+   * state, which is what a user part is FOR.
+   */
+  eq(core.structureRegionOf('J_Bip_C_Head'), 'head', 'a VRoid head bone is a head');
+  eq(core.structureRegionOf('J_Adj_L_FaceEye'), 'eye', 'and an eye bone an eye, not a head');
+  eq(core.structureRegionOf('Hand.L'), 'hand', 'an MMD hand is a hand');
+  eq(core.structureRegionOf('左腕'), 'hand', 'and so is its Japanese name');
+  eq(core.structureRegionOf('TwinTail.A.001.L'), 'tail', 'a twintail matches tail, for better or worse');
+  /**
+   * The 大腿/小腿/脚/胸部/屁股 rows (operator, 2026-10-12), and the ORDER RULE they stated twice: 「这里 leg 的存在，
+   * 一定优先匹配完 upper leg/upperleg 之类大腿部位，才能把剩下的匹配到 leg」. The words a MODEL file uses
+   * (`J_Bip_L_UpperLeg`, `LeftLeg`, `bust`) matter more than the words a person would type, so both are asserted.
+   */
+  eq(core.structureRegionOf('J_Bip_L_UpperLeg'), 'upperLeg', 'a VRoid thigh bone is a 大腿');
+  eq(core.structureRegionOf('upperleg'), 'upperLeg', 'and so is the word with no separator in it');
+  eq(core.structureRegionOf('Upper_Leg'), 'upperLeg', 'and with one');
+  eq(core.structureRegionOf('thigh'), 'upperLeg', 'with the anatomical name as well');
+  eq(core.structureRegionOf('datui'), 'upperLeg', 'and the pinyin the operator uses for it');
+  eq(core.structureRegionOf('J_Bip_L_LowerLeg'), 'lowerLeg',
+    'the lower leg is the LOWER one even though upperLeg contains the same three letters');
+  eq(core.structureRegionOf('LeftLeg'), 'lowerLeg', 'and a bare leg is what is left for it');
+  eq(core.structureRegionOf('xiaotui'), 'lowerLeg', 'as is the pinyin for 小腿');
+  eq(core.structureRegionOf('J_Bip_L_Foot'), 'foot', 'a foot bone is a 脚');
+  eq(core.structureRegionOf('feet'), 'foot', 'the plural too');
+  eq(core.structureRegionOf('ashi'), 'foot', 'and the operator\'s own word for it');
+  eq(core.structureRegionOf('J_Bip_C_Chest'), 'chest', 'a chest bone is a 胸部');
+  eq(core.structureRegionOf('bust'), 'chest',
+    'and the mesh 蓝色小肥鱼 calls bust, which nothing used to claim at all');
+  eq(core.structureRegionOf('rufang'), 'chest', 'with the operator\'s word for it');
+  eq(core.structureRegionOf('Hips'), 'butt', 'hips are a 屁股');
+  eq(core.structureRegionOf('pigu'), 'butt', 'and so is the pinyin');
+  eq(core.structureRegionOf('neiku'), 'butt', 'as is the underwear a mesh may be named after');
+  eq(core.structureRegionOf('尻尾'), 'tail', 'while 尻尾 is a TAIL, caught by the row above 屁股');
+  eq(core.structureRegionOf('尻'), 'butt', 'leaving a bare 尻 for the bottom');
+  eq(core.structureRegionOf('QunZi'), null, 'and a skirt still matches nothing, which is what a user part is for');
+  eq(core.structureRegionOf('LiuHai.L.002'), null, 'while a pinyin name matches nothing at all');
+  eq(core.structureRegionOf('Spine'), null, 'and neither does a bone the body happens to contain');
+  eq(core.structureRegionOf(''), null, 'with an empty name answering nothing rather than body');
+  /**
+   * And a shipped row is what an unclaimed name FALLS TO: `bust` used to land on 身体 and is a 胸部 now, while a
+   * name the table still has not seen keeps falling to body — the fallback that leaves a fresh profile behaving
+   * as it always did.
+   */
+  const shippedOnly = core.cleanPreferences({});
+  eq(core.partItemFor(shippedOnly, 'bust', core.structureRegionOf('bust')).id, 'chest',
+    'the mesh named bust is answered by the shipped 胸部 row');
+  eq(core.partItemFor(shippedOnly, 'J_Bip_L_LowerLeg', core.structureRegionOf('J_Bip_L_LowerLeg')).id, 'lowerLeg',
+    'a lower leg bone by the 小腿 row');
+  eq(core.partItemFor(shippedOnly, 'LiuHai.L.002', core.structureRegionOf('LiuHai.L.002')).id, 'body',
+    'and a name the table has never seen still falls to 身体');
+
+  const wavePart = core.cleanPreferences({
+    parts: {
+      // `seeded` says this profile has been offered every shipped region, so the migration of 2026-10-12 has
+      // nothing to insert: this fixture is about the USER's own rows surviving a round trip.
+      seeded: core.STRUCTURE_REGIONS,
+      items: [
+        { id: 'p1', label: '刘海', match: ['LiuHai'], emotion: { emotions: ['happy'], holdSeconds: 3 }, speech: { lines: ['别摸刘海', '刘海乱了'], prompt: '被摸到刘海时说一句' } },
+        { id: 'p2', label: '唯一', match: [{ name: 'LiuHai.L', exact: true }] },
+        { id: 'eye', label: '眼睛', region: 'eye', match: [], emotion: { emotions: ['surprised'] } },
+        { id: 'body', label: '身体', region: 'body' },
+      ],
+    },
+  });
+  const wave = wavePart.parts.items;
+  eq(wave.length, 4, 'the parts a user wrote are what comes back, in the order they are shown');
+  eq(wave[0].label, '刘海', 'with the label they gave it');
+  same(wave[0].speech.lines, ['别摸刘海', '刘海乱了'], 'and the lines it says, one per line');
+  eq(wave[0].speech.prompt, '被摸到刘海时说一句', 'and the prompt an AI line is generated from');
+  eq(wave[0].region, null, 'a user part has no default region: it is matched by the structures it names');
+  same(wave[0].match, [{ name: 'LiuHai', exact: false }], 'and a bare name is a PREFIX rule');
+  same(wave[1].match, [{ name: 'LiuHai.L', exact: true }], 'while an exact one stays exact');
+  same(core.cleanPartStructures(['a', 'a', 'b', { name: 'a', exact: true }]),
+    [{ name: 'a', exact: false }, { name: 'b', exact: false }, { name: 'a', exact: true }],
+    'a duplicate collapses, but the same name in the other MODE is a different rule and is kept');
+  same(core.cleanPartStructures(['x'.repeat(300)]), [{ name: 'x'.repeat(core.PARTS_LIMITS.maxStructureLength), exact: false }],
+    'and a structure name is capped rather than stored whole');
+
+  /**
+   * The matching order IS the contract: explicit structures first (in list order, so a structure two parts claim
+   * belongs to the one higher up), then the shipped region row, then the body row.
+   */
+  eq(core.partItemFor(wavePart, 'LiuHai.L.002', 'head').id, 'p1',
+    'a prefix entry claims every structure under it, even one the heuristic calls a head');
+  eq(core.partItemFor(wavePart, 'LiuHai.L', 'head').id, 'p1',
+    'and it wins over the exact entry BELOW it, because the list order is the priority');
+  eq(core.partItemFor(core.cleanPreferences({
+    parts: { items: [{ id: 'p1', label: '唯一', match: [{ name: 'LiuHai.L', exact: true }] }, { id: 'p2', label: '前缀', match: ['LiuHai'] }] },
+  }), 'LiuHai.L.002', 'head').id, 'p2', 'while an exact entry never claims a child');
+  eq(core.partItemFor(wavePart, 'J_Adj_L_FaceEye', 'eye').id, 'eye',
+    'a structure no user part claims falls to the shipped row for its region');
+  eq(core.partItemFor(wavePart, 'WeiBa.002', null).id, 'body',
+    'and one whose name matches nothing falls to the body row');
+  eq(core.partItemFor(core.cleanPreferences({ parts: { items: [] } }), 'head', 'head'), null,
+    'a user who deleted every part gets NO part, rather than an invented one');
+  eq(core.partItemFor(core.cleanPreferences({
+    parts: { items: [{ id: 'p1', label: '关掉的', enabled: false, match: ['LiuHai'] }, { id: 'body', region: 'body' }] },
+  }), 'LiuHai', 'head').id, 'body', 'and a switched-off part does not claim its structures');
+
+  /**
+   * The LEGACY per-region emotion rows migrate into the shipped parts.
+   *
+   * That table was the previous shape of this feature (2026-10-11), and a profile that used it must not lose the
+   * reactions it set up — which is exactly what the operator had in the running app.
+   */
+  const migrated = core.cleanPreferences({
+    expressions: { emotion: { parts: { eye: { emotions: ['happy'], holdSeconds: 4 } } } },
+  }).parts.items;
+  same(migrated[0].emotion.emotions, ['happy'], 'an old per-region row lands on the part for that region');
+  eq(migrated[0].emotion.holdSeconds, 4, 'with its duration');
+  // …and an item that DOES configure its own emotion wins over the legacy row, rather than being overwritten.
+  const migratedBoth = core.cleanPreferences({
+    parts: { items: [{ id: 'eye', region: 'eye', emotion: { emotions: ['angry'] } }] },
+    expressions: { emotion: { parts: { eye: { emotions: ['happy'] } } } },
+  }).parts.items;
+  same(migratedBoth[0].emotion.emotions, ['angry'], 'while a new-shape row is not overwritten by the old one');
+
+  /**
+   * And a row the shipped table GAINED reaches a profile that was written before it existed (2026-10-12).
+   *
+   * A stored list is authoritative — that is what makes a deleted row stay deleted — so without this the five new
+   * rows would exist only on a brand-new profile, which is not what "增加大腿/小腿/脚/胸部/屁股的部位" asked for. The
+   * operator's own list is the case below: the five rows of the previous table, in their old order.
+   */
+  const row = function (id, label, region) { return { id: id, label: label, region: region }; };
+  const beforeFive = core.cleanPreferences({
+    parts: {
+      items: [row('eye', '眼睛', 'eye'), row('head', '头', 'head'), row('hand', '手 / 手臂', 'hand'),
+        row('body', '身体', 'body'), row('tail', '尾巴', 'tail')],
+    },
+  });
+  same(beforeFive.parts.items.map(function (item) { return item.id; }),
+    ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+    'the five new rows are INSERTED into a stored list rather than appended');
+  same(beforeFive.parts.items.map(function (item) { return item.label; }),
+    ['眼睛', '头', '手 / 手臂', '身体', '大腿', '小腿', '脚', '胸部', '屁股', '尾巴'],
+    'between 身体 and 尾巴, which is the order the operator asked for');
+  same(beforeFive.parts.seeded,
+    ['eye', 'head', 'hand', 'body', 'tail', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt'],
+    'with every region recorded as OFFERED, so a second clean has nothing left to add');
+  eq(core.cleanPreferences(beforeFive).parts.items.length, beforeFive.parts.items.length,
+    'which is what makes the migration run ONCE');
+  // …and a row this profile had already DELETED is not resurrected by the new ones arriving.
+  const afterDelete = core.cleanPreferences({
+    parts: { items: [row('eye', '眼睛', 'eye'), row('head', '头', 'head'), row('body', '身体', 'body'), row('tail', '尾巴', 'tail')] },
+  });
+  same(afterDelete.parts.items.map(function (item) { return item.id; }),
+    ['eye', 'head', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+    'while a row this profile had already deleted (手) does NOT come back with them');
+  // An EMPTY list is the user's answer — every row deleted — and stays empty, exactly as it always did.
+  eq(core.cleanPreferences({ parts: { items: [] } }).parts.items.length, 0,
+    'a profile with no parts at all is offered nothing, the new rows included');
+  // A row the user deleted must not come back through an EDIT either, which is why `seeded` rides with the patch.
+  const edited = core.cleanPreferences({
+    parts: { items: [row('eye', '眼睛', 'eye'), row('tail', '尾巴', 'tail')] },
+  });
+  core.removePartItem(edited, 'tail');
+  same(edited.parts.items.map(function (item) { return item.id; }),
+    ['eye', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt'],
+    'a removed row stays removed while the new rows stay');
+  // And a user's own row keeps its place: only region rows are ordered by the shipped table.
+  same(core.cleanPreferences({
+    parts: { items: [row('eye', '眼睛', 'eye'), { id: 'p1', label: '刘海', match: ['LiuHai'] }, row('tail', '尾巴', 'tail')] },
+  }).parts.items.map(function (item) { return item.id; }),
+  ['eye', 'p1', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+  'while a hand-written part is never moved by the seeding');
+
+  const partsTarget = core.cleanPreferences({});
+  const added = core.addPartItem(partsTarget, '耳朵');
+  eq(added.label, '耳朵', 'the settings page can add a part');
+  eq(partsTarget.parts.items.length, core.STRUCTURE_REGIONS.length + 1,
+    'which joins the shipped ones rather than replacing them');
+  same(core.setPartItem(partsTarget, added.id, { match: ['ErDuo'], label: '耳朵和呆毛' }).match,
+    [{ name: 'ErDuo', exact: false }], 'and give it structures');
+  eq(core.setPartItem(partsTarget, added.id, { label: '耳朵和呆毛' }).label, '耳朵和呆毛',
+    'and rename it, keeping the structures it already had');
+  same(core.setPartEmotion(partsTarget, added.id, { emotions: ['happy'], holdSeconds: 2 }).emotion.emotions, ['happy'],
+    'a part row is written through setPartEmotion');
+  eq(core.setPartEmotion(partsTarget, 'nonsense', { emotions: ['happy'] }), null,
+    'which refuses a part that does not exist');
+  eq(core.setPartItem(partsTarget, added.id, { speech: { lines: ['别摸耳朵'] } }).speech.lines[0], '别摸耳朵',
+    'and its 碎碎念 box is written through setPartItem');
+  eq(core.setPartItem(partsTarget, added.id, { speech: { lines: ['别摸耳朵'] } }).speech.prompt, '',
+    'without dropping the other half of the box');
+  eq(core.removePartItem(partsTarget, added.id), true, 'and a part can be removed');
+  eq(partsTarget.parts.items.length, core.STRUCTURE_REGIONS.length, 'leaving the rest alone');
+  eq(core.removePartItem(partsTarget, 'nonsense'), false, 'while removing one that is not there says so');
+  // A shipped region row is the user's to delete: a model whose head is called something else may want only its
+  // own parts, and "no reaction anywhere" is a legitimate thing to ask for.
+  eq(core.removePartItem(partsTarget, 'head'), true, 'including a shipped region row');
+  eq(partsTarget.parts.items.some(function (item) { return item.id === 'head'; }), false, 'which stays gone');
+
+  const manyParts = [];
+  for (let i = 0; i < core.PARTS_LIMITS.maxItems + 5; i += 1) manyParts.push({ id: 'p' + i, label: 'x' + i });
+  eq(core.cleanPreferences({ parts: { items: manyParts } }).parts.items.length, core.PARTS_LIMITS.maxItems,
+    'the number of parts is capped, because this is a settings list a person reads');
+  const noId = { parts: { seeded: core.STRUCTURE_REGIONS, items: [{ label: 'no id' }] } };
+  const badId = { parts: { seeded: core.STRUCTURE_REGIONS, items: [{ id: 'x!', label: 'bad id' }] } };
+  same(core.cleanPreferences(noId).parts.items.map(function (item) { return item.id; }),
+    ['p0'], 'an item without a usable id is given one rather than dropped');
+  eq(core.cleanPreferences(badId).parts.items[0].id, 'p0',
+    'and an id that is not a plain key is replaced, not trusted');
+
+  eq(core.PRESS_LIMITS.moveThreshold, 4, 'a press may wander four pixels and still be a click');
+  eq(core.PRESS_LIMITS.holdSeconds, 0.6, 'and has to last six tenths of a second to become a long press');
+  eq(core.PRESS_LIMITS.reactGapSeconds, 3, 'while being touched twice in three seconds speaks once');
+
+  const pinned = core.cleanPreferences({
+    expressions: { weights: { blink: 0, happy: 1.4, '': 0.4, bad: 'x', ['n'.repeat(80)]: 1 } },
+  }).expressions.weights;
+  same(pinned, { blink: 0, happy: 1 },
+    'only usable names are kept, and a weight is clamped into 0..1');
+  eq(core.expressionWeightFor(core.cleanPreferences({ expressions: { weights: { blink: 0 } } }), 'blink'), 0,
+    'a pinned ZERO is an answer, not an absence');
+  eq(core.expressionWeightFor(core.cleanPreferences({}), 'blink'), null,
+    'and an unpinned name asks the behaviour instead');
+
+  const swapped = core.cleanPreferences({ expressions: { blink: { minSeconds: 30, maxSeconds: 5 } } }).expressions.blink;
+  eq(swapped.minSeconds, 5, 'an inverted blink range is ordered rather than collapsed');
+  eq(swapped.maxSeconds, 30, 'with both numbers kept');
+  eq(core.cleanPreferences({ expressions: { blink: { enabled: false } } }).expressions.blink.enabled, false,
+    'and the blink switch survives cleaning');
+  const clampedEmotion = core.cleanPreferences({
+    expressions: { emotion: { idleMinSeconds: -5, idleMaxSeconds: 99999, idle: false } },
+  }).expressions.emotion;
+  eq(clampedEmotion.idleMinSeconds, core.EMOTION_LIMITS.minSeconds, 'the idle interval is clamped at the bottom');
+  eq(clampedEmotion.idleMaxSeconds, core.EMOTION_LIMITS.maxSeconds, 'and at the top');
+  // An older settings file only had these three fields; folding them into the rows is what keeps a stored
+  // preference working instead of silently resetting to 'react to everything'.
+  eq(clampedEmotion.triggers.idle.enabled, false, 'the old idle switch folds into the idle row');
+  eq(clampedEmotion.triggers.drag.enabled, true, 'while an absent onInteract leaves the drag row on');
+
+  const legacyHold = core.cleanPreferences({ expressions: { emotion: { holdSeconds: 5 } } }).expressions.emotion;
+  eq(legacyHold.triggers.click.holdSeconds, 5, 'and an old shared duration seeds every row');
+  eq(legacyHold.triggers.idle.holdSeconds, 5, 'including the idle one');
+
+  const clampedRow = core.cleanPreferences({
+    expressions: {
+      emotion: {
+        triggers: {
+          idle: { holdSeconds: 999, emotions: ['happy', 'happy', '', 'angry', 42] },
+          drag: { holdSeconds: -3 },
+          nonsense: { enabled: true },
+        },
+      },
+    },
+  }).expressions.emotion;
+  eq(clampedRow.triggers.idle.holdSeconds, core.EMOTION_LIMITS.maxHoldSeconds, 'a row duration is clamped');
+  same(clampedRow.triggers.idle.emotions, ['happy', 'angry'],
+    'a row keeps the model labels it was given, once each and only real strings');
+  eq(clampedRow.triggers.drag.holdSeconds, 0, 'and a negative duration becomes the hold value, 0');
+  same(Object.keys(clampedRow.triggers).sort(), ['click', 'drag', 'hold', 'idle'],
+    'a trigger nobody knows about is dropped rather than stored');
+  /**
+   * The same rules for a PART's emotion row, and the one thing it adds: the row is reached by the part's ID, so
+   * a hand-edited file cannot grow a row the settings page would never show.
+   */
+  const partedPrefs = core.cleanPreferences({
+    parts: {
+      seeded: core.STRUCTURE_REGIONS,
+      items: [
+        { id: 'eye', region: 'eye', emotion: { holdSeconds: 999, emotions: ['happy', 'happy', ''] } },
+        { id: 'head', region: 'head', emotion: { enabled: false } },
+        { id: 'gone', region: 'nonsense', emotion: { enabled: true, emotions: ['happy'] } },
+      ],
+    },
+  });
+  const partRows = partedPrefs.parts.items;
+  eq(partRows[0].emotion.holdSeconds, core.EMOTION_LIMITS.maxHoldSeconds, 'a part row clamps its duration too');
+  same(partRows[0].emotion.emotions, ['happy'], 'and keeps the labels it was given, once each');
+  eq(partRows[1].emotion.enabled, false, 'a part row can be switched off');
+  eq(partRows[2].region, null, 'while a region nothing knows is not stored as one');
+  eq(partRows.length, 3, 'and the list is exactly what the user wrote');
+
+  const prefs = core.cleanPreferences({});
+  core.setEmotionTrigger(prefs, 'click', { emotions: ['TiePen', 'happy'], holdSeconds: 0 });
+  same(prefs.expressions.emotion.triggers.click.emotions, ['TiePen', 'happy'],
+    'a row can name a CUSTOM expression the model declares, not just the VRM presets');
+  eq(prefs.expressions.emotion.triggers.click.holdSeconds, 0,
+    'and the duration 0 is stored as an instruction, not as absence');
+  eq(core.setEmotionTrigger(prefs, 'nonsense', { enabled: false }), null,
+    'an unknown trigger is refused');
+  core.setEmotionTrigger(prefs, 'drag', { emotions: ['angry', 'angry', 'sad', 'sad'] });
+  same(prefs.expressions.emotion.triggers.drag.emotions, ['angry', 'sad'], 'and a row never repeats a label');
+  // A patch that only names emotions must leave that row's duration alone, or moving a checkbox would
+  // quietly turn a reaction into a mood.
+  const beforePatch = prefs.expressions.emotion.triggers.click.holdSeconds;
+  core.setEmotionTrigger(prefs, 'click', { emotions: ['happy'] });
+  eq(prefs.expressions.emotion.triggers.click.holdSeconds, beforePatch,
+    'and naming emotions does not disturb the duration');
+  ok(core.BLINK_EXPRESSIONS.includes('blink') && core.MOUTH_EXPRESSIONS.length === 5,
+    'the behaviours name the VRM presets they drive, so the panel can say what a switch will try');
+  ok((core.BEHAVIOUR_EXPRESSIONS || []).indexOf('blink') !== -1
+    && (core.BEHAVIOUR_EXPRESSIONS || []).indexOf('aa') !== -1
+    && (core.BEHAVIOUR_EXPRESSIONS || []).indexOf('lookUp') !== -1,
+    'and the expressions other behaviours own are listed apart, so the emotion table cannot offer them');
+  ok(!('EMOTION_EXPRESSIONS' in core),
+    'there is no hardcoded mood vocabulary left: the labels come from the model file');
+
+  // ---- spring overrides ----------------------------------------------------
+  // Per model, per chain, per FIELD: an absent field means "the number the file declares", which is
+  // what the UI calls the default. A missing field must therefore stay missing.
+  same(core.cleanPreferences({}).springs, {}, 'no spring is overridden until the user moves a slider');
+  const withSprings = core.cleanPreferences({
+    springs: {
+      m2: { DaiMao: { stiffness: 9, dragForce: 0.7 }, WeiBa: {}, Empty: { nonsense: 1 } },
+      '': { x: { stiffness: 1 } },
+    },
+  });
+  same(withSprings.springs, { m2: { DaiMao: { stiffness: core.SPRING_LIMITS.stiffness.max, dragForce: 0.7 } } },
+    'overrides are clamped, empty groups and unusable ids are dropped');
+  eq(core.springOverrideFor(withSprings, 'm2', 'WeiBa'), null,
+    'a chain with no override reports null, which is what "use the default" means');
+  eq(core.springOverrideFor(withSprings, 'm2', 'DaiMao').stiffness, core.SPRING_LIMITS.stiffness.max,
+    'and a chain that has one reports it');
+  eq(core.springOverrideFor(withSprings, 'other', 'DaiMao'), null, 'overrides do not leak between models');
+  eq(core.springOverrideFor(withSprings, 'm2', 'DaiMao').dragForce !== undefined, true,
+    'a field the user did not touch is simply absent, so it keeps the file value');
+  eq(core.springOverrideFor(withSprings, 'm2', 'DaiMao').gravityPower, undefined,
+    'exactly: gravity was never pinned to whatever the panel happened to show');
+}
+
+// ---------------------------------------------------------------------------
+group('6. state machine precedence');
+// ---------------------------------------------------------------------------
+{
+  let clock = 1_000_000;
+  const now = () => clock;
+  const machine = new core.PetMachine(now, 120000);
+
+  const onlineIdle = { available: true, running: false, pending: false };
+  const offline = { available: false, running: false, pending: false };
+  const working = { available: true, running: true, pending: false };
+  const waiting = { available: true, running: true, pending: true };
+
+  eq(machine.resolve(onlineIdle), 'resting', 'idle online pet rests');
+  eq(machine.resolve(working), 'working', 'a running turn works');
+  eq(machine.resolve(waiting), 'waiting', 'a pending approval outranks working');
+  eq(machine.resolve(offline), 'offline', 'a disconnected host is offline');
+
+  /**
+   * A completion WAITS OUT its settle window — and a new turn inside that window cancels it.
+   *
+   * Operator, 2026-10-11: "经常会完成一个子任务就清零显示任务达成，然后马上重新开始了，但是整个任务并没做完". A TASK is not
+   * a turn: automatic continuation, a queued follow-up or a steering message ends one turn and starts the next within
+   * a second, so a `turn/end` is only a completion if nothing starts again — for the same session — in
+   * `COMPLETION_SETTLE_MS`. Driven through the same boundary events the client actually pumps.
+   */
+  machine.boundary({ type: 'turn/start', sessionId: 's', seq: 1, reason: 'completed' });
+  eq(machine.resolve(working), 'working', 'a turn start is just work');
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 2, reason: 'completed' });
+  eq(machine.resolve(onlineIdle), 'resting',
+    'a completion is WITHHELD while its settle window runs, rather than flashing 任务达成 between rounds');
+  // …and the next round cancels it outright: the task is not over.
+  machine.boundary({ type: 'turn/start', sessionId: 's', seq: 3, reason: 'completed' });
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(machine.resolve(working), 'working', 'and a turn starting inside that window CANCELS it');
+  eq(machine.notice, undefined, 'so there is no notice left to appear later');
+  eq(machine.pendingNotice, undefined, 'and nothing is still waiting');
+
+  // A completion nothing follows shows 任务完成 once the window has passed.
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 4, reason: 'completed' });
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(machine.resolve(onlineIdle), 'done', 'a fresh completion shows as done once nothing started again');
+  clock += core.NOTICE_WINDOW_MS + 1;
+  eq(machine.resolve(onlineIdle), 'resting', 'a stale completion stops showing as done');
+
+  /**
+   * 任务完成 lasts as long as the 状态 settings ask — with the notice window as the FLOOR.
+   *
+   * The operator's report was that the 持续时间 field "只可能把它缩短": the state was gated by
+   * `NOTICE_WINDOW_MS` alone, so a 30-second 任务达成 line vanished after 4.2 s and the pet went back to
+   * 静息态. `doneWindowMs` reads that one number out of the CURRENT preferences (through `preferencesOf`,
+   * which is what the widget wires up), and everything shorter than the window is left alone because the
+   * window is also the deferral budget that keeps a completion arriving mid-drag from being lost.
+   */
+  {
+    eq(core.doneWindowMs(null), core.NOTICE_WINDOW_MS, 'with no preferences at all the shipped window stands');
+    eq(core.doneWindowMs(core.cleanPreferences({})), core.NOTICE_WINDOW_MS,
+      'and an unconfigured 任务完成 line keeps it too');
+    eq(core.doneWindowMs(core.cleanPreferences({ status: { done: { seconds: 30 } } })), 30000,
+      'a configured 持续时间 becomes the window');
+    eq(core.doneWindowMs(core.cleanPreferences({ status: { done: { seconds: 2 } } })), core.NOTICE_WINDOW_MS,
+      'and a duration shorter than the notice window cannot cut it below the floor');
+    eq(core.doneWindowMs(core.cleanPreferences({ status: { done: { text: '' } } })), core.NOTICE_WINDOW_MS,
+      'an EMPTY done line still holds the state: the state is the turn finishing, not the words');
+
+    let extendedClock = 9_000_000;
+    const extended = new core.PetMachine(() => extendedClock, 300000);
+    const extendedPrefs = core.cleanPreferences({ status: { done: { seconds: 30 } } });
+    extended.preferencesOf = () => extendedPrefs;
+    extended.boundary({ type: 'turn/end', sessionId: 's', seq: 1, reason: 'completed' });
+    extendedClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(extended.resolve(onlineIdle), 'done', 'the extended machine enters 任务完成');
+    extendedClock += core.NOTICE_WINDOW_MS + 1;
+    eq(extended.resolve(onlineIdle), 'done', 'and is STILL there one notice window later');
+    eq(core.statusFor(extendedPrefs, 'done', extendedClock - core.NOTICE_WINDOW_MS - 1, extendedClock).text,
+      '任务达成', 'with its own line up for the whole configured time');
+    extendedClock += 30000;
+    eq(extended.resolve(onlineIdle), 'resting', 'and it lets go once the configured seconds are up');
+
+    // The readout is per frame, so an edit made while the pet runs applies without a restart.
+    let liveClock = 8_000_000;
+    const live = new core.PetMachine(() => liveClock, 300000);
+    const livePrefs = core.cleanPreferences({});
+    live.preferencesOf = () => livePrefs;
+    live.boundary({ type: 'turn/end', sessionId: 's', seq: 1, reason: 'completed' });
+    liveClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(live.resolve(onlineIdle), 'done', 'a completion with no configured duration shows done');
+    livePrefs.status = core.setStatus(livePrefs, 'done', 'seconds', 60);
+    liveClock += core.NOTICE_WINDOW_MS + 1;
+    eq(live.resolve(onlineIdle), 'done',
+      'and a 持续时间 typed while it is up extends it on the very next frame, with no restart');
+  }
+
+  // A failure outranks a nearby completion and latches until the next turn.
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 2, reason: 'error' });
+  eq(machine.resolve(onlineIdle), 'error', 'a failure shows as error');
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 3, reason: 'completed' });
+  eq(machine.resolve(onlineIdle), 'error', 'a success does not erase a latched failure');
+  clock += 10 * core.NOTICE_WINDOW_MS;
+  eq(machine.resolve(onlineIdle), 'error', 'a latched failure outlives the notice window');
+  machine.boundary({ type: 'turn/start', sessionId: 's', seq: 4 });
+  eq(machine.resolve(working), 'working', 'a new turn clears the failure and works again');
+  machine.clear();
+
+  // A subagent boundary must not reach the pet at all.
+  machine.boundary({ type: 'turn/end', sessionId: 'child', seq: 9, reason: 'error', isSubagent: true });
+  eq(machine.notice, undefined, 'a subagent boundary is ignored');
+  /**
+   * `boundary(event)` alone still re-resolves the state — the completion just waits out its settle window first.
+   *
+   * The call WITHOUT a snapshot resolves against the last one, so this is also the shape the client uses: the frame
+   * arrives, the state is re-decided on the spot, and a completion that nothing follows appears a few seconds later.
+   */
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 10, reason: 'completed' });
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(machine.boundary(onlineIdle), 'done', 'boundary(snapshot) alone re-resolves the state');
+
+  // Greeting outranks offline and working but not an interaction.
+  machine.greet();
+  eq(machine.resolve(offline), 'greeting', 'a click greeting outranks offline');
+  machine.setInteraction('held');
+  eq(machine.resolve(onlineIdle), 'held', 'being held outranks a greeting');
+  machine.setInteraction('falling');
+  eq(machine.resolve(working), 'falling', 'falling outranks working');
+  machine.setInteraction('landing');
+  eq(machine.resolve(waiting), 'landing', 'landing outranks waiting');
+  machine.setInteraction(null);
+  machine.greetingUntil = 0;
+
+  // Sleeping after the nap timeout, and waking on activity.
+  clock += 120001;
+  eq(machine.resolve(onlineIdle), 'sleeping', 'an idle pet eventually sleeps');
+  eq(machine.resolve(working), 'working', 'a busy session wakes the pet');
+  eq(machine.resolve(onlineIdle), 'resting', 'and it stays awake shortly after');
+}
+
+// ---------------------------------------------------------------------------
+group('6b. the waiting latch, the pending kind, and coming back to DSH');
+// ---------------------------------------------------------------------------
+{
+  let clock = 5_000_000;
+  const machine = new core.PetMachine(() => clock, 300000);
+  const idle = { available: true, running: false, pending: false };
+  const question = { available: true, running: true, pending: true, pendingKind: 'question' };
+  const approval = { available: true, running: true, pending: true, pendingKind: 'approval' };
+
+  eq(machine.resolve(approval), 'waiting', 'a pending approval waits for confirmation');
+  eq(machine.pendingKind, 'approval', 'and its kind travels with it, so 需要你的授权 can be told apart');
+  eq(machine.resolve(question), 'waiting', 'a pending question waits too');
+  eq(machine.pendingKind, 'question', 'with its own kind');
+
+  /**
+   * The operator's rule, verbatim: "等待确认状态必须完成确认项目后才可以跳转出来". Nothing may move the pet out of
+   * 等待确认 while the interaction is still unanswered — and the two things that would otherwise do it are
+   * exactly the two the cascade normally ranks HIGHER: a failure and a completion.
+   */
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 1, reason: 'error' });
+  eq(machine.resolve(question), 'waiting', 'a failure while a question is pending does not leave 等待确认');
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 2, reason: 'completed' });
+  eq(machine.resolve(approval), 'waiting', 'nor does a completion');
+  machine.setInteraction('held');
+  eq(machine.resolve(question), 'held', 'a drag still owns the pose, because that is the user’s own hand');
+  machine.setInteraction(null);
+
+  // Answered: the latch releases, and the same frame's cascade decides where to go — here, the failure that
+  // was waiting behind it, because a latched error outlives the notice window.
+  eq(machine.resolve(idle), 'error', 'answering releases the latch, and the failure behind it shows');
+  eq(machine.pendingKind, null, 'and the pending kind is dropped with the state');
+  machine.clear();
+  eq(machine.resolve(idle), 'resting', 'and the pet rests once the failure is dismissed');
+
+  // Coming back to DSH ends a 任务完成 or 出错 prompt: "用户切换回dsh为焦点后恢复到空闲状态".
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 3, reason: 'completed' });
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(machine.resolve(idle), 'done', 'a completion shows while the user is away');
+  machine.setFocus(false);
+  eq(machine.resolve(idle), 'done', 'losing focus does not clear it');
+  eq(machine.setFocus(true), 'resting', 'regaining focus returns the pet to the idle state');
+  eq(machine.notice, undefined, 'and the notice is gone, not merely hidden');
+
+  // The same for a latched failure — the other case the operator named.
+  machine.boundary({ type: 'turn/end', sessionId: 's', seq: 4, reason: 'error' });
+  eq(machine.resolve(idle), 'error', 'a failure latches');
+  machine.setFocus(false);
+  machine.setFocus(true);
+  eq(machine.state, 'resting', 'and coming back to DSH clears that too');
+
+  /**
+   * But NOT 等待确认: an unanswered question is still unanswered whether or not the window has focus, and
+   * clicking back into DSH is exactly how the user reaches the prompt they are being asked about.
+   */
+  eq(machine.resolve(question), 'waiting', 'a question arrives');
+  machine.setFocus(false);
+  machine.setFocus(true);
+  eq(machine.state, 'waiting', 'coming back to DSH does not dismiss a pending question');
+  eq(machine.resolve(idle), 'resting', 'only answering it does');
+}
+
+// ---------------------------------------------------------------------------
+group('6b2. a finished turn waits for the user to come back to ITS session');
+// ---------------------------------------------------------------------------
+/**
+ * The operator's rule, verbatim (2026-10-11): "任务达成…一直持续直到用户切换回已经达成任务/失败的会话中；同理，
+ * 等待确认要让用户回答完问题/确认完权限后才消失."
+ *
+ * Driven through the REAL chain — `SessionAggregate` (which knows DSH's session statuses) → snapshot → machine —
+ * rather than by poking the machine, because the two halves have to agree about which session the notice is
+ * ABOUT: the aggregate writes `notice.sessionId`, the snapshot carries `currentSessionId`, and the machine is
+ * the one that decides the user has come back.
+ */
+{
+  let clock = 9_000_000;
+  const catalog = { phase: 'ready', byId: { A: {}, B: {} } };
+  const aggregate = new core.SessionAggregate(() => clock);
+  const machine = new core.PetMachine(() => clock, 300_000);
+  let holdPrefs = core.cleanPreferences({});
+  machine.preferencesOf = () => holdPrefs;
+  const statuses = new Map([['A', { running: true }], ['B', { running: true }]]);
+  /** One frame: install the world, then let the machine read the snapshot it produces. */
+  const frame = (currentSessionId) => {
+    aggregate.setInput({ catalog, statuses, connected: true, scope: 'global', currentSessionId });
+    return machine.resolve(aggregate.snapshot());
+  };
+
+  eq(frame('B'), 'working', 'the second session is busy, so the pet works');
+  // A finishes while the user is looking at B: the store edge writes the notice, and the machine WAITS IT OUT.
+  statuses.set('A', { running: false });
+  eq(frame('B'), 'working', 'A finishing is withheld while its settle window runs');
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(frame('B'), 'done',
+    'A finishing puts 任务达成 up once nothing started again, even though the user is in B');
+  eq(machine.notice && machine.notice.sessionId, 'A', 'and the notice remembers WHICH session finished');
+
+  clock += 60_000;
+  eq(frame('B'), 'done', 'a minute later it is still there: no window ends it');
+  clock += 3_600_000;
+  eq(frame('B'), 'done', 'nor an hour later — the user has not been back to A');
+  eq(frame('B'), 'done', 'and looking at B again does not acknowledge it');
+
+  /**
+   * The user switches to A: THAT is the acknowledgement.
+   *
+   * The pet then shows B's work, because B is busy — so the assertion that matters is the notice itself, and
+   * that is why it is checked on its own line rather than inferred from the state.
+   */
+  eq(frame('A'), 'working', 'switching to the session that finished acknowledges it');
+  eq(machine.notice, undefined, 'the notice is gone, not merely hidden');
+  eq(frame('B'), 'working', 'and it does not come back when the user moves on: B is busy again');
+  eq(frame('B'), 'working', 'nor on the frame after that — a dismissed notice stays dismissed');
+
+  /**
+   * The hold is a FLOOR, not an expiry: a duration the user raised means the line is guaranteed that long even
+   * when they are already in the session — which is how somebody asks for a longer look at it.
+   */
+  holdPrefs = core.cleanPreferences({ status: { done: { seconds: 30 } } });
+  clock += 1_000;
+  machine.boundary(aggregate.snapshot(), { type: 'turn/end', sessionId: 'A', seq: 7, reason: 'completed' });
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(frame('A'), 'done', 'a new completion in A shows while the user is right there');
+  clock += 10_000;
+  eq(frame('A'), 'done', 'and a raised 持续时间 holds it for at least that long');
+  clock += 21_000;
+  eq(frame('A'), 'working', 'after which being in the session clears it');
+  holdPrefs = core.cleanPreferences({});
+
+  /**
+   * 出错 takes the same road — the operator named both — with the latch it always had about which notice wins.
+   */
+  clock += 1_000;
+  machine.boundary(aggregate.snapshot(), { type: 'turn/end', sessionId: 'A', seq: 8, reason: 'error' });
+  eq(frame('B'), 'error', 'a failure in A shows while the user is in B');
+  clock += 600_000;
+  eq(frame('B'), 'error', 'and stays there, however long they take');
+  eq(frame('A'), 'working', 'until they are back in A too');
+
+  /**
+   * A turn somewhere ELSE must not erase it: work continuing in B is exactly the case the rule exists for.
+   */
+  clock += 1_000;
+  machine.boundary(aggregate.snapshot(), { type: 'turn/end', sessionId: 'A', seq: 9, reason: 'error' });
+  eq(frame('B'), 'error', 'an unacknowledged failure is up again');
+  machine.boundary(aggregate.snapshot(), { type: 'turn/start', sessionId: 'B', seq: 10 });
+  eq(machine.notice !== undefined, true, 'a turn starting in B does NOT erase A’s failure');
+  machine.boundary(aggregate.snapshot(), { type: 'turn/start', sessionId: 'A', seq: 11 });
+  eq(machine.notice, undefined, 'but a new turn in A supersedes its own notice');
+}
+
+// ---------------------------------------------------------------------------
+group('6b3. 等待确认 survives the clock, and so does the prompt it draws');
+// ---------------------------------------------------------------------------
+{
+  let clock = 12_000_000;
+  const machine = new core.PetMachine(() => clock, 300_000);
+  machine.preferencesOf = () => core.cleanPreferences({});
+  const pending = { available: true, running: true, pending: true, pendingKind: 'approval', currentSessionId: 'A' };
+  eq(machine.resolve(pending), 'waiting', 'a permission prompt puts the pet in 等待确认');
+  for (let i = 0; i < 120; i += 1) { clock += 60_000; machine.resolve(pending); }
+  eq(machine.state, 'waiting', 'two hours later it is STILL waiting: only the answer ends it');
+  const line = core.statusFor(core.cleanPreferences({}), 'waiting', clock, clock + 999_999);
+  eq(line !== null && line.text, '我有问题要问你',
+    'and the line it draws has not expired either, even though it is the state’s own longest-lived text');
+  eq(machine.resolve({ available: true, running: false, pending: false, currentSessionId: 'A' }), 'resting',
+    'answering it is what releases the pet');
+}
+
+// ---------------------------------------------------------------------------
+group('6c. the per-state status prompt');
+// ---------------------------------------------------------------------------
+{
+  const blank = core.cleanPreferences({});
+  same(core.STATUS_STATES, ['resting', 'working', 'waiting', 'done', 'error', 'offline'],
+    'the six states the user configures are the operator’s six, in order');
+  same(core.STATUS_STATES, core.MOTION_STATES,
+    'and the motion map is offered for exactly the same six, so the two halves cannot drift');
+
+  eq(core.statusLineFor(blank, 'working'), '深度求索中，用时 {duration} ···',
+    '工作态 ships DSH’s own running line, clock token and all');
+  eq(core.statusLineFor(blank, 'waiting'), '我有问题要问你', '等待确认 asks the question');
+  eq(core.statusLineFor(blank, 'done'), '任务达成', '任务完成 reports the completion');
+  eq(core.statusLineFor(blank, 'error'), '遇到问题了...', '出错 reports the failure');
+  eq(core.statusLineFor(blank, 'resting'), '', '空闲 says nothing by default');
+  eq(core.statusLineFor(blank, 'offline'), '', 'and so does 离线');
+  eq(core.statusEntryFor(blank, 'working').animation, 'shimmer',
+    '工作态 ships DSH’s own blue sweep, because that is the prompt the operator quoted');
+  eq(core.statusEntryFor(blank, 'done').animation, 'none',
+    'a completion is a message rather than a live indicator');
+  eq(core.statusEntryFor(blank, 'working').seconds, 0,
+    'and 0 seconds means "for as long as the state lasts"');
+
+  // ---- DSH's own running label, copied piece by piece ------------------------
+  //
+  // The operator asked for the app's line verbatim — "我要的是dsh内部的前面带着一个鲸鱼尾巴图标的'深度求索中，用时
+  // XX分XX秒 ···'" — so these are the app's rules, not this repository's taste: `formatRunDuration` in
+  // `dsh-client-ui-chat` emits whole seconds, minutes only from a full minute, hours only once there is one,
+  // and the clock is floored at one second (`Math.max(1e3, now - startTime)`).
+  eq(core.formatRunDuration(9000), '9秒', 'a nine-second turn reads 9秒');
+  eq(core.formatRunDuration(14 * 60000 + 46000), '14分46秒', 'the operator’s own screenshot: 14分46秒');
+  eq(core.formatRunDuration(59 * 1000), '59秒', 'under a minute there is no minutes part at all');
+  eq(core.formatRunDuration(60000), '1分0秒', 'a full minute gains one');
+  eq(core.formatRunDuration(3600000 + 2 * 60000 + 3000), '1小时2分3秒', 'and an hour gains an hours part');
+  eq(core.formatRunDuration(46000, 'en'), '46s', 'the units follow the language, as the app’s i18n does');
+
+  {
+    const now = 1_800_000_000_000;
+    const started = now - (14 * 60000 + 46000);
+    const line = core.statusFor(blank, 'working', started, now);
+    eq(line.text, '深度求索中，用时 14分46秒 ···', 'the prompt substitutes the live clock for the token');
+    eq(line.icon, true, 'and 工作中 wears DSH’s whale mark');
+    eq(core.statusFor(blank, 'waiting', now, now).icon, false,
+      'no other state wears it: the operator’s four lines are their own messages');
+    eq(core.statusFor(blank, 'working', now, now).text, '深度求索中，用时 1秒 ···',
+      'a turn that has just begun reads one second, never zero — the app floors it there');
+    eq(core.statusFor(blank, 'working', undefined, now).text, '深度求索中，用时 1秒 ···',
+      'and an unknowable start still substitutes rather than leaking the raw token');
+    // The clock is what makes the prompt change by itself: same state, one second later, new words.
+    eq(core.statusFor(blank, 'working', started, now + 1000).text, '深度求索中，用时 14分47秒 ···',
+      'the clock ticks by re-deriving the line, which is what the renderers re-key on');
+    // A line without the token is untouched, so a user’s own wording is still their own.
+    const ownLine = core.cleanPreferences({});
+    ownLine.status = core.setStatus(ownLine, 'working', 'text', '我在想…');
+    eq(core.statusFor(ownLine, 'working', started, now).text, '我在想…',
+      'a line the user wrote replaces DSH’s copy and carries no clock');
+  }
+
+  /**
+   * AND THE TURN CLOCK, which is DSH's own rule rather than the state's age.
+   *
+   * Operator, 2026-10-11, after being shown DSH's implementation: "完全照搬 DSH：逐轮、turn 关闭时不显示用时". DSH counts
+   * from the latest turn's `turn.start.time`, only while that turn is `open`; with it closed the label is the
+   * token-free 「深度求索中」; and a settled turn reports `turn.end.time - turn.start.time`. Read out of
+   * `@deepseek-ai/dsh-client-ui-chat/lib/client.js` (`RunningStatus`, `TurnProcessNodeView`).
+   */
+  {
+    const prefs = core.cleanPreferences({});
+    const t0 = 2_000_000_000_000;
+    // A turn that began four minutes ago, on a state that was entered seconds ago: the TURN is what is reported.
+    const turnStart = t0 - 4 * 60000;
+    eq(core.statusFor(prefs, 'working', t0 - 3000, t0, { startedAt: turnStart, endedAt: null }).text,
+      '深度求索中，用时 4分0秒 ···',
+      'an OPEN turn is counted from the turn’s own start, not from when the pet’s state changed');
+    eq(core.statusFor(prefs, 'done', t0, t0, { startedAt: turnStart, endedAt: t0 }).text,
+      '任务达成',
+      'and the settled notice shows its own line');
+    const settledLine = core.cleanPreferences({});
+    settledLine.status = core.setStatus(settledLine, 'done', 'text', '任务达成，用时 {duration}');
+    eq(core.statusFor(settledLine, 'done', t0, t0, { startedAt: turnStart, endedAt: t0 - 60000 }).text,
+      '任务达成，用时 3分0秒',
+      'a settled turn reports its OWN span — DSH’s 「用时 X」 row — not the time since it ended');
+    /**
+     * And with NO turn open, the clause goes: DSH ships two strings, and the token-free one is what it draws in the
+     * gap between the rounds of one task. The pet has one user-written line, so its clause is removed instead.
+     */
+    eq(core.statusFor(prefs, 'working', t0, t0, null).text, '深度求索中 ···',
+      'with no open turn the duration clause is DROPPED, which is DSH’s token-free 「深度求索中」');
+    /**
+     * …but the FALLBACK sentinel is a different answer: "no turn frames in this deployment, use the state's age".
+     *
+     * That is what keeps 用时 alive where the boundary stream is not wired — the live regression that this exists for.
+     */
+    eq(core.statusFor(prefs, 'working', t0 - 4 * 60000, t0, core.STATUS_CLOCK_FALLBACK).text,
+      '深度求索中，用时 4分0秒 ···',
+      'and the fallback sentinel measures from the state’s own entry time, so a stream-less pet still has a clock');
+    eq(core.statusFor(prefs, 'done', t0 - 30000, t0, core.STATUS_CLOCK_FALLBACK).text, '任务达成',
+      'which the notice states take as well, keeping their own line');
+    eq(core.statusFor(prefs, 'working', turnStart, t0).text, '深度求索中，用时 4分0秒 ···',
+      'while a caller that passes no clock at all keeps the older state-age behaviour');
+  }
+
+  /**
+   * `PetMachine.statusClock()`: which of those three answers the machine is in.
+   */
+  {
+    let clock = 3_000_000_000_000;
+    const machine = new core.PetMachine(() => clock, 300000);
+    const idle = { available: true, running: false, pending: false };
+    /**
+     * NO TURN EVER SEEN is not "no duration" — it is `'state'`, meaning "measure from the state's own age".
+     *
+     * This is the live regression of 2026-10-11: the boundary stream is an upgrade a plain-JavaScript plugin cannot
+     * count on, the running app was measured returning `clock: null` for ever, and the pet therefore showed NO 用时 at
+     * all — reported as "工作状态这下彻底不正常了，深度求索中的时间也没了". With no turn to be faithful to, the older clock is
+     * the honest answer.
+     */
+    eq(machine.statusClock(), core.STATUS_CLOCK_FALLBACK,
+      'a pet that has never seen a turn falls back to the STATE clock rather than to no duration');
+    machine.boundary({ type: 'turn/start', sessionId: 's', seq: 1, time: clock - 5000 });
+    const openClock = machine.statusClock();
+    ok(Boolean(openClock), 'an open turn reports a clock at all');
+    eq(openClock.startedAt, clock - 5000,
+      'with the START the frame carried, which is DSH’s own timestamp — not when the pet noticed');
+    eq(openClock.endedAt, null, 'and no end, because the turn is still open');
+    machine.boundary({ type: 'turn/end', sessionId: 's', seq: 2, time: clock, reason: 'completed' });
+    eq(machine.statusClock(), null,
+      'a closed turn reports NOTHING until its notice is up: that is the gap DSH draws without a duration');
+    clock += core.COMPLETION_SETTLE_MS + 1;
+    machine.resolve(idle);
+    eq(machine.state, 'done', 'and the notice arrives once the settle window has passed');
+    const settledClock = machine.statusClock();
+    ok(Boolean(settledClock), 'after which the closed turn reports a clock');
+    eq(settledClock.endedAt, clock - core.COMPLETION_SETTLE_MS - 1,
+      'with the END the turn/end frame carried, so the span is the turn’s own');
+    eq(settledClock.startedAt, clock - core.COMPLETION_SETTLE_MS - 1 - 5000,
+      'measured from the start that same frame pair reported');
+  }
+
+  // The label’s size comes from the pet’s box, which is the operator’s own prescription
+  // ("用窗口尺寸来计算大小而非模型放大倍率"): the box grows with the size preference and with the model, so the
+  // text does too, and the whale is sized in `em` so it follows without a second rule.
+  eq(core.statusPromptFontPx(387), 12.8, 'the default pet’s box gives the app’s own 12–13px label');
+  eq(core.statusPromptFontPx(774) > core.statusPromptFontPx(387), true,
+    'twice the box is a bigger label, which is what "文字没有随着模型变大" asked for');
+  eq(core.statusPromptFontPx(20), 10, 'and a tiny pet keeps a readable floor');
+  eq(core.statusPromptFontPx(0), 12, 'a box nobody has measured yet falls back to the default size');
+
+  // ---------------------------------------------------------------------------
+  // The prompt's own size control: a wheel ON THE TEXT corrects the size for ONE
+  // model and never touches the pet (the operator's "鼠标滚轮在提示文字上时，只缩放
+  // 状态提示文字（防止某些模型和提示文字不匹配）" and "记住每个模型提示文字大小的偏好").
+  // ---------------------------------------------------------------------------
+  {
+    // `statusScaleStep` returns the new MAP, not a preference object — that is the shape both surfaces assign
+    // (`preferences.statusScale = core.statusScaleStep(preferences, modelId, direction)`), so the helper here
+    // is the same assignment, and reading a size back goes through `statusScaleFor` as a caller would.
+    const blank = core.cleanPreferences({});
+    const withScale = (map) => ({ ...core.cleanPreferences({}), statusScale: map });
+    const step = (prefs, direction) => withScale(core.statusScaleStep(prefs, 'm1', direction));
+    const scaleOf = (prefs) => core.statusScaleFor(prefs, 'm1');
+
+    eq(scaleOf(blank), 1, 'a model with no correction draws the derived size');
+    eq(core.statusPromptFontPx(387, 1), core.statusPromptFontPx(387), 'and 1 leaves the size exactly alone');
+
+    const bigger = step(blank, 1);
+    eq(scaleOf(bigger), 1.12, 'one notch up is the wheel step');
+    eq(core.statusScaleFor(bigger, 'm2'), 1, 'and it belongs to that model alone');
+    eq(core.statusPromptFontPx(387, 1.12), 14.3, 'the text grows by exactly that factor');
+    eq(core.statusPromptFontPx(387, 1.12) > core.statusPromptFontPx(387), true,
+      'strictly bigger, in the same box — the model did not move');
+
+    const back = step(bigger, -1);
+    eq(scaleOf(back), 1, 'and one notch down returns to the derived size');
+    eq(Object.keys(back.statusScale).length, 0,
+      'a correction of 1 is DROPPED, not stored: the map is a list of exceptions');
+    eq(JSON.stringify(core.cleanPreferences({ statusScale: { m1: 1, m2: 2 } }).statusScale), '{"m2":2}',
+      'cleanPreferences drops the no-op entry and keeps the real one');
+
+    // The clamps: wide enough for a mismatched model, tight enough to stay legible and on screen.
+    let up = blank;
+    for (let i = 0; i < 40; i += 1) up = step(up, 1);
+    eq(scaleOf(up), core.STATUS_SCALE_LIMITS.max, 'wheeling up stops at the maximum');
+    eq(core.statusPromptFontPx(387, core.STATUS_SCALE_LIMITS.max), 51.1,
+      'and four times the derived 12.77px is what it draws');
+    let down = blank;
+    for (let i = 0; i < 40; i += 1) down = step(down, -1);
+    eq(scaleOf(down), core.STATUS_SCALE_LIMITS.min, 'wheeling down stops at the minimum');
+    eq(core.statusPromptFontPx(387, core.STATUS_SCALE_LIMITS.min), 6,
+      'and the absolute floor keeps an unreadable size out of reach');
+    eq(core.statusPromptFontPx(10000, 4), core.STATUS_SCALE_LIMITS.maxFontPx,
+      'while the ceiling stops a huge box times a correction from running off the screen');
+
+    // The store's own round trip: what the settings store keeps is what comes back.
+    const stored = core.cleanPreferences({ statusScale: { m1: 1.5, m2: 'nonsense', m3: 99 } });
+    eq(core.statusScaleFor(stored, 'm1'), 1.5, 'a stored correction survives cleaning');
+    eq(core.statusScaleFor(stored, 'm2'), 1, 'a non-numeric one is ignored');
+    eq(core.statusScaleFor(stored, 'm3'), core.STATUS_SCALE_LIMITS.max, 'and an absurd one is clamped');
+    eq(core.statusScaleFor(stored, ''), 1, 'no model id means no correction');
+    eq(JSON.stringify(core.setStatusScale(blank, 'm1', 2)), '{"m1":2}', 'setStatusScale writes one entry');
+    eq(Object.keys(core.setStatusScale({ statusScale: { m1: 2 } }, 'm1', 1)).length, 0,
+      'and setting it back to 1 removes it again');
+  }
+  eq(core.STATUS_ICON_PATH.indexOf('M8.844') === 0, true,
+    'the mark is DSH’s own whale path, copied from RunningWhaleTail');
+  eq(/<svg[^>]*viewBox="0 0 16 16"/.test(core.statusIconMarkup()), true,
+    'and it is drawn in the app’s own 16x16 viewBox, stroked in currentColor');
+
+  // The two pending prompts the operator asked for, told apart by the session's own classification.
+  eq(core.pendingInteractionKind({ kind: 'approval' }), 'approval', 'a permission prompt is an approval');
+  eq(core.pendingInteractionKind({ kind: 'question' }), 'question', 'a structured answer is a question');
+  eq(core.pendingInteractionKind({ kind: 'plan-review' }), 'plan-review', 'a plan review is its own kind');
+  eq(core.pendingInteractionKind(null), 'question', 'an unknown pending interaction reads as a question');
+
+  // Editing: every field round-trips, and the line is text + tag.
+  let prefs = core.cleanPreferences({});
+  prefs.status = core.setStatus(prefs, 'waiting', 'tag', '❓');
+  eq(core.statusLineFor(prefs, 'waiting'), '我有问题要问你❓',
+    'the tag is stored beside the text and drawn after it');
+  prefs.status = core.setStatus(prefs, 'working', 'animation', 'none');
+  eq(core.statusEntryFor(prefs, 'working').animation, 'none', 'an explicit 静态 overrides the shipped sweep');
+  prefs.status = core.setStatus(prefs, 'working', 'text', '干活中');
+  eq(core.statusLineFor(prefs, 'working'), '干活中', 'and the text is the user’s');
+  prefs.status = core.setStatus(prefs, 'done', 'seconds', 3);
+  eq(core.statusEntryFor(prefs, 'done').seconds, 3, 'a positive duration is kept');
+  eq(core.statusFor(prefs, 'done', 1000, 2000) !== null, true, 'inside its window the line is shown');
+  /**
+   * The 2026-10-11 rule: "任务达成…一直持续直到用户切换回已经达成任务/失败的会话中."
+   *
+   * A configured 持续时间 therefore may not be what hides 任务达成 / 出错 / 等待确认 — the ending is an event
+   * (the user is back in that session; the question was answered), never a stopwatch. It still MEANS something
+   * for the two notice states: `noticeHoldMs` reads it as the minimum time the line is guaranteed to be up.
+   */
+  eq(core.statusFor(prefs, 'done', 1000, 4000) !== null, true,
+    'past its own duration 任务达成 is STILL there, because a clock does not end it');
+  eq(core.statusFor(prefs, 'done', 1000, 10_000_000).text, '任务达成',
+    'and it is still there an hour later');
+  same(core.UNTIMED_STATUS_STATES, ['waiting', 'done', 'error'],
+    'the three event-ended states, named once so both surfaces and the settings agree');
+  eq(core.statusFor(prefs, 'waiting', 1000, 10_000_000).text, '我有问题要问你',
+    '等待确认 likewise waits for the answer, not for the clock');
+  eq(core.statusFor(prefs, 'error', 1000, 10_000_000).text, '遇到问题了...',
+    'so does 出错');
+  const timed = core.cleanPreferences({ status: { working: { text: '干活中', seconds: 3 } } });
+  eq(core.statusFor(timed, 'working', 1000, 2000) !== null, true,
+    'while a LIVE state still respects its 持续时间 inside the window');
+  eq(core.statusFor(timed, 'working', 1000, 4000), null,
+    'and disappears past it — the rule is about endings, not about ignoring the setting');
+  eq(core.statusFor(prefs, 'done', 1000, 2000).text, '任务达成', 'the window does not change the text');
+  eq(core.noticeHoldMs(prefs, 'completed'), 4200,
+    '任务完成 with no duration of its own keeps the shipped 4.2 s floor');
+  eq(core.noticeHoldMs(core.cleanPreferences({ status: { done: { seconds: 30 } } }), 'completed'), 30_000,
+    'and a configured one RAISES the floor rather than cutting the line short');
+  eq(core.noticeHoldMs(core.cleanPreferences({ status: { error: { seconds: 60 } } }), 'error'), 60_000,
+    '出错 reads its OWN duration, not 任务完成’s');
+
+  /**
+   * How the two states are DRAWN — the operator's other request that day: "任务达成要用金色的加粗字体，任务失败/
+   * 错误要用红色字体." The tone travels with `statusFor` so the app and the floating window cannot disagree.
+   */
+  same(core.STATUS_TONES, { done: { tone: 'gold', bold: true }, error: { tone: 'danger', bold: false } },
+    'the two tones the operator asked for, in one table');
+  eq(core.statusFor(prefs, 'done', 1000, 2000).tone, 'gold', '任务达成 is gold');
+  eq(core.statusFor(prefs, 'done', 1000, 2000).bold, true, 'and bold');
+  eq(core.statusFor(prefs, 'error', 1000, 2000).tone, 'danger', '出错 is the danger colour');
+  eq(core.statusFor(prefs, 'error', 1000, 2000).bold, false, 'and carries no extra weight');
+  eq(core.statusFor(prefs, 'waiting', 1000, 2000).tone, '', 'every other state keeps the surface’s own colour');
+  eq(core.statusFor(prefs, 'working', 1000, 2000).tone, '', 'including 工作中');
+  same(core.statusTone('sleeping'), { tone: '', bold: false },
+    'and an unknown state answers with an empty look rather than undefined');
+
+  /**
+   * Clearing the box means "say nothing", and that has to survive the cleaner: it is the one edit whose whole
+   * point is the ABSENCE of a line, so dropping the empty string would make it undo itself.
+   */
+  prefs.status = core.setStatus(prefs, 'working', 'text', '');
+  eq(core.statusLineFor(prefs, 'working'), '', 'clearing the box means this state says nothing');
+  eq(core.statusFor(prefs, 'working', 0, 1), null, 'and nothing is drawn');
+  same(core.cleanStatus({ working: { text: '' } }), { working: { text: '' } },
+    'the cleaner keeps the explicit empty text');
+  same(core.cleanStatus({ bogus: { text: 'x' } }), {}, 'a state that is not one of the six is refused');
+  eq(core.cleanStatus({ working: { seconds: 99999 } }).working.seconds, core.STATUS_LIMITS.maxSeconds,
+    'a duration is clamped');
+  same(core.cleanStatus({ done: { animation: 'wobble' } }), {}, 'an unknown animation is refused');
+  eq(core.statusLineFor(core.cleanPreferences({ status: { error: { text: 'x'.repeat(80) } } }), 'error').length,
+    core.STATUS_LIMITS.textLength, 'an over-long text is capped');
+
+  /**
+   * The rename, which is a PERSISTENCE boundary: a profile that mapped a clip to 庆祝 must not lose it.
+   */
+  eq(core.migrateStateKey('celebrate'), 'done', 'the old state name migrates to the new one');
+  same(core.cleanMotions({ celebrate: ['a1'] }), { done: ['a1'] },
+    'so a stored 庆祝 mapping arrives as 任务完成 instead of being dropped');
+  same(core.cleanMotionEvery({ celebrate: { min: 5, max: 9 } }), { done: { min: 5, max: 9 } },
+    'and so does its one-shot interval');
+  same(core.cleanStatus({ celebrate: { text: 'x' } }), { done: { text: 'x' } },
+    'and a status line stored under the old name');
+  same(core.cleanMotions({ celebrate: ['a1'], done: ['a2'] }), { done: ['a2'] },
+    'when both are present the current name wins');
+
+  /** The observer contract both surfaces hang their UI off. */
+  const observed = [];
+  const machine = new core.PetMachine(() => 1000, 300000);
+  const stop = machine.observe((state) => observed.push(state));
+  same(observed, ['resting'], 'a new observer is told the state it starts on');
+  machine.resolve({ available: true, running: true, pending: false });
+  same(observed, ['resting', 'working'], 'and every change after it');
+  machine.resolve({ available: true, running: true, pending: false });
+  eq(observed.length, 2, 'but not a frame that changed nothing');
+  stop();
+  machine.resolve({ available: true, running: false, pending: false });
+  eq(observed.length, 2, 'and an unsubscribed observer hears nothing');
+}
+
+// ---------------------------------------------------------------------------
+group('6d. 碎碎念: what the pet says on its own');
+// ---------------------------------------------------------------------------
+{
+  // The shipped table: generic lines only, both languages, one entry per event the boundary actually has.
+  const events = ['working', 'done', 'error', 'waiting', 'approval', 'offline', 'idle'];
+  eq(events.every((event) => core.speechLines('zh', event).length > 0), true,
+    'every event has Chinese lines');
+  eq(events.every((event) => core.speechLines('en', event).length > 0), true, 'and English ones');
+  eq(core.speechLines('zh', 'anything-else').length, 0,
+    'an event nobody wrote offers nothing, which is what silence is made of');
+  // The privacy rule, asserted rather than trusted: the table is the ONLY source, and nothing in it can
+  // name a file, a path or a tool.
+  const allLines = events.flatMap((event) => core.speechLines('zh', event).concat(core.speechLines('en', event)));
+  eq(allLines.every((line) => line.length <= core.SPEECH_LIMITS.lineLength + 20), true,
+    'no shipped line is long enough to become a paragraph');
+  eq(allLines.every((line) => !/[\\/]|\.(js|ts|json|md|exe|log)\b/.test(line)), true,
+    'and none of them can carry a path or a file name — the table is the only input to a bubble');
+
+  // Which event a state calls for.
+  eq(core.speechEvent('working', null), 'working', 'a state maps to its own event');
+  eq(core.speechEvent('waiting', 'approval'), 'approval', '等待确认 splits on what DSH is asking for');
+  eq(core.speechEvent('waiting', 'question'), 'waiting', 'a question is its own remark');
+  eq(core.speechEvent('waiting', null), 'waiting', 'an unclassified 等待确认 is a question, not silence');
+  eq(core.speechEvent('resting', null), null, '静息态 has no event: that is what the idle remark is for');
+  eq(core.speechEvent('nonexistent', null), null, 'and an unknown state is silence rather than an invented line');
+
+  // The settings.
+  const defaults = core.cleanSpeech(null);
+  eq(defaults.enabled, true, 'speech is on by default');
+  eq(defaults.holdSeconds, core.SPEECH_LIMITS.holdSeconds, 'a line is held for the shipped few seconds');
+  eq(core.cleanSpeech({ enabled: false }).enabled, false,
+    'turning it OFF survives cleaning — the one edit whose whole point is the absence of speech');
+  eq(core.cleanSpeech({ holdSeconds: 999 }).holdSeconds, core.SPEECH_LIMITS.maxHoldSeconds,
+    'an absurd hold is clamped');
+  eq(core.cleanSpeech({ holdSeconds: 'nonsense' }).holdSeconds, core.SPEECH_LIMITS.holdSeconds,
+    'and an unparseable one falls back rather than becoming NaN');
+  const inverted = core.cleanSpeech({ idleMinSeconds: 300, idleMaxSeconds: 10 });
+  eq(inverted.idleMaxSeconds, 300, 'a window that is inside out has its max follow its min');
+
+  // Selection, with a scripted random.
+  eq(core.pickSpeechLine('zh', 'working', () => 0, null), core.speechLines('zh', 'working')[0],
+    'random 0 picks the first line');
+  eq(core.pickSpeechLine('zh', 'working', () => 0.999, null),
+    core.speechLines('zh', 'working')[core.speechLines('zh', 'working').length - 1],
+    'and near-1 the last');
+  const twoLines = core.speechLines('zh', 'working').slice(0, 2);
+  eq(core.pickSpeechLine('zh', 'working', () => 0, twoLines[0]) === twoLines[0], false,
+    'a line is never repeated back-to-back while another exists');
+  eq(core.pickSpeechLine('en', 'done', () => 0, null), core.speechLines('en', 'done')[0],
+    'the language picks which column of the table is used');
+  eq(core.pickSpeechLine('zh', 'unknown-event', () => 0, null), null, 'and an unknown event yields nothing');
+
+  // ---------------------------------------------------------------------------
+  // The machine: the throttle is the feature. A scripted clock and random make an hour of behaviour cheap.
+  // ---------------------------------------------------------------------------
+  let clock = 3_000_000;
+  const rnd = () => 0;
+  const prefs = core.cleanPreferences({ speech: {} });
+  const machine = new core.SpeechMachine(() => clock);
+  const hold = core.DEFAULT_SPEECH.holdSeconds * 1000;
+
+  eq(machine.observe(prefs, 'resting', null, 'zh', rnd), null,
+    'an idle pet does not speak the moment it starts: the first idle gap is drawn, not skipped');
+
+  const first = machine.observe(prefs, 'working', null, 'zh', rnd);
+  eq(typeof first === 'string' && first.length > 0, true, 'a new event speaks at once');
+  eq(machine.line(), first, 'and the line is up');
+  clock += hold - 1;
+  eq(machine.observe(prefs, 'working', null, 'zh', rnd), first, 'while it is held, nothing replaces it');
+  clock += 1;
+  eq(machine.line(), null, 'and the hold expires on time');
+  eq(machine.observe(prefs, 'working', null, 'zh', rnd), null,
+    'the SAME event does not speak twice in a row, which is what stops 工作中 from chattering');
+
+  // Back to an idle state, then the next turn is a new event again.
+  machine.observe(prefs, 'resting', null, 'zh', rnd);
+  eq(machine.observe(prefs, 'working', null, 'zh', rnd) !== null, true,
+    'a later turn speaks again, so the no-repeat rule means "not twice in a row"');
+
+  // 等待确认 is two remarks.
+  clock += hold + 1;
+  const asked = machine.observe(prefs, 'waiting', 'question', 'zh', rnd);
+  eq(core.speechLines('zh', 'waiting').indexOf(asked) !== -1, true, '等待确认 asks its own line');
+  clock += hold + 1;
+  const approval = machine.observe(prefs, 'waiting', 'approval', 'zh', rnd);
+  eq(core.speechLines('zh', 'approval').indexOf(approval) !== -1, true,
+    'and an approval is a different remark from a question');
+
+  // Unknown states are silence, and reaching one clears the event memory without speaking.
+  clock += hold + 1;
+  eq(machine.observe(prefs, 'nonsense', null, 'zh', rnd), null, 'an unrecognised state says nothing');
+
+  // The idle remark: not before the drawn gap, then once, and never inside the minimum gap after a line.
+  const idler = new core.SpeechMachine(() => clock);
+  eq(idler.observe(core.cleanPreferences({ speech: { idleMinSeconds: 10, idleMaxSeconds: 10 } }), 'resting', null, 'zh', () => 0),
+    null, 'the drawn gap has to pass first');
+  clock += 10_000;
+  const idleLine = idler.observe(core.cleanPreferences({ speech: { idleMinSeconds: 10, idleMaxSeconds: 10, minGapSeconds: 60 } }), 'resting', null, 'zh', () => 0);
+  eq(core.speechLines('zh', 'idle').indexOf(idleLine) !== -1, true, 'then the pet says something of its own');
+  clock += 10_000;
+  eq(idler.observe(core.cleanPreferences({ speech: { idleMinSeconds: 10, idleMaxSeconds: 10, minGapSeconds: 60 } }), 'resting', null, 'zh', () => 0),
+    null, 'and not again until the minimum gap has passed as well');
+
+  // Switching it off silences the machine whatever the state, and switching it back on does not replay a line.
+  const off = core.cleanPreferences({ speech: { enabled: false } });
+  const muted = new core.SpeechMachine(() => clock);
+  eq(muted.observe(off, 'working', null, 'zh', rnd), null, 'with speech off, an event says nothing');
+  eq(muted.observe(off, 'done', null, 'zh', rnd), null, 'and neither does the next one');
+  eq(muted.line(), null, 'nothing is held either');
+
+  // The published line clears with the hold, which is what the floating window follows.
+  const publisher = new core.SpeechMachine(() => clock);
+  publisher.observe(prefs, 'done', null, 'zh', rnd);
+  eq(typeof publisher.line() === 'string', true, 'a completion gives the pet something to say');
+  clock += hold + 1;
+  eq(publisher.line(), null, 'and it clears when the hold ends, so the relay sends the clear');
+}
+
+// ---------------------------------------------------------------------------
+group('6e. 碎碎念: one box per state, and the AI settings beside them');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * The user's own lines, one box per state.
+   *
+   * The page sends a textarea's value (ONE STRING, one line per line) while storage holds an ARRAY, and the
+   * two have to clean to the same thing: otherwise a saved box would look different after a reload, and a
+   * field the cleaner dropped could never be saved at all.
+   */
+  eq(JSON.stringify(core.SPEECH_STATES), JSON.stringify(['resting', 'working', 'waiting', 'done', 'error', 'offline']),
+    'six states, one box each');
+  const boxes = core.cleanSpeech({ lines: { working: ' 干活了 \n\n 干活了 \n让我想想' } }).lines;
+  eq(JSON.stringify(boxes.working), JSON.stringify(['干活了', '让我想想']),
+    'a textarea becomes lines: trimmed, blanks dropped, duplicates collapsed');
+  eq(JSON.stringify(core.cleanSpeech({ lines: { working: ['a', 'b'] } }).lines.working), JSON.stringify(['a', 'b']),
+    'and an array — what storage holds — cleans to itself');
+  eq(Object.keys(core.cleanSpeech(null).lines).length, core.SPEECH_STATES.length,
+    'all six keys always come back, empty or not');
+  eq(core.cleanSpeech(null).lines.resting.length, 0, 'with nothing in them by default');
+  eq(core.cleanSpeech({ lines: { error: '多行\n文本' } }).lines.error[0].indexOf('\n'), -1,
+    'a line never carries a newline into the bubble');
+
+  const tooLong = 'x'.repeat(core.SPEECH_LIMITS.lineLength + 20);
+  eq(core.cleanSpeech({ lines: { done: tooLong } }).lines.done[0].length, core.SPEECH_LIMITS.lineLength,
+    'a line longer than the bubble is cut rather than dropped');
+  const manyLines = [];
+  for (let i = 0; i < core.SPEECH_LIMITS.maxLines + 5; i += 1) manyLines.push('line ' + i);
+  eq(core.cleanSpeech({ lines: { error: manyLines.join('\n') } }).lines.error.length, core.SPEECH_LIMITS.maxLines,
+    'and a pasted thousand-line box is capped');
+
+  // The source, and the AI block that comes with it.
+  eq(core.cleanSpeech(null).source, 'builtin',
+    'the shipped source is the built-in table, so an untouched profile behaves exactly as before');
+  eq(core.cleanSpeech({ source: 'nonsense' }).source, 'builtin', 'an unknown source falls back to it');
+  eq(core.cleanSpeech({ source: 'ai' }).source, 'ai', 'and ai is a source the user can choose');
+  const ai = core.cleanSpeech({
+    ai: { provider: 'custom', baseUrl: ' https://x/v1 ', model: 'm', apiKey: ' sk-a b ', temperature: 99, timeoutMs: 10 },
+  }).ai;
+  eq(ai.provider, 'custom', 'the custom provider is remembered');
+  eq(ai.baseUrl, 'https://x/v1', 'and its URL is trimmed');
+  eq(ai.apiKey, 'sk-a b', 'while the key keeps its interior exact — it is a credential, not a sentence');
+  eq(ai.temperature, core.SPEECH_LIMITS.maxTemperature, 'temperature is clamped to what an API accepts');
+  eq(ai.timeoutMs, core.SPEECH_LIMITS.minTimeoutMs, 'and so is the timeout');
+  eq(core.cleanSpeech({ ai: { provider: 'nonsense' } }).ai.provider, 'dsh', 'an unknown provider means DSH');
+  eq(Object.keys(core.cleanSpeech(null).ai.prompts).length, core.SPEECH_STATES.length,
+    'and every state has a prompt slot');
+  eq(core.cleanSpeech({ ai: { prompts: { working: '说点工作上的话' } } }).ai.prompts.done, '',
+    'writing one state\'s prompt leaves the others alone');
+
+  /**
+   * The two vocabularies, and the bridge between them: an EVENT draws from a STATE's box.
+   *
+   * This mapping is the whole reason the boxes are keyed by state and the machine fires on events — DSH asks two
+   * different things under 等待确认, and the idle remark happens while the pet is in 静息态.
+   */
+  eq(core.customSpeechLines(core.cleanSpeech({ lines: { waiting: '等你' } }), 'approval')[0], '等你',
+    'both 等待确认 events read the ONE waiting box');
+  eq(core.customSpeechLines(core.cleanSpeech({ lines: { resting: '发呆' } }), 'idle')[0], '发呆',
+    'and the idle remark reads the 静息态 box');
+  eq(core.customSpeechLines(core.cleanSpeech({}), 'working').length, 0, 'an empty box is an empty pool');
+
+  eq(core.pickSpeechLine('zh', 'working', () => 0, null, ['我的台词']), '我的台词',
+    'a custom pool is what the picker draws from');
+  eq(core.speechLines('zh', 'working').indexOf(core.pickSpeechLine('zh', 'working', () => 0, null, [])) !== -1, true,
+    'and an EMPTY one falls back to the shipped table while the built-in source is the one in force');
+  /**
+   * …but NOT once another source is chosen: "开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念" (operator,
+   * 2026-10-11). The sixth argument is the mode, and `false` means the table is not in the chain at all.
+   */
+  eq(core.pickSpeechLine('zh', 'working', () => 0, null, [], false), null,
+    'with the table OFF, an empty pool is SILENCE — the source the user chose is the whole of it');
+  eq(core.pickSpeechLine('zh', 'working', () => 0, null, ['我的台词'], false), '我的台词',
+    'while a pool the user DID write is still spoken in that mode');
+  eq(core.pickSpeechLine('zh', 'working', () => 0, '我的台词', ['我的台词', '第二句']), '第二句',
+    'the no-repeat rule covers custom lines too');
+}
+
+// ---------------------------------------------------------------------------
+group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
+// ---------------------------------------------------------------------------
+{
+  let clock = 100_000;
+  const prefs = (speech) => core.cleanPreferences({ speech });
+  const rnd = () => 0;
+
+  // `custom`: the user's own line is what the pet says — and an empty box is SILENCE, not DSH's line.
+  const custom = new core.SpeechMachine(() => clock);
+  const customPrefs = prefs({ source: 'custom', lines: { working: '自定义的一句' } });
+  eq(custom.observe(customPrefs, 'working', null, 'zh', rnd), '自定义的一句', 'a custom box is spoken for its state');
+  eq(custom.wantsAi, null, 'and pure custom never asks a model anything');
+  clock += 6000;
+  /**
+   * THE OPERATOR'S RULE (2026-10-11): "开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念."
+   *
+   * Choosing a source other than the built-in one takes the shipped table OUT of the chain, so a state nobody wrote a
+   * line for says NOTHING. It used to fall through to DSH's own line, which left the pet speaking in the app's voice
+   * exactly where the user had chosen their own — the one place "I set it to AI/custom" has to be believed.
+   */
+  eq(custom.observe(customPrefs, 'done', null, 'zh', rnd), null,
+    'a state whose box is empty says NOTHING once custom is chosen — the shipped table is off');
+  // …and the BUILT-IN source keeps it: that IS the table, and the table is what built-in means.
+  const shipped = new core.SpeechMachine(() => clock);
+  const shippedPrefs = prefs({ source: 'builtin' });
+  eq(shipped.observe(shippedPrefs, 'done', null, 'zh', rnd), core.speechLines('zh', 'done')[0],
+    'while the built-in source still speaks the shipped line for the same empty box');
+
+  /**
+   * `ai`: the machine publishes the INTENT and shows the fallback meanwhile.
+   *
+   * The core has no network, so this is the contract a surface implements: one request per `seq`, answered with
+   * `say()`. The fallback is up from the first frame, which is what "AI 失败也不哑巴" means in practice.
+   */
+  clock = 200_000;
+  const ai = new core.SpeechMachine(() => clock);
+  const aiPrefs = prefs({ source: 'ai', lines: { working: '先这么说' } });
+  eq(ai.observe(aiPrefs, 'working', null, 'zh', rnd), '先这么说',
+    'with AI on, the user\'s own line is up while the model thinks');
+  eq(Boolean(ai.wantsAi), true, 'and the request has been published');
+  eq(ai.wantsAi.state, 'working', 'naming the box the line belongs to');
+  eq(ai.wantsAi.event, 'working', 'and the event that fired');
+  const firstSeq = ai.wantsAi.seq;
+  eq(ai.observe(aiPrefs, 'working', null, 'zh', rnd), '先这么说',
+    'the request is not re-published while that line is held');
+  eq(ai.wantsAi.seq, firstSeq, 'so the surface cannot be asked twice for one event');
+  clock += 6000;
+  /**
+   * Moving on with AI on: the request goes out, but the PET says nothing on its own.
+   *
+   * With the shipped table off (2026-10-11) there is no local line for a state the user did not write one for, so the
+   * model's answer is the whole line — which is why the sequence number is the thing to assert here, not the text.
+   */
+  eq(ai.observe(aiPrefs, 'done', null, 'zh', rnd), null,
+    'moving on says nothing on its own once AI is chosen: the shipped table is off');
+  eq(ai.wantsAi.seq, firstSeq + 1, 'and asks again, with a new sequence number');
+
+  eq(ai.say('模型写的一句', 'done'), true, 'an answer is accepted');
+  eq(ai.line(), '模型写的一句', 'and becomes the bubble');
+  eq(ai.wantsAi, null, 'the request is forgotten once it is answered');
+  eq(ai.say('   ', 'done'), false, 'an empty answer is refused');
+  eq(ai.say('a\nb', 'done'), true, 'a multi-line answer is flattened');
+  eq(ai.line().indexOf('\n'), -1, 'so the bubble stays one line');
+
+  // Switched off means no speech AND no calls: the switch is about the pet talking, not about its voice box.
+  clock = 400_000;
+  const off = new core.SpeechMachine(() => clock);
+  eq(off.observe(prefs({ enabled: false, source: 'ai' }), 'working', null, 'zh', rnd), null, 'speech off says nothing');
+  eq(off.wantsAi, null, 'and asks for nothing either');
+
+  // The surface's half: one request per intent, and the answer lands in the bubble.
+  clock = 500_000;
+  const machine = new core.SpeechMachine(() => clock);
+  const book = { handled: 0, inFlight: false, promise: null };
+  const asked = [];
+  machine.observe(prefs({ source: 'ai', lines: { working: '兜底' } }), 'working', null, 'zh', rnd);
+  const pending = core.pumpAiSpeech(machine, book, (request) => {
+    asked.push(request);
+    return Promise.resolve({ text: '来自模型' });
+  });
+  eq(book.inFlight, true, 'which is marked in flight while it runs');
+  eq(core.pumpAiSpeech(machine, book, () => { asked.push({}); return null; }), pending,
+    'a second pump while it is in flight asks nothing new');
+  await pending;
+  // The ask itself runs on a microtask (so a frame loop never blocks on a fetch), which is why the request is
+  // counted here rather than before the await.
+  eq(asked.length, 1, 'one intent is exactly one request');
+  eq(asked[0].state, 'working', 'and carries the state the line belongs to');
+  eq(asked[0].event, 'working', 'and the event that fired it');
+  eq(machine.line(), '来自模型', 'and the answer replaced the fallback line');
+  eq(book.inFlight, false, 'with the surface free again');
+
+  // A failure leaves the fallback up, and is not retried here: the throttle decides when to try again.
+  const failing = new core.SpeechMachine(() => clock);
+  const failBook = { handled: 0, inFlight: false, promise: null };
+  failing.observe(prefs({ source: 'ai', lines: { working: '兜底' } }), 'working', null, 'zh', rnd);
+  await core.pumpAiSpeech(failing, failBook, () => Promise.reject(new Error('offline')));
+  eq(failing.line(), '兜底', 'a failed request leaves the user\'s own line standing');
+  eq(failBook.inFlight, false, 'and the surface is free to try again later');
+
+  // An answer that arrives after the pet moved on is DROPPED, not shown over a newer state.
+  const late = new core.SpeechMachine(() => clock);
+  const lateBook = { handled: 0, inFlight: false, promise: null };
+  /**
+   * The state it moves ON to has a line of its own, which is the line the late answer must not replace.
+   *
+   * (It cannot be the shipped table any more: with a source other than the built-in one chosen, a state nobody wrote a
+   * line for says nothing at all — see the `custom` block above.)
+   */
+  const latePrefs = prefs({ source: 'ai', lines: { done: '已经结束了' } });
+  late.observe(latePrefs, 'working', null, 'zh', rnd);
+  let release = null;
+  const slow = core.pumpAiSpeech(late, lateBook, () => new Promise((resolveLate) => { release = resolveLate; }));
+  // The ask starts on a microtask, so the request has to be admitted to flight before it can be released.
+  await null;
+  clock += 6000;
+  late.observe(latePrefs, 'done', null, 'zh', rnd);
+  release({ text: '迟到的台词' });
+  await slow;
+  eq(late.line(), '已经结束了',
+    'a late answer is dropped rather than spoken over the state that replaced it');
+
+  /**
+   * The SECOND reason the pet speaks: it was TOUCHED, on a part.
+   *
+   * The chain is AI → the part's own lines → the state's own lines → silence, and every step is here: a part
+   * with lines speaks at once, a part without them borrows the state's box, a part nobody configured stays
+   * silent AND costs nothing, and a rapid series of clicks is held to `reactGapSeconds` rather than becoming a
+   * stream of requests. The AI half is asserted on the wire: the request carries the PART, which is what the
+   * host turns into that part's prompt.
+   */
+  clock = 900_000;
+  const reactions = core.cleanPreferences({
+    parts: {
+      items: [
+        { id: 'ear', label: '耳朵', match: ['ErDuo'], speech: { lines: ['别摸耳朵', '痒'], prompt: '被摸耳朵时撒娇' } },
+        { id: 'head', label: '头', region: 'head', match: [], speech: { lines: [] } },
+        { id: 'body', label: '身体', region: 'body' },
+      ],
+    },
+    speech: { enabled: true, source: 'custom', lines: { working: '状态台词' } },
+  });
+  const ear = core.partItemById(reactions, 'ear');
+  const head = core.partItemById(reactions, 'head');
+  const body = core.partItemById(reactions, 'body');
+  const reacting = new core.SpeechMachine(() => clock);
+  const said = reacting.react(reactions, ear, 'working', 'zh', rnd);
+  eq(said === '别摸耳朵' || said === '痒', true, 'a press on a part says one of that part\'s own lines');
+  eq(reacting.line(), said, 'and it is the line that is up');
+  eq(reacting.current.part, 'ear', 'with the part recorded, so a readout can say where it came from');
+  // The gap: the second press inside it says nothing, and does not disturb the line that is already up.
+  clock += (core.PRESS_LIMITS.reactGapSeconds * 1000) - 500;
+  eq(reacting.react(reactions, ear, 'working', 'zh', rnd), null, 'a second press inside the gap says nothing');
+  eq(reacting.line(), said, 'and leaves the line it already said alone');
+  clock += 1000;
+  const second = reacting.react(reactions, ear, 'working', 'zh', rnd);
+  eq(second === '别摸耳朵' || second === '痒', true, 'while one after the gap speaks again');
+  eq(second === said, false, 'and prefers a line it did not just say');
+
+  // A part with no lines of its own falls back to the STATE's box — the user's own pool, never the shipped table.
+  const borrowed = new core.SpeechMachine(() => clock);
+  eq(borrowed.react(reactions, head, 'working', 'zh', rnd), '状态台词',
+    'a part with no lines borrows the state\'s own remark');
+  /**
+   * A part with SHIPPED lines says them, and says them BEFORE the state's box is consulted — while the source is
+   * the built-in one, which is the only source those lines belong to (2026-10-12).
+   *
+   * 胸部 and 屁股 are the two rows this exists for: their boxes ship empty and the pet still answers 变态！, which
+   * is the difference between an empty box and a silent part. The state's box is deliberately fuller than the
+   * part's here, so "the part's own voice wins" is the thing being measured rather than the only line available.
+   */
+  const shippedParts = core.cleanPreferences({
+    speech: { enabled: true, source: 'builtin', lines: { working: '状态台词' } },
+  });
+  const pressingChest = new core.SpeechMachine(() => clock);
+  const chestLine = pressingChest.react(shippedParts,
+    { region: 'chest', bone: 'J_Bip_C_Chest', mesh: null, part: core.partItemById(shippedParts, 'chest') }, 'working', 'zh', rnd);
+  eq(chestLine === '变态！' || chestLine === '大色狼！', true,
+    `a shipped 胸部 part answers with its OWN lines rather than the state's (${chestLine})`);
+  eq(pressingChest.current.part, 'chest', 'recorded against that part, so a readout can say where it came from');
+  const pressingButt = new core.SpeechMachine(() => clock);
+  const buttLine = pressingButt.react(shippedParts,
+    { region: 'butt', bone: null, mesh: 'pantsu', part: core.partItemById(shippedParts, 'butt') }, 'working', 'zh', rnd);
+  eq(buttLine === '变态！' || buttLine === '大色狼！', true, 'and so does 屁股');
+  /**
+   * …and the SAME two rows go quiet once the source is 自定义: the shipped table is the built-in source, so the
+   * press falls through to the user's own state box exactly as it does for a part with no table entry at all.
+   *
+   * This is the sibling the operator's rule needs (2026-10-12: 「如果设置了AI碎碎念，就停止输出内置的碎碎念」), and it
+   * is asserted on the press path rather than on the table alone because the table being switched off and the
+   * machine honouring that are two different facts.
+   */
+  const customSource = core.cleanPreferences({
+    speech: { enabled: true, source: 'custom', lines: { working: '状态台词' } },
+  });
+  eq(new core.SpeechMachine(() => clock).react(customSource,
+    core.partItemById(customSource, 'chest'), 'working', 'zh', rnd), '状态台词',
+  'and a 自定义 source says the state\'s own line instead of the shipped 变态！');
+  // The user's own box outranks the shipped one, which is the operator's own condition for both.
+  const chestWritten = core.cleanPreferences({
+    parts: { items: [{ id: 'chest', label: '胸部', region: 'chest', speech: { lines: ['不要脸'] } }] },
+    speech: { enabled: true, source: 'custom', lines: { working: '状态台词' } },
+  });
+  eq(new core.SpeechMachine(() => clock).react(chestWritten,
+    core.partItemById(chestWritten, 'chest'), 'working', 'zh', rnd), '不要脸',
+  'while a line the user wrote replaces the shipped one — in every source');
+  /**
+   * In AI mode the shipped line is OFF and the model is what speaks: the press is silence until the answer lands, and
+   * the request still names the part. Both halves matter — a press that said 变态！ would be the built-in table
+   * speaking over the model the user asked for, and a press that asked for nothing would be a lost reaction.
+   */
+  const chestAi = core.cleanPreferences({ speech: { enabled: true, source: 'ai' } });
+  const chestAsk = new core.SpeechMachine(() => clock);
+  const chestHeld = chestAsk.react(chestAi, core.partItemById(chestAi, 'chest'), 'working', 'zh', rnd);
+  eq(chestHeld, null,
+    'in AI mode the shipped line is NOT said while the model writes it — the pet is silent');
+  eq(chestAsk.wantsAi && chestAsk.wantsAi.part, 'chest', 'with the request for that part standing beside it');
+  // And the user's own part line still STANDS in AI mode, which is what keeps this from being "AI mode is mute".
+  const chestAiWritten = core.cleanPreferences({
+    parts: { items: [{ id: 'chest', label: '胸部', region: 'chest', speech: { lines: ['不要脸'] } }] },
+    speech: { enabled: true, source: 'ai' },
+  });
+  const chestAiAsk = new core.SpeechMachine(() => clock);
+  eq(chestAiAsk.react(chestAiWritten, core.partItemById(chestAiWritten, 'chest'), 'working', 'zh', rnd), '不要脸',
+    'while a line the user wrote for that part is still said over the top of the wait');
+  eq(chestAiAsk.wantsAi && chestAiAsk.wantsAi.part, 'chest', 'with the model still asked about it');
+  // …but with no line in EITHER box the touch is silence: a press is not an excuse to reach into the shipped
+  // table, which would answer a touched ear with 开始干活了.
+  const barePrefs = core.cleanPreferences({
+    parts: { items: [{ id: 'body', label: '身体', region: 'body' }] },
+    speech: { enabled: true, source: 'custom', lines: {} },
+  });
+  const untouched = new core.SpeechMachine(() => clock);
+  eq(untouched.react(barePrefs, core.partItemById(barePrefs, 'body'), 'working', 'zh', rnd), null,
+    'a part with nothing to say stays silent rather than borrowing the shipped table');
+  eq(untouched.wantsAi, null, 'and asks the host for nothing');
+  eq(untouched.react(reactions, null, 'working', 'zh', rnd), null, 'as does a press nobody measured a part for');
+  eq(new core.SpeechMachine(() => clock).react(
+    core.cleanPreferences({ speech: { enabled: false }, parts: { items: [{ id: 'ear', label: 'x', speech: { lines: ['hi'] } }] } }),
+    core.partItemById(core.cleanPreferences({ parts: { items: [{ id: 'ear', label: 'x', speech: { lines: ['hi'] } }] } }), 'ear'),
+    'working', 'zh', rnd), null, 'and speech switched off silences a touch as well as a state');
+
+  // The AI half: the request names the PART, and the answer lands in the bubble carrying it.
+  clock = 950_000;
+  const aiPartPrefs = core.cleanPreferences({
+    parts: { items: [{ id: 'ear', label: '耳朵', match: ['ErDuo'], speech: { lines: ['兜底台词'], prompt: '被摸耳朵时撒娇' } }] },
+    speech: { enabled: true, source: 'ai' },
+  });
+  const aiReact = new core.SpeechMachine(() => clock);
+  const aiBook = { handled: 0, inFlight: false, promise: null };
+  const aiAsked = [];
+  eq(aiReact.react(aiPartPrefs, core.partItemById(aiPartPrefs, 'ear'), 'working', 'zh', rnd), '兜底台词',
+    'in AI mode the part\'s own line stands while the model thinks');
+  eq(aiReact.wantsAi && aiReact.wantsAi.part, 'ear', 'and the published intent names the part');
+  await core.pumpAiSpeech(aiReact, aiBook, (request) => {
+    aiAsked.push(request);
+    return Promise.resolve({ text: '模型写的一句' });
+  });
+  eq(aiAsked.length, 1, 'which is one request');
+  eq(aiAsked[0].part, 'ear', 'carrying the part, so the host can use that part\'s prompt');
+  eq(aiReact.line(), '模型写的一句', 'and the answer replaces the fallback');
+  /**
+   * A part with a PROMPT but no lines is the one case where the pet is silent first: there is nothing to say
+   * while the model thinks, and inventing a line from another part would be worse than waiting.
+   */
+  clock = 960_000;
+  const promptOnly = core.cleanPreferences({
+    parts: { items: [{ id: 'ear', label: '耳朵', match: ['ErDuo'], speech: { lines: [], prompt: '被摸耳朵时撒娇' } }] },
+    speech: { enabled: true, source: 'ai' },
+  });
+  const waiting = new core.SpeechMachine(() => clock);
+  eq(waiting.react(promptOnly, core.partItemById(promptOnly, 'ear'), 'working', 'zh', rnd), null,
+    'a part with a prompt and no lines waits for the model in silence');
+  eq(waiting.wantsAi && waiting.wantsAi.part, 'ear', 'with the request already standing');
+  /**
+   * And a part with NEITHER still ASKS — with WHAT was touched named in the request.
+   *
+   * This is the operator's request of 2026-10-11: "未设置对应部位 AI 提示词时，把触摸部位自动传入 AI 生成碎碎念，
+   * 例如点击眼睛，把触摸眼睛的行为发给 LLM 生成。如果是默认未设置部位的结构，例如 bust，就传给 LLM 让它生成 bust
+   * 被触摸的碎碎念". So the intent carries the STRUCTURE the raycast named — the bone when there is one, else the
+   * mesh — and the pet stays silent only until the answer arrives.
+   */
+  const emptyBox = core.cleanPreferences({
+    parts: { items: [{ id: 'ear', label: '耳朵', match: ['ErDuo'] }] },
+    speech: { enabled: true, source: 'ai' },
+  });
+  const earItem = core.partItemById(emptyBox, 'ear');
+  const nothing = new core.SpeechMachine(() => clock);
+  eq(nothing.react(emptyBox, { region: 'head', bone: 'ErDuo.L.002', mesh: null, part: earItem }, 'working', 'zh', rnd),
+    null, 'a part with an empty box and no prompt says nothing yet');
+  eq(nothing.wantsAi && nothing.wantsAi.part, 'ear', 'but the model IS asked, because AI mode was chosen');
+  eq(nothing.wantsAi.structure, 'ErDuo.L.002', 'and the request names the structure the press landed on');
+  const askedPart = [];
+  await core.pumpAiSpeech(nothing, { handled: 0, inFlight: false, promise: null }, (request) => {
+    askedPart.push(request);
+    return Promise.resolve({ text: '别摸耳朵啦' });
+  });
+  eq(askedPart[0].structure, 'ErDuo.L.002', 'which reaches the ask with the structure intact');
+  eq(nothing.line(), '别摸耳朵啦', 'and the model\'s answer is what the pet then says');
+
+  /**
+   * The SPRING CHAIN travels with it, and the chain name is the one that means something.
+   *
+   * Operator, 2026-10-11: "触发点击碎碎念的时候，把对应的链名和结构名一起发给 LLM，链名的优先级大于结构名". The anatomy
+   * carries `chain` as the three fields a chain has — `key`, `name`, `label` — and `chainNameOf` picks the
+   * meaningful one: the DECLARED name first (`LiuHai`), then the root joint (`TwinTail.A.002.L`, which is all a
+   * VRM 0.x twintail has), then the storage key (`hair0`). Both names are published, so the host can prefer the
+   * chain and still mention the structure.
+   */
+  const chainClock = 970_000;
+  const chainPrefs = core.cleanPreferences({
+    parts: { items: [{ id: 'hair', label: '刘海', match: ['LiuHai'] }] },
+    speech: { enabled: true, source: 'ai' },
+  });
+  const hairItem = core.partItemById(chainPrefs, 'hair');
+  const withChain = new core.SpeechMachine(() => chainClock);
+  withChain.react(chainPrefs, {
+    region: 'head',
+    bone: 'LiuHai.002',
+    mesh: null,
+    part: hairItem,
+    chain: { key: 'LiuHai', name: 'LiuHai', label: 'LiuHai', joints: 4 },
+  }, 'working', 'zh', rnd);
+  eq(withChain.wantsAi && withChain.wantsAi.chain, 'LiuHai', 'a press on a spring joint publishes its CHAIN');
+  eq(withChain.wantsAi.structure, 'LiuHai.002', 'alongside the structure, so the host has both');
+  const askedChain = [];
+  await core.pumpAiSpeech(withChain, { handled: 0, inFlight: false, promise: null }, (request) => {
+    askedChain.push(request);
+    return Promise.resolve({ text: '别拽刘海' });
+  });
+  eq(askedChain[0].chain, 'LiuHai', 'and both names reach the ask');
+  eq(askedChain[0].structure, 'LiuHai.002', 'with the structure still there');
+  // An UNNAMED VRM 0.x chain: the file declares nothing, so the root joint is the name a person recognises.
+  const unnamed = new core.SpeechMachine(() => chainClock);
+  unnamed.react(chainPrefs, {
+    region: 'head', bone: 'TwinTail.A.003.L', mesh: null, part: hairItem,
+    chain: { key: 'hair0', name: null, label: 'TwinTail.A.002.L', joints: 13 },
+  }, 'working', 'zh', rnd);
+  eq(unnamed.wantsAi.chain, 'TwinTail.A.002.L', 'an unnamed chain is named by its root joint, not by hair0');
+  // A chain that carries nothing usable names nothing at all rather than the empty string.
+  const nameless = new core.SpeechMachine(() => chainClock);
+  nameless.react(chainPrefs, { region: 'head', bone: 'x', mesh: null, part: hairItem, chain: { key: '', name: '  ', label: null } },
+    'working', 'zh', rnd);
+  eq(nameless.wantsAi.chain, null, 'and a chain with no usable name publishes null');
+  // A plain string is accepted too, so a surface that already reduced it cannot disagree about the shape.
+  const asString = new core.SpeechMachine(() => chainClock);
+  asString.react(chainPrefs, { region: 'head', bone: 'x', mesh: null, part: hairItem, chain: 'TwinTail' }, 'working', 'zh', rnd);
+  eq(asString.wantsAi.chain, 'TwinTail', 'a chain already reduced to a name is accepted as it is');
+  eq(core.chainNameOf({ name: 'A', label: 'B', key: 'C' }), 'A', 'and the rule itself prefers the declared name');
+  eq(core.chainNameOf({ name: '', label: 'B', key: 'C' }), 'B', 'then the root joint');
+  eq(core.chainNameOf({ key: 'C' }), 'C', 'then the storage key');
+  eq(core.chainNameOf(null), null, 'while nothing at all stays nothing');
+  /**
+   * The structure can be a MESH NAME alone, which is the `bust` case: there is no bone named bust, and the name
+   * the model file uses is the only thing to send.
+   *
+   * The part here is passed EXPLICITLY rather than resolved from the name, and that is the point: `bust` now
+   * belongs to the shipped 胸部 row (2026-10-12), so a caller that has not re-measured its anatomy — an older
+   * cached scene — still says the line about the part it DID find, while the structure name travels unchanged.
+   */
+  const bustPrefs = core.cleanPreferences({
+    parts: { items: [{ id: 'body', label: '身体', region: 'body' }] },
+    speech: { enabled: true, source: 'ai' },
+  });
+  const bust = new core.SpeechMachine(() => clock);
+  bust.react(bustPrefs, { region: 'body', bone: null, mesh: 'bust', part: core.partItemById(bustPrefs, 'body') },
+    'working', 'zh', rnd);
+  eq(bust.wantsAi && bust.wantsAi.structure, 'bust', 'a mesh-only structure is sent by its own name too');
+  eq(bust.wantsAi.part, 'body', 'under the part that answered for it');
+  // A bone beats a mesh when both are known: `leftEye` says which eye, the face mesh says nothing.
+  const both = new core.SpeechMachine(() => clock);
+  both.react(emptyBox, { region: 'eye', bone: 'J_Adj_L_FaceEye', mesh: 'Face.baked', part: earItem }, 'working', 'zh', rnd);
+  eq(both.wantsAi.structure, 'J_Adj_L_FaceEye', 'and a bone name is preferred over the mesh name');
+  /**
+   * A caller that knows the PART but measured no anatomy (an older cached scene, or a surface that skipped the
+   * raycast) still gets the part's own reaction — with no structure to name.
+   */
+  const bare = new core.SpeechMachine(() => clock);
+  bare.react(emptyBox, earItem, 'working', 'zh', rnd);
+  eq(bare.wantsAi && bare.wantsAi.part, 'ear', 'a bare part item is accepted as well');
+  eq(bare.wantsAi.structure, null, 'with no structure named, because none was measured');
+  /**
+   * But with speech OFF nothing is asked at all: the switch is above every other rule.
+   */
+  const mutedParts = core.cleanPreferences({
+    parts: { items: [{ id: 'ear', label: '耳朵', match: ['ErDuo'] }] },
+    speech: { enabled: false, source: 'ai' },
+  });
+  const mutedReact = new core.SpeechMachine(() => clock);
+  eq(mutedReact.react(mutedParts, { region: 'head', bone: 'ErDuo', mesh: null, part: core.partItemById(mutedParts, 'ear') },
+    'working', 'zh', rnd), null, 'speech off asks nothing');
+  eq(mutedReact.wantsAi, null, 'and publishes no intent');
+}
+
+// ---------------------------------------------------------------------------
+group('6g. the state channel: a heartbeat, and what a stale report answers');
+// ---------------------------------------------------------------------------
+
+{
+  /**
+   * THE REPORT THIS EXISTS FOR (operator, 2026-10-11): "有时候开始工作的碎碎念不消失，完成任务后还在显示深度求索中".
+   *
+   * The state channel is one-way (the app's pet POSTS, the floating window GETS), and the app posted only on CHANGE
+   * — correct, but it made silence ambiguous: a long turn and a page whose frame loop had STOPPED look identical from
+   * outside. Chromium stops that loop while the DSH window is hidden, so a turn finishing in the background was never
+   * computed, never sent, and the window drew 工作中 / 深度求索中 over a counting clock for ever. Two halves fix it:
+   * the reporter RE-STATES itself on a timer, and the host stops believing a report that has gone quiet.
+   */
+  const beatEvery = core.HOST_STATE_HEARTBEAT_MS;
+  const staleAfter = core.HOST_STATE_STALE_MS;
+  ok(beatEvery > 0 && staleAfter > beatEvery * 3,
+    `the freshness window (${staleAfter} ms) tolerates several missed heartbeats (${beatEvery} ms each)`);
+
+  // The rule itself, at its edges.
+  const t0 = 1_700_000_000_000;
+  eq(core.hostStateIsStale(0, t0), false, 'a pet that has NEVER reported is not "stale", it is absent');
+  eq(core.hostStateIsStale(t0, t0), false, 'a report from this instant is fresh');
+  eq(core.hostStateIsStale(t0, t0 + staleAfter), false, 'one exactly at the window is still believed');
+  eq(core.hostStateIsStale(t0, t0 + staleAfter + 1), true, 'and one past it is not');
+  eq(core.hostStateIsStale(t0, t0 + 60_000), false,
+    'while a hidden page throttled to one wake a minute is still inside the window');
+
+  // What the host ANSWERS, which is where the window's behaviour comes from.
+  const fresh = core.hostStateView({ state: 'working', line: '深度求索中', at: t0, seq: 7 }, t0 + 1000);
+  eq(fresh.state, 'working', 'a fresh report is served as it was reported');
+  eq(fresh.line, '深度求索中', 'with its line');
+  eq(fresh.stale, false, 'and marked fresh');
+  eq(fresh.seq, 7, 'on its own sequence, so a reader that only watches `seq` is not woken for nothing');
+  eq(fresh.transition, false, 'and no transition is claimed');
+
+  const old = core.hostStateView({ state: 'working', line: '深度求索中', at: t0, seq: 7 }, t0 + staleAfter + 1);
+  eq(old.state, null, 'an aged report is answered as NO PET REPORTING, not as the last thing it said');
+  eq(old.line, null, 'with no 碎碎念 line left over either');
+  eq(old.stale, true, 'and marked stale');
+  eq(old.seq, 8, 'with the sequence bumped ONCE, because the reader only looks when `seq` moves');
+  eq(old.transition, true, 'which is the transition it is told about');
+  const stillOld = core.hostStateView({ state: null, line: null, at: t0, seq: 8, stale: true }, t0 + staleAfter + 5000);
+  eq(stillOld.seq, 8, 'a report that is STILL aged does not bump the sequence again');
+  eq(stillOld.transition, false, 'because nothing changed for the reader');
+  const back = core.hostStateView({ state: 'working', at: Date.now(), seq: 9, stale: true }, Date.now());
+  eq(back.state, 'working', 'and a fresh report after a stale one is served again');
+  eq(back.seq, 10, 'with its own bump, so a window that cleared its label hears that there is a pet again');
+  eq(back.transition, true, 'as a transition');
+
+  /**
+   * The HEARTBEAT, driven with an injected timer: a beat re-states the last report unchanged, and — the trap — it
+   * must NOT re-send the touch. A press is an event; repeating it would tell the host the pet was pressed again
+   * every few seconds.
+   */
+  const posts = [];
+  let tick = null;
+  const reporter = core.createStateReporter({
+    fetchImpl: (url, options) => {
+      posts.push(JSON.parse(options.body));
+      return Promise.resolve({ ok: true });
+    },
+    setIntervalImpl: (fn, ms) => { tick = { fn, ms }; return tick; },
+    clearIntervalImpl: (handle) => { if (handle === tick) tick = null; },
+  });
+  eq(reporter.startHeartbeat(), true, 'the heartbeat starts');
+  eq(tick && tick.ms, beatEvery, `at the documented interval (${beatEvery} ms)`);
+  eq(reporter.startHeartbeat(), false, 'and asking twice does not start a second one');
+  await Promise.resolve();
+  tick.fn();
+  await Promise.resolve();
+  eq(posts.length, 0, 'a beat before anything was reported sends nothing');
+
+  await reporter.report('working', '深度求索中', { reason: 'click', region: 'head', at: t0 });
+  eq(posts.length, 1, 'a normal report goes out');
+  eq(posts[0].state, 'working', 'with the state');
+  ok(Boolean(posts[0].touch), 'and the press');
+  await reporter.report('working', '深度求索中', { reason: 'click', region: 'head', at: t0 });
+  eq(posts.length, 1, 'the same report twice is deduplicated, which is what made silence ambiguous');
+  await tick.fn();
+  eq(posts.length, 2, 'but a BEAT sends it again');
+  eq(posts[1].state, 'working', 're-stating the state');
+  eq(posts[1].line, '深度求索中', 'and the line');
+  eq(posts[1].touch, undefined, 'and NOT the press, because a press is an event and not a state');
+  /**
+   * And the CLOCK travels too, including the fallback sentinel: the floating window has no turn frames of its own, so
+   * this relay is the only way its 用时 can be the app's number — or, without any frames at all, the state-clock answer.
+   */
+  await reporter.report('working', '深度求索中', null, { startedAt: t0, endedAt: null });
+  eq(posts[2].clock.startedAt, t0, 'a turn clock rides with the report');
+  await reporter.report('working', '深度求索中', null, 'state');
+  eq(posts[3].clock, 'state', 'and the stream-less sentinel rides as itself, not as null');
+  reporter.stopHeartbeat();
+  eq(tick, null, 'and it can be stopped, so a disposed widget does not keep talking');
+}
+
+// ---------------------------------------------------------------------------
+group('7. deferral: a completion arriving mid-drag is not lost');
+// ---------------------------------------------------------------------------
+{
+  let clock = 2_000_000;
+  const machine = new core.PetMachine(() => clock, 120000);
+  const idle = { available: true, running: false, pending: false, notice: undefined };
+
+  // A short drag must not put the pet to sleep: the idle deadline slides by the
+  // whole time the pointer owned it.
+  machine.setInteraction('held');
+  machine.setDeferral(true);
+  clock += 20000;                          // held for 20 s of a 120 s nap timeout
+  machine.setInteraction(null);
+  machine.setDeferral(false);
+  eq(machine.resolve(idle), 'resting', 'a 20 s drag of a 120 s timeout does not make the pet nap');
+
+  // The slide is bounded by MAX_DEFER_MS, so an hour-long drag cannot keep the
+  // pet awake indefinitely: it drifts to the banked maximum and then naps.
+  let clock2 = 3_000_000;
+  const machine2 = new core.PetMachine(() => clock2, 120000);
+  machine2.setDeferral(true);
+  clock2 += 60 * 60 * 1000;                // held for an hour
+  machine2.setDeferral(false);
+  eq(machine2.lastBusyAt, 3_000_000 + core.MAX_DEFER_MS,
+    'the banked deferral is clamped to MAX_DEFER_MS');
+  eq(machine2.resolve(idle), 'sleeping',
+    'after the cap the pet sleeps, because an hour really has passed');
+
+  // Unbalanced calls must be harmless.
+  const machine3 = new core.PetMachine(() => 0, 1000);
+  machine3.setDeferral(false);
+  machine3.setDeferral(true);
+  machine3.setDeferral(true);
+  eq(machine3.deferredSince, 0, 'a repeated freeze keeps the first timestamp');
+  machine3.setDeferral(false);
+  eq(machine3.deferredSince, null, 'resuming clears the freeze');
+}
+
+// ---------------------------------------------------------------------------
+group('8. session aggregate');
+// ---------------------------------------------------------------------------
+{
+  let clock = 5_000_000;
+  const aggregate = new core.SessionAggregate(() => clock);
+
+  aggregate.setInput({ connected: false, catalog: { byId: {}, phase: 'ready' }, statuses: new Map() });
+  eq(aggregate.snapshot().available, false, 'no connection means unavailable');
+
+  const statuses = new Map([['s1', { running: true }]]);
+  aggregate.setInput({ connected: true, catalog: { byId: { s1: {} }, phase: 'ready' }, statuses });
+  let snapshot = aggregate.snapshot();
+  eq(snapshot.available, true, 'connected and ready is available');
+  eq(snapshot.running, true, 'a running session is reported');
+  eq(snapshot.pending, false, 'no pending approval');
+
+  // Pending interaction takes a session out of "working".
+  aggregate.setInput({
+    connected: true,
+    catalog: { byId: { s1: {} }, phase: 'ready' },
+    statuses: new Map([['s1', { running: true, pendingInteraction: { id: 'x' } }]]),
+  });
+  snapshot = aggregate.snapshot();
+  eq(snapshot.pending, true, 'a pending interaction is reported');
+  eq(snapshot.workingCount, 0, 'a waiting session is not also working');
+  eq(snapshot.running, false, 'running counts only non-waiting sessions');
+
+  // Subagents are ignored.
+  aggregate.setInput({
+    connected: true,
+    catalog: { byId: { s1: { isSubagent: true } }, phase: 'ready' },
+    statuses: new Map([['s1', { running: true }]]),
+  });
+  eq(aggregate.snapshot().running, false, 'a subagent does not drive the pet');
+
+  // Turn boundaries: start records, end completes.
+  aggregate.reset([{ sessionId: 'main', isSubagent: false }]);
+  aggregate.setInput({ connected: true, catalog: { byId: { main: {} }, phase: 'ready' }, statuses: new Map() });
+  eq(aggregate.snapshot().running, false, 'a reset aggregate is idle');
+  aggregate.boundary({ type: 'turn/start', sessionId: 'main', seq: 1 });
+  eq(aggregate.snapshot().running, true, 'turn/start marks the session running');
+  aggregate.boundary({ type: 'turn/end', sessionId: 'main', seq: 2, reason: 'completed' });
+  snapshot = aggregate.snapshot();
+  eq(snapshot.running, false, 'turn/end stops it running');
+  eq(snapshot.notice?.reason, 'completed', 'turn/end records the completion notice');
+
+  // A subagent boundary is ignored entirely.
+  const before = aggregate.snapshot().notice;
+  aggregate.boundary({ type: 'turn/start', sessionId: 'child', seq: 9, isSubagent: true });
+  eq(aggregate.snapshot().notice, before, 'a subagent boundary changes nothing');
+  eq(aggregate.records.has('child'), false, 'a subagent boundary is not recorded');
+
+  // ---------------------------------------------------------------------------
+  // The store's own running flag, which is what makes 任务完成 work without the RPC
+  // boundary stream (the operator's "任务完成之后并没有任何提示").
+  // ---------------------------------------------------------------------------
+  {
+    const live = core.cleanPreferences({});
+    // Mutable, because a completion now waits out its settle window before the pet says 任务达成.
+    let now = 1_800_000_000_000;
+    const storeAggregate = new core.SessionAggregate(() => now);
+    const runningStore = (running) => new Map([['m1', { running }]]);
+    const base = { connected: true, catalog: { byId: { m1: {} }, phase: 'ready' }, statuses: runningStore(true) };
+
+    storeAggregate.setInput(base);
+    eq(storeAggregate.snapshot().running, true, 'a session the store calls running is working');
+
+    // The edge: the store says the turn ended. No boundary frame anywhere.
+    storeAggregate.setInput({ ...base, statuses: runningStore(false) });
+    eq(storeAggregate.snapshot().running, false, 'the store saying it stopped leaves 工作中');
+    eq(storeAggregate.snapshot().notice?.reason, 'completed',
+      'and that falling edge IS the completion notice, with no turn/end frame in sight');
+    {
+      /**
+       * End to end, with NO boundary frame anywhere: the snapshot the aggregate produces must be enough for the
+       * machine to say 任务达成. Handing the machine a synthetic `turn/end` here used to be how this check
+       * passed, and that is exactly the hole the operator found — the aggregate wrote the notice and the
+       * machine never read it ("完成后的提示还是没有传到独立桌宠上").
+       */
+      const machine = new core.PetMachine(() => now, 120000);
+      // The store edge is the ONLY source here, and the settlement is what stands between it and 任务达成.
+      eq(machine.resolve(storeAggregate.snapshot()), 'resting',
+        'the snapshot alone is not yet 任务达成: the completion is waiting out its settle window');
+      now += core.COMPLETION_SETTLE_MS + 1;
+      eq(machine.resolve(storeAggregate.snapshot()), 'done',
+        'the SNAPSHOT alone is enough: the machine adopts the aggregate’s completion notice');
+      eq(core.statusFor(live, 'done', now, now).text, '任务达成',
+        'and the line it says is the operator’s own');
+      // The window draws whatever the in-app pet published, so the machine's own state is what matters.
+      eq(storeAggregate.snapshot().available && storeAggregate.snapshot().running === false, true,
+        'while the snapshot itself reports nothing running — no 工作中 to fall back to');
+    }
+
+    // A new turn clears the old notice, exactly as a turn/start frame does.
+    storeAggregate.setInput({ ...base, statuses: runningStore(true) });
+    eq(storeAggregate.snapshot().notice, undefined, 'starting again clears the completion notice');
+
+    // The subagent rule holds for the store too: a helper finishing is not the user's task.
+    const sub = { connected: true, catalog: { byId: { m1: { isSubagent: true } }, phase: 'ready' } };
+    storeAggregate.setInput({ ...sub, statuses: runningStore(true) });
+    storeAggregate.setInput({ ...sub, statuses: runningStore(false) });
+    eq(storeAggregate.snapshot().notice, undefined, 'a subagent stopping is not a completion');
+
+    /**
+     * And the precedence that caused the stuck pet: a `turn/start` whose `turn/end` never arrives — a dropped
+     * stream, or the upgrade channel simply not being wired — must not outvote the store forever.
+     */
+    const pinned = new core.SessionAggregate(() => now);
+    pinned.reset([{ sessionId: 'm1', isSubagent: false }]);
+    pinned.setInput({ connected: true, catalog: { byId: { m1: {} }, phase: 'ready' }, statuses: runningStore(false) });
+    pinned.boundary({ type: 'turn/start', sessionId: 'm1', seq: 1 });
+    eq(pinned.snapshot().running, false,
+      'a boundary record cannot pin a session at running once the store says it stopped');
+    pinned.setInput({ connected: true, catalog: { byId: { m1: {} }, phase: 'ready' }, statuses: new Map() });
+    eq(pinned.snapshot().running, true,
+      'while a session the store does not list still falls back to its boundary record');
+  }
+
+  // A failure latches until a new turn starts; a success must not erase it.
+  aggregate.boundary({ type: 'turn/end', sessionId: 'main', seq: 3, reason: 'error' });
+  eq(aggregate.snapshot().notice?.reason, 'error', 'an error is recorded');
+  aggregate.boundary({ type: 'turn/end', sessionId: 'main', seq: 4, reason: 'completed' });
+  eq(aggregate.snapshot().notice?.reason, 'error', 'a following success does not erase a latched failure');
+  aggregate.boundary({ type: 'turn/start', sessionId: 'main', seq: 5 });
+  eq(aggregate.snapshot().notice, undefined, 'a new turn clears the latched failure');
+  aggregate.boundary({ type: 'turn/end', sessionId: 'main', seq: 6, reason: 'completed' });
+  eq(aggregate.snapshot().notice?.reason, 'completed', 'and the next turn reports normally again');
+
+  // Current-session scope filters other sessions out.
+  aggregate.reset([]);
+  aggregate.setInput({
+    connected: true,
+    scope: 'current',
+    currentSessionId: 'mine',
+    catalog: { byId: { mine: {}, other: {} }, phase: 'ready' },
+    statuses: new Map([['other', { running: true }]]),
+  });
+  eq(aggregate.snapshot().running, false, 'current scope ignores another session\'s turn');
+  eq(aggregate.snapshot().available, true, 'current scope is available when the selected session exists');
+
+  // …but a selected session that does not exist yet is not a session.
+  aggregate.setInput({
+    connected: true,
+    scope: 'current',
+    currentSessionId: 'not-created-yet',
+    catalog: { byId: { mine: {} }, phase: 'ready' },
+    statuses: new Map(),
+  });
+  eq(aggregate.snapshot().available, false, 'an unknown selected session is not available');
+
+  // Stale and malformed boundaries never throw.
+  aggregate.boundary(null);
+  aggregate.boundary({});
+  aggregate.boundary({ type: 'turn/start', sessionId: '' });
+  aggregate.boundary({ type: 'turn/start', sessionId: 'x', seq: 'not a number' });
+  ok(true, 'malformed boundaries are ignored without throwing');
+}
+
+// ---------------------------------------------------------------------------
+group('9. idle motion');
+// ---------------------------------------------------------------------------
+{
+  const pose0 = core.idlePose(0, 'resting', { periodSeconds: 4 });
+  const pose4 = core.idlePose(4, 'resting', { periodSeconds: 4 });
+  near(pose0.yaw, pose4.yaw, 1e-12, 'idle yaw loops exactly after one period');
+  near(pose0.breathScale, pose4.breathScale, 1e-12, 'breathing loops exactly after one period');
+  // There is NO vertical term any more. The idle used to carry a whole-body `bob`
+  // (`sin(2theta) * 0.0025` of a viewport height) and the report was that the pet drifted up and
+  // down; the user asked for left-right micro-motion only. Asserted as an absence, because "there is
+  // no vertical movement" is exactly the kind of thing a later refactor reintroduces by accident.
+  ok(!('bob' in pose0), 'the idle pose has no vertical term');
+  {
+    let vertical = null;
+    for (let t = 0; t < 4; t += 0.05) {
+      const pose = core.idlePose(t, 'resting', { periodSeconds: 4 });
+      const key = ['bob', 'lift', 'dy'].find((name) => name in pose);
+      if (key) { vertical = `${key} at t=${t.toFixed(2)}`; break; }
+    }
+    ok(vertical === null, `no vertical channel appears anywhere in the period (${vertical || 'none'})`);
+  }
+
+  // Breathing is a positive wobble around 1, never negative.
+  for (let t = 0; t < 4; t += 0.05) {
+    const pose = core.idlePose(t, 'resting', { periodSeconds: 4 });
+    ok(pose.breathScale > 0.9 && pose.breathScale < 1.1, `breathScale stays near 1 at t=${t.toFixed(2)}`);
+  }
+
+  // Yaw is bounded by the sway amplitude.
+  let maxYaw = 0;
+  for (let t = 0; t < 4; t += 0.01) {
+    maxYaw = Math.max(maxYaw, Math.abs(core.idlePose(t, 'resting', { periodSeconds: 4, swayAmplitude: 0.12 }).yaw));
+  }
+  ok(maxYaw <= 0.12 + 1e-9, 'yaw never exceeds the configured amplitude');
+
+  // Sleeping breathes more deeply than working.
+  const sleeping = core.idlePose(1, 'sleeping', { periodSeconds: 4 });
+  const working = core.idlePose(1, 'working', { periodSeconds: 4 });
+  ok(Math.abs(sleeping.breathScale - 1) > Math.abs(working.breathScale - 1),
+    'a sleeping pet breathes more deeply than a working one');
+
+  // Follow-through along a chain is delayed: link 0 leads, later links trail.
+  const lead = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).follow(0, 0.1);
+  const lag1 = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).follow(1, 0.1);
+  const lag2 = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).follow(2, 0.1);
+  ok(lead !== lag1 && lag1 !== lag2, 'each chain link has its own phase');
+  near(lead, core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).yaw, 1e-12,
+    'chain link 0 matches the body');
+
+  // Unknown states fall back instead of producing NaN.
+  const unknown = core.idlePose(1, 'nonsense', { periodSeconds: 4 });
+  ok(Number.isFinite(unknown.yaw) && Number.isFinite(unknown.breathScale), 'an unknown state still yields finite motion');
+}
+
+// ---------------------------------------------------------------------------
+group('10. constants are self-consistent');
+// ---------------------------------------------------------------------------
+{
+  eq(core.STATES.length, 11, 'eleven states are declared');
+  eq(new Set(core.STATES).size, core.STATES.length, 'state names are unique');
+  for (const state of core.INTERACTION_STATES) {
+    ok(core.STATES.includes(state), `interaction state "${state}" is a declared state`);
+  }
+  ok(core.MAX_DEFER_MS > core.NOTICE_WINDOW_MS, 'the deferral bound exceeds the notice window');
+  ok(core.FALL_PHYSICS.bounce > 0 && core.FALL_PHYSICS.bounce < 1, 'restitution is a fraction');
+  ok(core.FALL_PHYSICS.stepSeconds > 0 && core.FALL_PHYSICS.stepSeconds <= 1 / 30, 'physics sub-steps finely enough');
+  /**
+   * Removing the built-in avatar, and what "default" now means.
+   *
+   * Operator, 2026-10-10: "移除内置替身，默认模型设置为SampleModel". The default is the EMPTY id — automatic — and
+   * `resolveModelId` is the rule that turns it into a catalogued model, with the NAME (not the scan-order id)
+   * doing the choosing, because ids drift when files are added or the host restarts.
+   */
+  eq(core.DEFAULTS.modelId, '', 'the shipping default names no model: it resolves against the catalog');
+  const catalogFixture = [
+    { id: 'm1', name: 'HatsuneMikuNT.vrm' },
+    { id: 'm2', name: 'SampleModel.vrm' },
+    { id: 'm3', name: 'fish.pmx' },
+  ];
+  eq(core.resolveModelId(catalogFixture, ''), 'm2', 'an empty preference resolves to SampleModel');
+  eq(core.resolveModelId(catalogFixture, 'm9'), 'm2',
+    'and so does an id that is no longer in the catalog — ids are positions in a scan, so they drift');
+  eq(core.resolveModelId(catalogFixture, 'm3'), 'm3', 'a stored id that IS in the catalog is honoured');
+  eq(core.resolveModelId([{ id: 'm1', name: 'a.pmx' }], ''), 'm1',
+    'without any VRM, the first model of any kind beats showing nothing');
+  eq(core.resolveModelId([], ''), '', 'and an empty catalog resolves to nothing, which the surfaces report');
+  eq(core.cleanPreferences({ modelId: 'placeholder' }).modelId, '',
+    'a profile saved with the old default migrates to automatic instead of naming a removed avatar');
+  eq(core.modelChoices(catalogFixture.concat([{ id: 'placeholder', name: 'Built-in' }])).length, 3,
+    'and no surface offers the built-in avatar any more');
+}
+
+// ---------------------------------------------------------------------------
+group('11. authored motion (VMD / VRMA)');
+// ---------------------------------------------------------------------------
+{
+  // A VMD is identified by its ASCII banner and a VRMA by the extension inside
+  // its GLB JSON chunk, so both detectors are exercised on real byte layouts
+  // rather than on a name.
+  function glb(jsonText, extraChunk) {
+    const json = Buffer.from(jsonText, 'ascii');
+    const padding = (4 - (json.length % 4)) % 4;
+    const jsonChunk = Buffer.concat([json, Buffer.alloc(padding, 0x20)]);
+    const tail = extraChunk ? Buffer.from(extraChunk, 'ascii') : Buffer.alloc(0);
+    const total = 12 + 8 + jsonChunk.length + (tail.length ? 8 + tail.length : 0);
+    const head = Buffer.alloc(20);
+    head.write('glTF', 0, 'ascii');
+    head.writeUInt32LE(2, 4);
+    head.writeUInt32LE(total, 8);
+    head.writeUInt32LE(jsonChunk.length, 12);
+    head.writeUInt32LE(0x4e4f534a, 16); // bytes 'J' 'S' 'O' 'N'
+    const parts = [head, jsonChunk];
+    if (tail.length) {
+      const chunkHead = Buffer.alloc(8);
+      chunkHead.writeUInt32LE(tail.length, 0);
+      chunkHead.writeUInt32LE(0x004e4942, 4); // bytes 'B' 'I' 'N' 0x00
+      parts.push(chunkHead, tail);
+    }
+    return Buffer.concat(parts);
+  }
+
+  ok(core.MOTION_EXTENSIONS.includes('.vmd') && core.MOTION_EXTENSIONS.includes('.vrma'),
+    'both motion extensions are recognised');
+  eq(core.isMotionFile('a.vmd'), true, 'isMotionFile accepts .vmd');
+  eq(core.isMotionFile('B.VRMA'), true, 'isMotionFile is case-insensitive');
+  eq(core.isMotionFile('c.vrm'), false, 'a VRM model is not a motion file');
+  eq(core.isMotionFile('d.pmx'), false, 'an MMD model is not a motion file');
+
+  // The drag poses are pointer-owned; a clip that displaced the body would fight the fall integration that
+  // decides where the pet lands. `sleeping` and `greeting` are excluded for the operator's reason instead:
+  // they are not things DSH is doing, so they are not rows in the 状态 section.
+  for (const state of core.INTERACTION_STATES) {
+    eq(core.MOTION_STATES.includes(state), false, `interaction state "${state}" cannot be overridden by a motion`);
+  }
+  for (const state of ['sleeping', 'greeting']) {
+    eq(core.MOTION_STATES.includes(state), false,
+      `"${state}" is not one of the six configurable states`);
+  }
+  eq(core.STATES.length - core.MOTION_STATES.length, core.INTERACTION_STATES.length + 2,
+    'the states a motion cannot drive are exactly the three drag poses plus sleeping and greeting');
+  for (const state of ['resting', 'working', 'waiting', 'done', 'error', 'offline']) {
+    ok(core.MOTION_STATES.includes(state), `"${state}" can be overridden by a motion`);
+  }
+
+  const vmdBytes = Buffer.concat([Buffer.from('Vocaloid Motion Data 0002', 'ascii'), Buffer.alloc(64)]);
+  eq(core.detectMotionFormat(vmdBytes), 'vmd', 'the VMD banner is detected');
+  eq(core.detectMotionFormat(Buffer.concat([Buffer.from('Vocaloid Motion', 'ascii'), Buffer.alloc(64)])), 'unknown',
+    'a truncated banner is not a VMD');
+  eq(core.detectMotionFormat(glb('{"extensions":{"VRMC_vrm_animation":{"specVersion":"1.0"}}}')), 'vrma',
+    'a VRMA is detected by the extension in its JSON chunk');
+  eq(core.detectMotionFormat(glb('{"asset":{"version":"2.0"},"extensions":{"VRMC_vrm":{}}}')), 'unknown',
+    'a VRM model is not a motion, even though both are GLB');
+  eq(core.detectMotionFormat(glb('{"asset":{"version":"2.0"}}')), 'unknown', 'a plain GLB model is not a motion');
+  // The search is bounded to the JSON chunk on purpose: a GLB whose *binary*
+  // payload happens to contain the extension name is not a VRMA.
+  eq(core.detectMotionFormat(glb('{"asset":{"version":"2.0"}}', 'VRMC_vrm_animation')), 'unknown',
+    'the detection stays inside the JSON chunk');
+  eq(core.detectMotionFormat(Buffer.from([1, 2, 3, 4, 5, 6, 7, 8])), 'unknown', 'arbitrary bytes are unknown');
+  eq(core.detectMotionFormat(Buffer.alloc(2)), 'unknown', 'a buffer too short to identify is unknown');
+  eq(core.detectMotionFormat(new Uint8Array(0)), 'unknown', 'an empty buffer is unknown');
+  // A view into a larger buffer must read from its own offset, not the start of
+  // the underlying ArrayBuffer: the host hands the scene a slice.
+  const padded = Buffer.concat([Buffer.alloc(16, 0xff), vmdBytes]);
+  eq(core.detectMotionFormat(new Uint8Array(padded.buffer, padded.byteOffset + 16, vmdBytes.length)), 'vmd',
+    'a byte-offset view is read from its own offset');
+
+  // `eq` compares with Object.is, which is reference equality for objects, so the
+  // maps below are compared by value serialisation instead.
+  function same(actual, expected, label) {
+    eq(JSON.stringify(actual), JSON.stringify(expected), label);
+  }
+
+  // The list shape, and the legacy string it replaced. The string form is not a
+  // courtesy: the map is PERSISTED, so every profile written before this build holds
+  // `{ resting: 'a1' }`, and a cleaner that refused it would silently erase the
+  // operator's whole motion configuration on the first run of the new build.
+  same(core.cleanMotions({ resting: 'a', held: 'x', bogus: 'y', working: '', sleeping: 7 }), { resting: ['a'] },
+    'a legacy bare-string id is normalised to a one-entry list (and unknown/empty values dropped)');
+  same(core.cleanMotions(null), {}, 'cleanMotions tolerates a missing map');
+  same(core.cleanMotions({ resting: ['a2', 'a1'] }), { resting: ['a2', 'a1'] },
+    'a list is kept in the order it was written, so the panel and the draw are stable');
+  same(core.cleanMotions({ resting: ['a1', 'a1', 'a2', '', 7, null] }), { resting: ['a1', 'a2'] },
+    'duplicates and non-ids are dropped: the same clip twice would double its chance of being drawn');
+  eq(core.cleanMotions({ resting: 'z'.repeat(900) }).resting[0].length, core.MOTION_LIMITS.idLength,
+    'cleanMotions caps an id length');
+  eq(core.cleanMotions({ resting: Array.from({ length: 40 }, (_, i) => 'a' + i) }).resting.length,
+    core.MOTION_LIMITS.maxPerState, 'cleanMotions caps how many clips one state may draw from');
+
+  const withMotion = core.cleanPreferences({ motions: { resting: 'm1', held: 'no' } });
+  same(withMotion.motions, { resting: ['m1'] },
+    'cleanPreferences carries the motion map through its own filter, string form included');
+  same(core.cleanPreferences({}).motions, {}, 'no motions configured by default');
+  eq(core.cleanPreferences({ motions: { resting: 'x' } }).motions === core.cleanPreferences({}).motions, false,
+    'each cleaned preference set owns its own motion map');
+  same(core.DEFAULTS.motions, {}, 'the shipped default selects no authored motion');
+
+  // The three helpers the surfaces share. They exist in core so the app panel, the
+  // settings window and the host all read and write ONE shape.
+  same(core.motionIdsFor({ resting: ['a1', 'a2'] }, 'resting'), ['a1', 'a2'], 'motionIdsFor reads a list');
+  same(core.motionIdsFor({ resting: 'a1' }, 'resting'), ['a1'], 'motionIdsFor reads the legacy string');
+  same(core.motionIdsFor({}, 'resting'), [], 'motionIdsFor answers an empty list for an unset state');
+  same(core.motionIdsFor(null, 'resting'), [], 'motionIdsFor tolerates a missing map');
+  eq(core.motionIdsFor({ held: ['x'] }, 'held').length, 0,
+    'motionIdsFor refuses a state the session machine cannot reach, like the cleaner does');
+
+  same(core.motionIdList({ resting: ['a3', 'a1'], working: ['a1', 'a2'] }), ['a3', 'a1', 'a2'],
+    'motionIdList is every distinct id in first-seen order — the set that has to be preloaded');
+  same(core.motionIdList({ resting: 'a1' }), ['a1'], 'motionIdList reads the legacy string shape too');
+  same(core.motionIdList(null), [], 'motionIdList tolerates a missing map');
+
+  const toggled = core.setMotionIds({ resting: ['a1'], done: 'a2' }, 'resting', ['a1', 'a5', 'a5']);
+  same(toggled, { resting: ['a1', 'a5'], done: ['a2'] },
+    'setMotionIds replaces one state and leaves the others alone (deduplicating what it is handed)');
+  same(core.setMotionIds({ resting: ['a1'] }, 'resting', []), {},
+    'clearing the last clip deletes the key, which is what "procedural idle" is stored as');
+  same(core.setMotionIds({ resting: ['a1'] }, 'held', ['a9']).resting, ['a1'],
+    'a state the session machine cannot reach cannot be written');
+  eq(core.setMotionIds({ resting: ['a1'] }, 'resting', ['a2']) === core.setMotionIds({ resting: ['a1'] }, 'resting', ['a2']),
+    false, 'every call answers a fresh map, so a caller can never half-update a shared one');
+
+  // Per-clip play mode: the directory's manifest declares it, the preference overrides it, and an absent
+  // override means "ask the catalog" rather than "loop".
+  same(core.cleanMotionLoop({ a1: true, a2: false, a3: 'yes', '': true }), { a1: true, a2: false },
+    'cleanMotionLoop keeps boolean overrides for named clips, and drops anything else');
+  eq(core.motionLoopFor(core.cleanPreferences({ motionLoop: { a2: true } }), 'a2', false), true,
+    'a preference override beats the catalog: a declared one-shot can be forced back to looping');
+  eq(core.motionLoopFor(core.cleanPreferences({}), 'a2', false), false,
+    'with no override the catalog decides, so a declared one-shot stays a one-shot');
+  eq(core.motionLoopFor(core.cleanPreferences({ motionLoop: { a2: true } }), 'a9', false), false,
+    'an override for one clip never leaks to another');
+  eq(core.motionLoopFor(core.cleanPreferences({}), 'a9', undefined), true,
+    'and a clip the catalog says nothing about loops, which is the shipped behaviour');
+  same(core.setMotionLoop(core.cleanPreferences({ motionLoop: { a1: true } }), 'a2', false),
+    { a1: true, a2: false }, 'setMotionLoop adds one entry and keeps the rest');
+  same(core.setMotionLoop(core.cleanPreferences({ motionLoop: { a1: true, a2: false } }), 'a2', null), { a1: true },
+    'setting null removes the override, which is what "follow the file" means');
+
+  // Per-state one-shot interval: a random window in seconds, and 0 means off.
+  same(core.cleanMotionEvery({ resting: { min: 20, max: 80 }, bogus: { min: 1, max: 2 }, held: { min: 1, max: 2 } }),
+    { resting: { min: 20, max: 80 } }, 'cleanMotionEvery keeps the states a session can reach');
+  same(core.cleanMotionEvery({ resting: { min: 80, max: 20 } }), { resting: { min: 20, max: 80 } },
+    'an inverted window is ordered rather than dropped');
+  same(core.cleanMotionEvery({ resting: { min: 5, max: 0 }, working: { min: 0, max: 0 } }), {},
+    'a window whose max is 0 is OFF: it carries no entry at all');
+  same(core.cleanMotionEvery({ resting: { min: -10, max: 99999 } }),
+    { resting: { min: 0, max: core.MOTION_EVERY_LIMITS.maxSeconds } }, 'a window is clamped to sane seconds');
+  same(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'resting'),
+    { min: 20, max: 80 }, 'motionEveryFor reads one state window through the cleaner');
+  eq(core.motionEveryFor(core.cleanPreferences({}), 'resting'), null, 'and answers null when the state has none');
+  eq(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 1, max: 2 } } }), 'held'), null,
+    'a state the session machine cannot reach has no window, whatever the stored blob says');
+  same(core.setMotionEvery(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'working', { min: 5, max: 10 }),
+    { resting: { min: 20, max: 80 }, working: { min: 5, max: 10 } }, 'setMotionEvery adds a state and keeps the others');
+  same(core.setMotionEvery(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'resting', null), {},
+    'clearing one state leaves no entry behind');
+
+  // Per state, per clip: the play mode, the expression and the mouth that clip uses IN that state.
+  same(core.cleanMotionClips({
+    resting: { a1: { loop: false, expression: 'Joy', mouth: 'A' }, a2: { loop: 'yes' } },
+    held: { a1: { loop: true } },
+    working: { a3: { expression: '' } },
+  }), { resting: { a1: { loop: false, expression: 'Joy', mouth: 'A' } } },
+  'cleanMotionClips keeps a reachable state, boolean modes and named faces, and drops everything else');
+  same(core.cleanMotionClips({ resting: { a1: { loop: false, expression: 'Joy' } } }), { resting: { a1: { loop: false, expression: 'Joy' } } },
+    'a plain entry survives unchanged');
+  same(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { mouth: 'A' } } } }), 'resting', 'a1'),
+    { mouth: 'A' }, 'motionClipFor reads one state-and-clip entry');
+  eq(core.motionClipFor(core.cleanPreferences({}), 'resting', 'a1'), null, 'and answers null when there is none');
+  eq(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'held', 'a1'), null,
+    'a state the session machine cannot reach has no per-clip entry');
+
+  // The three layers of the play mode, most specific first. This is the operator's "每个状态下，可以针对每个动作
+  // 设置该状态下该动作为循环还是单次" (2026-10-09).
+  const layered = core.cleanPreferences({
+    motionLoop: { a1: true },
+    motionClips: { resting: { a1: { loop: false } }, done: { a1: { mouth: 'A' } } },
+  });
+  eq(core.motionLoopForState(layered, 'resting', 'a1', true), false,
+    'the state\'s own entry beats the per-clip override: a clip can be a one-shot in one state only');
+  eq(core.motionLoopForState(layered, 'done', 'a1', false), true,
+    'a state entry that says nothing about the mode falls through to the per-clip override');
+  eq(core.motionLoopForState(core.cleanPreferences({}), 'resting', 'a1', false), false,
+    'and with neither, the catalog\'s declaration stands');
+
+  const written = core.setMotionClip(core.cleanPreferences({}), 'resting', 'a1', 'expression', 'Joy');
+  same(written, { resting: { a1: { expression: 'Joy' } } }, 'setMotionClip writes one field of one pair');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: written }), 'resting', 'a1', 'mouth', 'A'),
+    { resting: { a1: { expression: 'Joy', mouth: 'A' } } }, 'and keeps the field that was already decided');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: written }), 'resting', 'a1', 'expression', null), {},
+    'clearing the last field drops the entry, so "no decision" and "an empty decision" are the same thing');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'held', 'a1', 'loop', true),
+    { resting: { a1: { loop: true } } }, 'a state the session machine cannot reach cannot be written');
+
+  /**
+   * The per-clip 凝视 switch, and the idle rule's setting. Both are the operator's 2026-10-09 late requests:
+   * "给每个状态下每个动作加上鼠标凝视的开关" and "如果鼠标连续5秒没有移动，就停止鼠标凝视" — with the second one
+   * also being "作为一个选项写到设置里面方便调试".
+   */
+  same(core.setMotionClip(core.cleanPreferences({}), 'resting', 'a1', 'gaze', false),
+    { resting: { a1: { gaze: false } } }, 'the per-clip gaze switch is stored as a refusal');
+  eq(core.motionGazeFor(core.cleanPreferences({ motionClips: { resting: { a1: { gaze: false } } } }), 'resting', 'a1'), false,
+    'and that refusal reaches the renderer');
+  eq(core.motionGazeFor(core.cleanPreferences({}), 'resting', 'a1'), true,
+    'while a clip nobody has touched follows the pointer, exactly as it did before the switch existed');
+  eq(core.motionGazeFor(core.cleanPreferences({ motionClips: { resting: { a1: { gaze: false } } } }), 'done', 'a1'), true,
+    'and the refusal is per STATE: the same clip can still look at the cursor in another state');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { gaze: false, mouth: 'A' } } } }), 'resting', 'a1', 'gaze', null),
+    { resting: { a1: { mouth: 'A' } } }, 'clearing the switch drops only the switch');
+  same(core.cleanMotionClips({ resting: { a1: { gaze: true } } }), {},
+    'a stored "gaze: true" is dropped rather than kept: the switch only ever records a refusal');
+
+  eq(core.DEFAULTS.gazeIdleSeconds, 5, 'the idle rule starts at the five seconds the operator asked for');
+  eq(core.cleanPreferences({}).gazeIdleSeconds, 5, 'and a profile that says nothing keeps it');
+  eq(core.cleanPreferences({ gazeIdleSeconds: 0 }).gazeIdleSeconds, 0,
+    'zero is a VALUE, not a missing one: it turns the rule off for debugging');
+  eq(core.cleanPreferences({ gazeIdleSeconds: -4 }).gazeIdleSeconds, 0, 'a negative number lands on zero');
+  eq(core.cleanPreferences({ gazeIdleSeconds: 9999 }).gazeIdleSeconds, core.GAZE_LIMITS.idleSecondsMax,
+    'and a huge one is clamped to the control\'s own maximum');
+  eq(core.cleanPreferences({ gazeIdleSeconds: 'nonsense' }).gazeIdleSeconds, 5,
+    'while something unparseable falls back to the default rather than to "never"');
+  // The one-second buffer the operator asked for after seeing the snap: "凝视暂停和重新开始要让人物在1秒缓冲时间内
+  // 均匀转头回归或者凝视鼠标，不然动画看上去很诡异". A number in core rather than a literal in the renderer, so a suite
+  // can set it to 0 and measure the mechanism without the ramp.
+  eq(core.GAZE_LIMITS.blendSeconds, 1, 'the gaze ramps in and out over one second');
+
+  /**
+   * The cursor's draught: how a sweep across the pet becomes a direction for the spring chains.
+   *
+   * Operator, 2026-10-10: "增加鼠标在模型上划过时，可以随着鼠标划过的方向摆动弹簧骨结构的功能". The mapping is a
+   * pure function precisely so it can be pinned here, without a model: the direction must follow what the user
+   * SAW (so the view orbit is undone), the strength must scale with SPEED (so a resting cursor blows nothing),
+   * and screen-down must stay down.
+   */
+  const rightSweep = core.windFromPointer({ dx: 200, dy: 0, dt: 0.1, viewYaw: 0 });
+  eq(rightSweep.x, 1, 'a sweep to the right blows the hair to the model\'s +x');
+  eq(rightSweep.y, 0, 'with nothing vertical in it');
+  eq(Math.round(rightSweep.z * 1e6) / 1e6, 0, 'and nothing out of the screen when the camera is square on');
+  ok(Math.abs(rightSweep.power - 1) < 1e-9, 'a 2000 px/s sweep is full strength');
+  const downSweep = core.windFromPointer({ dx: 0, dy: 120, dt: 0.1, viewYaw: 0 });
+  eq(downSweep.y, -1, 'a sweep DOWN pushes the chains down, which is -y in three');
+  eq(downSweep.power, 1200 / core.WIND_LIMITS.speedForMax, 'and the strength is the speed over the full-speed mark');
+  const orbited = core.windFromPointer({ dx: 200, dy: 0, dt: 0.1, viewYaw: Math.PI / 2 });
+  ok(Math.abs(orbited.x) < 1e-9 && Math.abs(orbited.z - 1) < 1e-9,
+    'the same sweep with the camera turned 90° blows along the model\'s z: the user watched it go sideways');
+  const resting = core.windFromPointer({ dx: 0, dy: 0, dt: 0.1, viewYaw: 0 });
+  eq(resting.power, 0, 'a cursor that is not moving blows nothing at all');
+  eq(core.windFromPointer({ dx: 50, dy: 50, dt: 0 }).power, 0, 'and neither does a sample with no time in it');
+  ok(core.windFromPointer({ dx: 99999, dy: 0, dt: 0.01 }).power === 1,
+    'while an absurdly fast swipe is clamped rather than tearing the chains off');
+
+  /**
+   * And how strong it is, and how LOCAL.
+   *
+   * Two follow-ups from the operator (2026-10-10): "强度太大了，降低80%" and "想要局部风而不是全局风". The first is
+   * the number below — 1.6 for one round, 0.32 now — and the second is `windFalloff`, which is what decides how
+   * much of the draught a joint gets for being a given distance from the cursor.
+   */
+  eq(core.WIND_LIMITS.power, 0.32, 'the draught is a fifth of what it was: 1.6 cut by 80%');
+  eq(core.WIND_LIMITS.power, Math.round(1.6 * 0.2 * 100) / 100, 'which is exactly 20% of the earlier strength');
+  eq(core.windFalloff(0, 100), 1, 'a joint under the cursor gets the whole draught');
+  eq(core.windFalloff(100, 100), 0, 'one at the edge of the reach gets none of it');
+  eq(core.windFalloff(180, 100), 0, 'and one beyond the reach is not "blown a little", it is untouched');
+  const half = core.windFalloff(50, 100);
+  ok(half > 0 && half < 1, `and halfway out it is between the two (${half.toFixed(3)})`);
+  ok(core.windFalloff(20, 100) > core.windFalloff(70, 100), 'falling off with distance, never rising');
+  eq(core.windFalloff(10, 0), 0, 'a reach of nothing reaches nothing rather than dividing by zero');
+  ok(core.WIND_LIMITS.radiusFraction > 0 && core.WIND_LIMITS.radiusFraction <= 1,
+    'the reach is a fraction of the model as drawn, so it scales with the zoom');
+
+  /**
+   * The four draught numbers as SETTINGS.
+   *
+   * Operator, 2026-10-10: "把鼠标互动的参数加入设置面板" — after two rounds of tuning by conversation, which is the
+   * lesson worth encoding: these are feel values, so they belong where the person feeling them can move them.
+   */
+  const windDefaults = core.cleanPreferences({});
+  eq(windDefaults.windPower, core.DEFAULTS.windPower, 'a profile that says nothing keeps the tuned strength');
+  eq(windDefaults.windPower, 0.32, 'which is the value the tuning arrived at');
+  eq(windDefaults.windRadius, 0.45, 'and the tuned reach');
+  eq(core.cleanPreferences({ windPower: 0 }).windPower, 0,
+    'ZERO is a value: it turns the draught off without disturbing the other three numbers');
+  eq(core.cleanPreferences({ windRadius: 0 }).windRadius, 0,
+    'and a reach of zero means GLOBAL, which the control offers so the two shapes can be compared by feel');
+  eq(core.cleanPreferences({ windPower: 99 }).windPower, core.WIND_RANGES.power.max,
+    'an absurd strength is clamped to the range the slider offers');
+  eq(core.cleanPreferences({ windSpeedForMax: 1 }).windSpeedForMax, core.WIND_RANGES.speedForMax.min,
+    'and so is a speed that would make every twitch a gale');
+  eq(core.cleanPreferences({ windDecay: -1 }).windDecay, core.WIND_RANGES.decay.min,
+    'a negative time constant lands on the smallest positive one');
+  eq(core.cleanPreferences({ windDecay: 'nonsense' }).windDecay, core.DEFAULTS.windDecay,
+    'while something unparseable falls back to the default rather than to zero');
+  ok(Object.keys(core.WIND_RANGES).length === 4
+    && core.DEFAULTS.windPower === core.WIND_LIMITS.power
+    && core.DEFAULTS.windRadius === core.WIND_LIMITS.radiusFraction
+    && core.DEFAULTS.windDecay === core.WIND_LIMITS.decaySeconds
+    && core.DEFAULTS.windSpeedForMax === core.WIND_LIMITS.speedForMax,
+    'the four ranges exist, and every shipped default is the constant the renderer falls back to');
+
+  /**
+   * The transient preview the settings window drives.
+   *
+   * `null` is the CLEAR signal and also the normal state, which is why an instruction with nothing in it
+   * cannot be represented: "show nothing" and "show a blank thing" would otherwise be different values.
+   */
+  same(core.cleanPreview({ state: 'resting', motionId: 'a1', expression: 'Joy', mouth: 'A' }),
+    { state: 'resting', motionId: 'a1', expression: 'Joy', mouth: 'A' }, 'cleanPreview keeps an instruction');
+  eq(core.cleanPreview({}), null, 'an empty instruction is a CLEAR, not an entry');
+  eq(core.cleanPreview(null), null, 'and so is nothing at all');
+  same(core.cleanPreview({ state: 'held', motionId: 'a1' }), { motionId: 'a1' },
+    'a state the session machine cannot reach is dropped, and the rest of the instruction survives');
+}
+
+// ---------------------------------------------------------------------------
+group('11b. the spring chain identity, in both halves');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * An unnamed chain is the normal case in VRM 0.x: the name is a free-text `comment` that most exporters
+   * leave empty, and an empty key could neither be stored (`cleanSprings` drops it) nor looked up
+   * (`springOverrideFor` refuses it). The operator's "设置面板中存在大量无法修改的未命名链" was exactly that,
+   * made worse by the renderer inventing a different fallback name of its own (2026-10-09).
+   */
+  eq(core.springChainKey({ name: 'LiuHai.L' }, 3), 'LiuHai.L', 'a named chain keeps its name as the key');
+  eq(core.springChainKey({ comment: 'Skirt' }, 0), 'Skirt', 'and a VRM 0.x comment counts as a name');
+  eq(core.springChainKey({ name: '', kind: 'vrm0' }, 7), 'hair7',
+    'an unnamed VRM 0.x chain falls back to the index the renderer also uses');
+  eq(core.springChainKey({ kind: 'vrm1' }, 2), 'spring2', 'and an unnamed VRM 1.0 spring does the same');
+  eq(core.springChainKey({ name: '' }, 0), 'hair0', 'with no kind, the VRM 0.x fallback is used');
+  eq(core.springChainKey(null, -5), 'hair0', 'a missing chain and a negative index are tolerated');
+  eq(core.springChainKey({ name: 'x'.repeat(300) }, 0).length, core.SPRING_LIMITS.keyLength,
+    'and a silly name is truncated rather than stored whole');
+  ok(core.springChainKey({ name: '' }, 1) !== core.springChainKey({ name: '' }, 2),
+    'two unnamed chains get DIFFERENT keys — the bug was that they shared the empty string');
+
+  // A key is what makes an override storable at all: this pairs the identity with the store it feeds.
+  const prefs = core.cleanPreferences({});
+  const key = core.springChainKey({ name: '' }, 4);
+  core.setSpringOverride(prefs, 'm2', key, 'stiffness', 1.5);
+  same(prefs.springs, { m2: { hair4: { stiffness: 1.5 } } },
+    'an unnamed chain\'s override is stored under its key instead of being dropped');
+}
+
+// ---------------------------------------------------------------------------
+group('12. the VRM relaxed stand (aimDownQuaternion)');
+// ---------------------------------------------------------------------------
+{
+  // A VRM's rest pose is a T-pose, so the procedural idle has to bring the arms
+  // down. The rotation is derived from the rig instead of hardcoded (models disagree
+  // about bone roll, and VRM 0.x/1.0 disagree about which way a bone points), which
+  // makes this the cheap half of that fix: pure vector maths, no browser.
+  const down = [0, -1, 0];
+
+  // A left arm pointing straight out along +X: 90° from down, clamped to the limit.
+  const left = core.aimDownQuaternion([1, 0, 0], down, 1.31);
+  ok(left !== null, 'an arm pointing sideways has a rotation');
+  near(left.angle, 1.31, 1e-6, 'the rotation is clamped to the limit rather than snapping vertical');
+  near(Math.abs(left.axis[2]), 1, 1e-6, 'the rotation happens about the axis perpendicular to arm and down');
+  near(left.axis[0], 0, 1e-6, 'the axis has no component along the arm');
+
+  // The mirrored arm gets the mirrored axis, so both arms come down, and the maths
+  // needs no per-side sign table to achieve that.
+  const right = core.aimDownQuaternion([-1, 0, 0], down, 1.31);
+  near(right.angle, left.angle, 1e-6, 'the mirrored arm gets the same angle');
+  near(right.axis[2], -left.axis[2], 1e-6, 'the mirrored arm gets the opposite axis');
+
+  // An arm already hanging barely moves: this is a clamp, not a fixed pose, so a
+  // model whose rest pose is an A-pose is not dragged further than it should be.
+  const hanging = core.aimDownQuaternion([0.1, -0.99, 0], down, 1.31);
+  ok(hanging !== null && hanging.angle < 0.2, `an almost-hanging arm barely rotates (${hanging && hanging.angle})`);
+
+  // Nothing to do, and nothing to divide by.
+  eq(core.aimDownQuaternion([0, -1, 0], down, 1.31), null, 'an arm already pointing down is left alone');
+  eq(core.aimDownQuaternion([0, 0, 0], down, 1.31), null, 'a zero-length arm axis is refused');
+  eq(core.aimDownQuaternion([1, 0, 0], [0, 0, 0], 1.31), null, 'a zero-length target is refused');
+  eq(core.aimDownQuaternion([1, 0, 0], down, 0), null, 'a zero limit is refused');
+  eq(core.aimDownQuaternion([1, 0, 0], down, NaN), null, 'a non-finite limit is refused');
+  eq(core.aimDownQuaternion(null, down, 1.31), null, 'a missing limb axis is refused');
+
+  // Exactly antiparallel: acos gives a half turn and the cross product vanishes, so
+  // the perpendicular has to be chosen rather than computed into NaN.
+  const flipped = core.aimDownQuaternion([0, 1, 0], down, 1.31);
+  ok(flipped !== null && Number.isFinite(flipped.angle), 'an antiparallel arm still gets a finite rotation');
+  near(flipped.angle, 1.31, 1e-6, 'the antiparallel case is clamped like any other');
+  ok(Math.abs(Math.hypot(flipped.axis[0], flipped.axis[1], flipped.axis[2]) - 1) < 1e-6,
+    'the chosen perpendicular is a unit vector');
+
+  // Inputs are read, never modified: the caller passes its live bone vectors.
+  const limb = [3, 4, 0];
+  core.aimDownQuaternion(limb, down, 1.31);
+  eq(limb.join(','), '3,4,0', 'the limb axis is not modified in place');
+  eq(core.aimDownQuaternion([0, 2, 0], [0, -4, 0], 1.31).angle, 1.31, 'non-unit inputs are normalised, not rescaled');
+}
+
+// ---------------------------------------------------------------------------
+group('13. pointer aim (which way the pet looks)');
+// ---------------------------------------------------------------------------
+{
+  // Reported: "the view follows the mouse until the cursor leaves the pet's frame, then
+  // it stops". The cause was the units — the aim was measured against the canvas
+  // half-size and dropped entirely past 1.6 of them — so what is asserted here is that
+  // the aim is measured against the PET's centre and saturates instead of vanishing.
+  const centre = { centreX: 1000, centreY: 600 };
+
+  const atCentre = core.pointerAim(Object.assign({ pointerX: 1000, pointerY: 600 }, centre));
+  eq(atCentre.x, 0, 'a pointer on the pet aims straight ahead horizontally');
+  eq(atCentre.y, 0, 'and vertically');
+
+  const right = core.pointerAim(Object.assign({ pointerX: 1200, pointerY: 500 }, centre));
+  ok(right.x > 0, 'a pointer to the right aims right');
+  ok(right.y < 0, 'a pointer above aims up, i.e. in screen-negative y');
+  near(right.x, core.gazeCurve(200 / core.GAZE_SPAN.x), 1e-9,
+    'the horizontal aim is the offset over the span, through the response curve');
+  near(right.y, -core.gazeCurve(100 / core.GAZE_SPAN.y), 1e-9, 'the vertical aim uses its own span');
+
+  // The response curve is the user's "近处快、远处慢" request. These are the properties that make it that
+  // rather than a differently-scaled straight line: it starts and ends at the corners (so the span keeps
+  // its meaning) and its slope FALLS from the centre to the edge.
+  near(core.gazeCurve(0), 0, 1e-12, 'the curve leaves the centre at zero');
+  near(core.gazeCurve(1), 1, 1e-12, 'and reaches full deflection exactly at one span');
+  const slopeNear = (core.gazeCurve(0.05) - core.gazeCurve(0)) / 0.05;
+  const slopeFar = (core.gazeCurve(1) - core.gazeCurve(0.95)) / 0.05;
+  ok(slopeNear > slopeFar * 3,
+    `the slope falls from the centre to the edge (${slopeNear.toFixed(2)} -> ${slopeFar.toFixed(2)})`);
+  ok(core.gazeCurve(0.1) > 0.2,
+    `a tenth of the span already buys a fifth of the turn (${core.gazeCurve(0.1).toFixed(3)})`);
+  ok(core.gazeCurve(0.5) > 0.65 && core.gazeCurve(0.5) < 0.8,
+    `half the span buys about three quarters of the turn (${core.gazeCurve(0.5).toFixed(3)})`);
+  ok(core.gazeCurve(0.3) < core.gazeCurve(0.6) && core.gazeCurve(0.6) < core.gazeCurve(0.9),
+    'the curve is monotone, so the head never turns back while the cursor keeps going');
+  near(core.pointerAim(Object.assign({ pointerX: 800, pointerY: 600 }, centre)).x,
+    -right.x, 1e-12, 'the curve is mirrored about the centre, so both sides feel the same');
+
+  // Both halves of the response are now SETTINGS (the 模型参数 window's 视线 section), and these are the
+  // contracts the settings UI leans on: the curve's slope is an input, 1 means exactly a straight line (so
+  // "linear" stays reachable and comparable), and the aim's span comes from the preference.
+  near(core.gazeCurve(0.5, 1), 0.5, 1e-12, 'an edge slope of 1 is exactly a straight line');
+  near(core.gazeCurve(0.5, 0.25), 0.5 / (0.25 + 0.75 * 0.5), 1e-12, 'a steeper setting curves the response');
+  ok(core.gazeCurve(0.2, 0.15) > core.gazeCurve(0.2, 0.5),
+    'a smaller slope turns the head further at the same distance');
+  near(core.gazeCurve(0.5, 5), core.gazeCurve(0.5, 1), 1e-12,
+    'a setting outside the range is clamped rather than followed');
+  near(core.gazeCurve(0.5, 0.01), core.gazeCurve(0.5, 0.1), 1e-12, 'and clamped at the other end too');
+  near(core.pointerAim(Object.assign({ pointerX: 1200, pointerY: 500, curve: 1 }, centre)).x,
+    200 / core.GAZE_SPAN.x, 1e-12, 'the curve is the ONLY thing shaping the aim, so slope 1 is the old line');
+  near(core.pointerAim(Object.assign({ pointerX: 1200, pointerY: 500, curve: 0.1 }, centre)).x,
+    core.gazeCurve(200 / core.GAZE_SPAN.x, 0.1), 1e-12, 'and a steeper curve is applied through it');
+
+  // `0` means auto — the caller's own frame — so a settings file from before these keys existed, or one
+  // with the field zeroed, keeps the shipping behaviour instead of collapsing the span to nothing.
+  eq(core.resolveGazeSpan(0, 1920), 1920, 'a span of 0 means auto: the caller frame is used');
+  eq(core.resolveGazeSpan(600, 1920), 600, 'a positive span overrides the frame');
+  eq(core.resolveGazeSpan(null, 900), 900, 'a missing span means auto as well');
+  eq(core.resolveGazeSpan(-5, 900), 900, 'a negative span is treated as auto, not as a zero-distance gaze');
+  eq(core.resolveGazeSpan(0, 0), core.GAZE_SPAN.x, 'with no frame to quote, the fallback span is used');
+  eq(core.resolveGazeSpan(99999, 1920), core.GAZE_SPAN_RANGE.max, 'an absurd span is clamped, not trusted');
+
+  // The whole point: far outside the pet's box still produces an aim, saturated rather
+  // than null. The pet box is a few hundred pixels across, so these are metres away in
+  // pet terms — the far corner of the window.
+  const farRight = core.pointerAim(Object.assign({ pointerX: 4000, pointerY: 600 }, centre));
+  eq(farRight.x, 1, 'a pointer far to the right saturates at full right, and does not return null');
+  const farLeft = core.pointerAim(Object.assign({ pointerX: -3000, pointerY: 600 }, centre));
+  eq(farLeft.x, -1, 'a pointer far to the left saturates at full left');
+  const farBelow = core.pointerAim(Object.assign({ pointerX: 1000, pointerY: 5000 }, centre));
+  eq(farBelow.y, 1, 'a pointer far below saturates at full down');
+  const farAbove = core.pointerAim(Object.assign({ pointerX: 1000, pointerY: -5000 }, centre));
+  eq(farAbove.y, -1, 'a pointer far above saturates at full up');
+
+  // A diagonal far away saturates on both axes, not on the radius: the pet has separate
+  // yaw and pitch limits, and tying them together would make it look sideways when the
+  // cursor is straight above.
+  const corner = core.pointerAim(Object.assign({ pointerX: 9000, pointerY: 9000 }, centre));
+  eq(corner.x, 1, 'a far corner saturates horizontally');
+  eq(corner.y, 1, 'a far corner saturates vertically too');
+
+  // A span can be overridden, and a nonsense one falls back to the shipped default
+  // rather than dividing by zero (which would make every aim infinite). The span is where the CURVE is
+  // evaluated, so a half-span offset is a half-span on the curve's input, not half the aim.
+  const wide = core.pointerAim(Object.assign({ pointerX: 1400, pointerY: 600, spanX: 800 }, centre));
+  near(wide.x, core.gazeCurve(0.5), 1e-9, 'an explicit span is used');
+  const zeroSpan = core.pointerAim(Object.assign({ pointerX: 1400, pointerY: 600, spanX: 0 }, centre));
+  near(zeroSpan.x, core.gazeCurve(400 / core.GAZE_SPAN.x), 1e-9, 'a zero span falls back to the default');
+
+  // The aim does not depend on the window or the canvas: the same pointer and centre give
+  // the same answer, which is what "measured against the pet" means.
+  const again = core.pointerAim(Object.assign({ pointerX: 1200, pointerY: 500 }, centre));
+  eq(again.x, right.x, 'the aim is a pure function of the pointer and the pet centre');
+  eq(again.y, right.y, 'on both axes');
+
+  // Unusable input is refused rather than turned into a NaN gaze.
+  eq(core.pointerAim(null), null, 'a missing pointer is refused');
+  eq(core.pointerAim({}), null, 'a pointer without coordinates is refused');
+  eq(core.pointerAim({ pointerX: NaN, pointerY: 0, centreX: 0, centreY: 0 }), null,
+    'a NaN pointer is refused');
+  eq(core.pointerAim({ pointerX: 0, pointerY: 0, centreX: 'x', centreY: 0 }), null,
+    'a non-numeric centre is refused');
+
+  // `GAZE_SPAN` is now only the FALLBACK, for a caller that has no frame of its own. Both real surfaces
+  // pass their frame's width as `spanX` — the floating window sends the work area's width, i.e. the
+  // screen's horizontal resolution ("满偏距离是屏幕的水平分辨率"), and the app overlay sends its window's
+  // width. The fallback stays a hand's-width scale rather than a window size, which is what keeps it sane
+  // on a 4K screen.
+  ok(core.GAZE_SPAN.x > 100 && core.GAZE_SPAN.x < 1200,
+    `the fallback gaze span is a hand's-width scale (${core.GAZE_SPAN.x})`);
+  ok(core.GAZE_SPAN.y > 0 && core.GAZE_SPAN.y < core.GAZE_SPAN.x,
+    'the vertical fallback is the smaller of the two, matching the smaller pitch range');
+  // A screen-wide span must be honoured exactly: that is the policy the surfaces depend on.
+  const screenWide = core.pointerAim(Object.assign({ pointerX: 1000 + 1920, pointerY: 600, spanX: 1920 }, centre));
+  near(screenWide.x, 1, 1e-9, 'a span equal to the screen width reaches full deflection in one width');
+}
+
+// ---------------------------------------------------------------------------
+console.log(`\n${'-'.repeat(60)}`);
+if (failed === 0) {
+  console.log(`core: ${passed} checks passed`);
+  process.exit(0);
+}
+console.log(`core: ${passed} passed, ${failed} FAILED`);
+for (const failure of failures) console.log(`  - ${failure}`);
+process.exit(1);

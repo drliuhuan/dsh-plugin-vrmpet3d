@@ -1,0 +1,18 @@
+{
+  "name": "dsh-plugin-pet3d-vendor",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Build-time-only dependency pins for the pet3d renderer chunk. The plugin itself has no runtime dependencies; the compiled chunk is committed under lib/.",
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "@moeru/three-mmd": "0.2.0-beta.2",
+    "@pixiv/three-vrm": "3.5.5",
+    "@pixiv/three-vrm-animation": "3.5.5",
+    "mmd-parser": "1.1.1",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

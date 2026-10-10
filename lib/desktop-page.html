@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  The desktop pet's page, served by the plugin's own host route (`/pet3d/window`).
+
+  Deliberately served over the plugin's HTTP origin rather than loaded from disk: the pet
+  fetches its model bytes from `/pet3d/asset/<id>`, and a `file://` page would make those
+  requests cross-origin (or refused outright). Same origin means the asset, motion and model
+  routes work exactly as they do for the in-app overlay, with no CORS and no special case.
+
+  The sources below are the SAME files the overlay loads. They are served from
+  `/pet3d/window/lib/`, a whitelisted prefix that reaches nothing else on disk.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>pet3d</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
+    /* The canvas IS the pet's box, not the window: the model is framed to its canvas, so a
+       screen-sized canvas draws a screen-sized pet. `lib/desktop-page.js` moves and resizes it
+       every frame; these are only the starting values and the anchoring. */
+    #pet { position: absolute; left: 0; top: 0; width: 220px; height: 300px; background: transparent; }
+  </style>
+</head>
+<body>
+<canvas id="pet"></canvas>
+<script src="/pet3d/window/lib/client.vendor.js"></script>
+<script src="/pet3d/window/lib/core.js"></script>
+<script src="/pet3d/window/lib/pet3d.js"></script>
+<script src="/pet3d/window/lib/client.js"></script>
+<!-- The right-click MENU both pets share: one definition of its entries, their order and their words, so the
+     two pets cannot offer different menus. It replaced each surface's own settings panel. -->
+<script src="/pet3d/window/lib/menu.js"></script>
+<script src="/pet3d/window/lib/desktop-page.js"></script>
+<script>
+(function () {
+  var notes = [];
+  window.addEventListener('error', function (event) {
+    notes.push(String(event.message));
+    if (window.pet3dDesktop) window.pet3dDesktop.ready({ ok: false, error: notes.join('; ') });
+  });
+
+  var bridge = window.pet3dDesktop;
+  if (!bridge) return;
+
+  bridge.config().then(function (config) {
+    var canvas = document.getElementById('pet');
+    // Only the CSS comes from here; the DRAWING BUFFER belongs to the renderer. Seeding the
+    // attributes as well is what let a per-frame guard compare device pixels (330) against CSS
+    // pixels (220): it resized the buffer every frame, after the render, so the window always
+    // composited an empty canvas. The mount lays the element out to the pet's own box.
+
+    var pet = globalThis.__PET3D_DESKTOP__.mount({
+      canvas: canvas,
+      bridge: bridge,
+      modelId: config.modelId,
+      screen: config.screen,
+      onError: function (error) {
+        notes.push(String((error && error.message) || error));
+      },
+    });
+
+    // Reported so the launcher (and its self-test) knows the pet is up and what it is drawing
+    // with: "the window opened" is not the same claim as "the pet is rendering".
+    var gl = pet.scene && pet.scene.renderer ? pet.scene.renderer.getContext() : null;
+    var debug = gl && gl.getExtension ? gl.getExtension('WEBGL_debug_renderer_info') : null;
+    var info = {
+      ok: Boolean(gl),
+      webgl2: Boolean(gl) && typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext,
+      renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : (gl ? gl.getParameter(gl.RENDERER) : null),
+      version: gl ? gl.getParameter(gl.VERSION) : null,
+      modelId: config.modelId,
+      errors: notes,
+    };
+    pet.ready.then(function () {
+      info.loadedModel = pet.loadedModel();
+      bridge.ready(info);
+    });
+  }).catch(function (error) {
+    notes.push(String((error && error.message) || error));
+    bridge.ready({ ok: false, errors: notes });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "moduleId": "dsh-plugin-pet3d/vendor",
+  "entry": "vendor/entry.js",
+  "clientChunk": "client.vendor.js",
+  "globalName": "__PET3D_VENDOR__",
+  "output": "lib/client.vendor.js",
+  "sha256": "6d6b7df86b13056ddbb3e866d5334839c0e568c6408512c3e1c48c3c8dfa5aee",
+  "bytes": 2566971,
+  "esbuild": "0.25.12",
+  "dependencies": {
+    "@moeru/three-mmd": "0.2.0-beta.2",
+    "@pixiv/three-vrm": "3.5.5",
+    "@pixiv/three-vrm-animation": "3.5.5",
+    "mmd-parser": "1.1.1",
+    "three": "0.186.1"
+  }
+}

@@ -1,0 +1,238 @@
+:root { color-scheme: dark light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 18px 20px 28px;
+  font: 13px/1.6 "Segoe UI", system-ui, -apple-system, "Microsoft YaHei", sans-serif;
+  background: #16171c;
+  color: #e9eaf0;
+}
+h1 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+h2 { margin: 22px 0 8px; font-size: 13px; font-weight: 600; opacity: .92; }
+h2 span { font-weight: 400; opacity: .55; margin-left: 6px; }
+p.hint { margin: 2px 0 0; font-size: 11.5px; opacity: .6; }
+.card { border: 1px solid rgba(255,255,255,.13); border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,.035); }
+.row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+.row > label:first-child, .row > span.k { flex: 0 0 132px; opacity: .8; }
+/* More than one labelled control on a line: the first label keeps the 132px column, a SECOND label
+   after a control is sized to its word instead of leaving another 132px hole. This replaces the inline
+   `style="flex:0 0 auto"` copies the two pages used to carry — one rule, both pages. */
+.row > span.k.sub { flex: 0 0 auto; opacity: .7; }
+/* A checkbox with its own word, inside a `.row` whose first cell is the section's label. It used to be
+   `<label class="row" style="margin:0">`, a `.row` nested in a `.row` with the margin cancelled inline. */
+.row > label.inline { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; margin: 0; }
+.grow { flex: 1; min-width: 0; }
+select, input[type=number], input[type=text] {
+  font: inherit; color: inherit; background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.16); border-radius: 6px; padding: 3px 6px;
+}
+input[type=number] { width: 74px; }
+input[type=range] { flex: 1; min-width: 90px; accent-color: #5b8cff; }
+button {
+  font: inherit; color: inherit; background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.16); border-radius: 6px; padding: 3px 9px; cursor: pointer;
+}
+button:hover { background: rgba(255,255,255,.16); }
+button.ghost { background: none; opacity: .8; }
+.value { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; opacity: .85; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,.08); }
+th { font-weight: 500; opacity: .6; font-size: 11.5px; }
+td.name { white-space: nowrap; }
+td.targets { font-size: 11.5px; opacity: .62; }
+/* One chain per block: its name on a line of its own, then the three fields, which wrap onto as many
+   rows as the window needs. The previous layout was a fixed grid (132px + 3 × minmax(150px,1fr) +
+   auto) whose columns needed ~700px of width while each cell held a label, a slider, a number box and
+   a button — so in the 模型参数 window every row overflowed its column and the section read as broken. */
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 7px 0 8px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.chain > .head { flex: 1 1 100%; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.chain > .head > div:first-child { flex: 0 0 auto; }
+.chain .field { flex: 1 1 210px; min-width: 186px; display: flex; align-items: center; gap: 6px; }
+.chain .field label { flex: 0 0 40px; font-size: 11.5px; opacity: .62; }
+.chain .field input[type=range] { flex: 1 1 40px; min-width: 40px; }
+.chain .field input[type=number] { flex: 0 0 62px; width: 62px; }
+.chain .actions { flex: 0 0 auto; margin-left: auto; }
+.note { font-size: 11.5px; opacity: .55; }
+/* One checkbox-and-label pair per expression, wrapping: a model can declare twenty of them. */
+label.pick { display: inline-flex; align-items: center; gap: 3px; margin: 1px 10px 1px 0; white-space: nowrap; }
+label.pick input { accent-color: #5b8cff; }
+/* The expression picker: ONE line per row, with the choices in a dropdown. The pile of checkboxes this
+   replaced made every row as tall as the model's expression list. */
+.pick-wrap { position: relative; display: inline-block; }
+.pick-select { max-width: 100%; text-align: left; padding: 1px 6px; font: inherit;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-menu { position: absolute; z-index: 20; left: 0; top: calc(100% + 2px); box-sizing: border-box;
+  min-width: 190px; max-width: 320px; max-height: 220px; overflow-y: auto; overflow-x: hidden;
+  padding: 4px 6px; border: 1px solid rgba(255,255,255,.18); border-radius: 6px;
+  background: #23232a; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.pick-menu[hidden] { display: none; }
+.pick-menu label.pick { display: flex; margin: 0; padding: 2px 2px; }
+/* An overlay scrollbar hides until hovered, which reads as "no scrollbar": keep a real one on screen. */
+.pick-menu::-webkit-scrollbar { width: 10px; }
+.pick-menu::-webkit-scrollbar-track { background: rgba(255,255,255,.06); border-radius: 999px; }
+.pick-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 999px; }
+#emotion-table td { vertical-align: top; }
+/* The 部位 table: a control row per part and a detail row under it for the box and the prompt. */
+#part-table td { vertical-align: top; }
+#part-table tr.part-detail td { padding-top: 0; border-top: 0; }
+#part-table .part-label { width: 132px; }
+#part-table .part-lines { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+#part-table .part-prompt { width: 100%; box-sizing: border-box; margin-top: 4px; }
+#part-table .part-match { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+#part-table .part-add-structure { flex: 1 1 150px; min-width: 120px; }
+#part-table .chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(255,255,255,.08); font-size: 11.5px; }
+#part-table .chip-mode, #part-table .chip-drop { font-size: 10.5px; padding: 0 4px; line-height: 16px; }
+#part-table .chip-mode { opacity: .8; }
+#part-table .chip .note { font-size: 10.5px; }
+#part-table .part-browse { font-size: 11px; padding: 1px 6px; }
+/* The structure browser: bounded, and scrolling with a scrollbar that is ALWAYS drawn. */
+.part-picker { margin-top: 10px; border: 1px solid rgba(255,255,255,.14); border-radius: 6px; padding: 6px; }
+.part-picker[hidden] { display: none; }
+.part-picker-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.part-picker-head input { flex: 1 1 auto; min-width: 120px; }
+.part-picker-list { max-height: 180px; overflow-y: auto; overflow-x: hidden; }
+/* An overlay scrollbar hides itself until hovered, which reads as "there is no scrollbar" in a small window:
+   these rules keep a real one on screen. */
+.part-picker-list::-webkit-scrollbar { width: 10px; }
+.part-picker-list::-webkit-scrollbar-track { background: rgba(255,255,255,.06); border-radius: 999px; }
+.part-picker-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 999px; }
+.part-picker-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.5); }
+.part-picker-row { display: flex; flex-direction: row; gap: 10px; align-items: baseline; width: 100%;
+  text-align: left; background: none; border: 0; border-radius: 4px; padding: 2px 6px; cursor: pointer;
+  color: inherit; font: inherit; }
+.part-picker-row:hover { background: rgba(255,255,255,.08); }
+.part-picker-row.owned { opacity: .55; }
+.part-picker-name { font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; }
+.part-picker-row .note { font-size: 10.5px; }
+.warn { color: #ffcf7a; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 11px; }
+.pill.on { background: rgba(80,200,120,.22); color: #9be8b4; }
+.pill.off { background: rgba(255,255,255,.08); opacity: .7; }
+.split { display: flex; gap: 18px; align-items: flex-start; }
+.split > * { flex: 1; min-width: 0; }
+#status { margin-top: 4px; font-size: 11.5px; opacity: .62; }
+/* The 动作 section: one collapsible box set per state, since a state can draw from several clips and
+   eight states of ticked boxes would push everything else off the page. */
+#motion-list .motion-state { border-bottom: 1px solid rgba(255,255,255,.08); padding: 4px 0; }
+#motion-list details > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+#motion-list summary .state { flex: 0 0 132px; opacity: .8; }
+#motion-list summary .count { font-size: 11.5px; opacity: .6; }
+#motion-list .picks { margin: 4px 0 6px 140px; display: flex; flex-wrap: wrap; gap: 3px 14px; }
+#motion-list .picks label.pick { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#motion-list .picks .mode { font-size: 10.5px; opacity: .55; }
+/* Per state, per clip: the check box and its label, then the three controls this round added. They wrap
+   with everything else, because a state can hold several clips and the panel is not wide. */
+#motion-list .clip-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 0 4px; }
+#motion-list .clip-controls select { max-width: 168px; }
+#motion-list .clip-mode { flex: 0 0 68px; }
+/* The per-clip 凝视 switch: a checkbox and its word, kept on one line with the three dropdowns. */
+#motion-list .clip-gaze { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+#motion-list .clip-gaze-box { margin: 0; }
+/* The interval line inside a state's box set: two numbers and their unit, wrapping with the rest. */
+#motion-list .every { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 6px 140px; font-size: 11.5px; }
+#motion-list .every input { width: 62px; }
+#motion-list .every .note { opacity: .55; }
+/* The state's status line: the text box grows, the three pickers do not. Indented like `.every`, so the
+   two lines read as belonging to the state above them rather than to the clip list below. */
+#motion-list .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0 2px 140px; font-size: 11.5px; }
+#motion-list .status-line .status-label { flex: 0 0 auto; opacity: .7; }
+#motion-list .status-line .status-text { flex: 1 1 210px; min-width: 150px; }
+#motion-list .status-line .status-tag { flex: 0 0 84px; }
+#motion-list .status-line .status-animation { flex: 0 0 116px; }
+#motion-list .status-line .status-seconds { flex: 0 0 62px; width: 62px; }
+#motion-list .status-line .note { opacity: .55; }
+/* The one line on this page that describes the RENDERER rather than the settings, so it is set apart:
+   a number that comes from the running pet, not from what was just written into the store. */
+p.hint.applied { border-left: 2px solid rgba(120,190,255,.5); padding-left: 8px; opacity: .9; }
+/* 碎碎念: one collapsible box per state (six open textareas would push everything else off the page),
+   with the state's own AI instruction inside the same box — the two answers belong to one subject. */
+#speech-states .speech-state { border-bottom: 1px solid rgba(255,255,255,.08); padding: 4px 0; }
+#speech-states details > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+#speech-states summary .state { flex: 0 0 132px; opacity: .8; }
+#speech-states summary .count { font-size: 11.5px; opacity: .6; }
+#speech-states .speech-body { margin: 4px 0 6px 140px; display: flex; flex-direction: column; gap: 3px; }
+#speech-states .speech-label { font-size: 11.5px; opacity: .6; }
+#speech-states textarea.speech-lines { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 12px; }
+#speech-states input.speech-prompt { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; }
+/* A hidden `.row` would still be a flex box without this rule, which is exactly how a "hidden" API-key
+   field would keep showing while the DSH provider was selected. */
+#speech-ai .row[hidden] { display: none; }
+/* 试一句's own answer: a flex item INSIDE the row, so it can never end up away from the button that asked
+   (`flex: 1 1 100%` is what gives it a line of its own beneath 生成 rather than squeezing beside it), and
+   gold while it is a refusal — `.hint.warn` already carries that colour. */
+#pref-speech-test-result { flex: 1 1 100%; margin: 0; }
+textarea.speech-persona { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 12px; }
+
+/* Settings layout: flexible controls and one readable card per editable part. */
+[hidden] { display: none !important; }
+html { scroll-padding-top: 18px; }
+body { max-width: 1120px; margin: auto; padding: 24px; }
+.eyebrow { color: #8daeff; font-size: 10px; letter-spacing: .14em; }
+h1 { font-size: 24px; margin-top: 4px; }
+.page-description { margin: 4px 0 8px; color: #b3b9c9; }
+.section-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 24px; }
+.section-nav a { color: #c9d5ef; text-decoration: none; padding: 5px 12px; border: 1px solid #363d50; border-radius: 8px; }
+.section-nav a:hover { background: #29334a; }
+.settings-section { margin-bottom: 28px; scroll-margin-top: 18px; }
+h2 { font-size: 16px; margin: 0 0 3px; opacity: 1; }
+.section-description { margin: 0 0 12px; color: #a6afc2; font-size: 12px; }
+.card { padding: 16px; background: #1d2029; border-color: #343947; }
+.row { flex-wrap: wrap; gap: 8px; min-width: 0; margin: 12px 0; }
+.row > span.k { flex-basis: 120px; }
+.row > label.k { flex: 0 0 120px; opacity: .8; }
+.row > input[type=text], .row > input[type=password], .row > select { max-width: 100%; min-width: 0; }
+input, select, textarea, button { accent-color: #8daeff; }
+select, input[type=number], input[type=text], input[type=password], textarea {
+  color: #e9eaf0; background: #252a36; border: 1px solid #454c60; border-radius: 7px; padding: 6px 8px; font: inherit;
+}
+textarea { min-height: 72px; }
+button { min-height: 30px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid #8daeff; outline-offset: 3px;
+}
+.note, p.hint { opacity: 1; color: #a6afc2; overflow-wrap: anywhere; }
+.warn, .hint.warn { color: #ffcf7a; }
+#status { opacity: 1; color: #a6afc2; overflow-wrap: anywhere; }
+#status.warn { color: #ffcf7a; }
+#model-meta { line-height: 1.8; }
+#part-table { display: block; }
+#part-table thead { display: none; }
+#part-body { display: block; }
+#part-body > tr:not(.part-detail) {
+  display: grid; grid-template-columns: minmax(140px, 1fr) 64px minmax(120px, 1fr) 110px 64px;
+  gap: 10px; padding: 14px 12px 6px; background: #252a36; border-radius: 10px 10px 0 0;
+}
+#part-body td { border: 0; padding: 0; min-width: 0; }
+#part-body > tr:not(.part-detail) > td:nth-child(1)::before { content: '部位名称'; }
+#part-body > tr:not(.part-detail) > td:nth-child(2)::before { content: '启用'; }
+#part-body > tr:not(.part-detail) > td:nth-child(3)::before { content: '互动表情'; }
+#part-body > tr:not(.part-detail) > td:nth-child(4)::before { content: '持续时间'; }
+#part-body > tr:not(.part-detail) > td:nth-child(5) { grid-column: 1 / -1; grid-row: 2; }
+#part-body > tr:not(.part-detail) > td:nth-child(5)::before { content: '关联结构'; width: 100%; }
+#part-body > tr:not(.part-detail) > td:nth-child(6) { grid-column: 5; grid-row: 1; align-self: end; }
+#part-body td::before { display: block; color: #a6afc2; font-size: 11px; margin-bottom: 5px; }
+#part-table .part-label { width: 100%; }
+#part-table tr.part-detail { display: block; padding: 8px 12px 14px; margin-bottom: 12px; background: #252a36; border-radius: 0 0 10px 10px; }
+#part-table tr.part-detail td { display: block; }
+#motion-list .motion-state, #speech-states .speech-state { padding: 10px 0; }
+#motion-list .picks, #motion-list .every, #motion-list .status-line, #speech-states .speech-body { margin-left: 16px; }
+#motion-list .picks { flex-direction: column; align-items: stretch; }
+#motion-list .picks label.pick { white-space: normal; flex-wrap: wrap; padding: 8px; background: #252a36; border-radius: 7px; }
+#motion-list .clip-controls { gap: 8px; }
+#speech-ai { padding-top: 12px; margin-top: 12px; border-top: 1px solid #343947; }
+.chain > .head { flex-wrap: wrap; overflow-wrap: anywhere; }
+.part-picker-head { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  body { padding: 16px 12px; }
+  .card { padding: 12px; }
+  .row > span.k:first-child { flex: 0 0 100%; }
+  .row > label.k:first-child { flex: 0 0 100%; }
+  .row > input[type=range] { min-width: 70px; }
+  #part-body > tr:not(.part-detail) { grid-template-columns: minmax(100px, 1fr) 64px; }
+  #part-body > tr:not(.part-detail) > td:nth-child(5) { grid-row: 4; }
+  #part-body > tr:not(.part-detail) > td:nth-child(6) { grid-column: 2; grid-row: 3; }
+  #motion-list .picks, #motion-list .every, #motion-list .status-line, #speech-states .speech-body { margin-left: 0; }
+  #emotion-table th, #emotion-table td { padding: 6px 3px; }
+  .split { flex-direction: column; }
+}

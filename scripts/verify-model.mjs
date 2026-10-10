@@ -1,0 +1,2349 @@
+#!/usr/bin/env node
+/**
+ * Verification of the host half: model and motion discovery, path safety, and the
+ * route handlers that hand authored bytes to the page.
+ *
+ * Run:  node scripts/verify-model.mjs [--fetch]
+ *
+ * `--fetch` downloads the real sample model used by the browser MMD probe into
+ * build/fixtures/. Nothing here writes into the plugin's shipped directories.
+ *
+ * These are the checks where a mistake is a security problem rather than a
+ * cosmetic one: the asset and motion routes are the only places a browser can ask
+ * the host for bytes off the user's disk, so their allowlisting is tested
+ * adversarially.
+ */
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { dirname, extname, join, resolve, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, rmSync, truncateSync, symlinkSync, utimesSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+// The loopback helper exists because `listen(0)` can be handed a port `fetch`
+// refuses, which kills the whole suite instead of one check. See its own header.
+import { listenOnUsablePort } from './loopback.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const plugin = await import(new URL('../lib/index.js', import.meta.url).href);
+/**
+ * The described-model cache, imported DIRECTLY because "the second request did not re-parse the file" is
+ * not visible over HTTP: two answers made from a cached report and from a fresh parse are byte-identical.
+ * `cacheStats().parses` is the only witness, so the suite has to be able to read it.
+ */
+const vrmInfo = await import(new URL('../lib/vrm-info.js', import.meta.url).href);
+/**
+ * The fixture generator, imported for ONE assertion: the manifest file name it writes beside the clips has
+ * to be the name the host reads. The generator spells it out rather than importing it (it is deliberately
+ * standalone), so the two spellings can drift — and the failure mode is silent, because a manifest under a
+ * name nobody reads simply leaves every clip looping.
+ */
+const generator = await import(new URL('./make-vrma-fixtures.mjs', import.meta.url).href);
+// The host imports the same file, but the suite reads it directly so the motion
+// fixtures can be checked against the CLIENT's own detector. A fixture the page
+// would reject proves nothing about the route that served it.
+await import(new URL('../lib/core.js', import.meta.url).href);
+const core = globalThis.__PET3D_CORE__;
+
+/**
+ * The imported-directory list the whole run is pointed at.
+ *
+ * The host resolves this file inside the running profile by default, so a suite that
+ * did not redirect it would read 鈥?and in the route groups write 鈥?the user's own
+ * import list. That is not hypothetical: a live import performed while debugging made
+ * this suite report three models where one was expected, i.e. a real profile turned a
+ * green suite red for a reason that had nothing to do with the code under test.
+ * Redirecting it here, before any group applies the plugin, keeps every group on an
+ * empty scratch list.
+ */
+const IMPORTED_DIRS_FILE = join(ROOT, 'build', 'fixtures', 'model-dirs-verify.json');
+process.env.PET3D_MODEL_DIRS_FILE = IMPORTED_DIRS_FILE;
+/**
+ * The same redirection for the MOTION list, and for the same reason: a suite that POSTs an import must not
+ * write the operator's own file (gotcha 37). Motions used to have no import list at all — only the plugin's
+ * `config.motionDirs`, which needs a DSH restart — so this file is what makes "drop a .vrma in a folder and
+ * use it" possible without touching the profile config.
+ */
+const IMPORTED_MOTIONS_FILE = join(ROOT, 'build', 'fixtures', 'motion-dirs-verify.json');
+process.env.PET3D_MOTION_DIRS_FILE = IMPORTED_MOTIONS_FILE;
+rmSync(IMPORTED_DIRS_FILE, { force: true });
+
+/**
+ * And the SETTINGS store, for the same reason one level deeper.
+ *
+ * Applying the plugin constructs `SettingsStore`, and its constructor reads AND WRITES the settings
+ * file at once — so a suite that did not redirect it rewrote the operator's own
+ * `pet3d-settings.json`. Measured 2026-10-08: the live plugin's store said version 13 while the file
+ * on disk said version 1, because a suite run had constructed a fresh store against it. The
+ * preferences survived only because the constructor reads before it writes; a group that POSTs a
+ * patch would have overwritten them.
+ */
+const SETTINGS_FILE = join(ROOT, 'build', 'fixtures', 'settings-verify.json');
+process.env.PET3D_SETTINGS_FILE = SETTINGS_FILE;
+rmSync(SETTINGS_FILE, { force: true });
+
+let passed = 0;
+let failed = 0;
+const failures = [];
+
+function ok(condition, label) {
+  if (condition) passed += 1;
+  else {
+    failed += 1;
+    failures.push(label);
+    console.error(`  FAIL  ${label}`);
+  }
+}
+
+function eq(actual, expected, label) {
+  if (Object.is(actual, expected)) passed += 1;
+  else {
+    failed += 1;
+    failures.push(label);
+    console.error(`  FAIL  ${label}\n        expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+function group(title) {
+  console.log(`\n${title}`);
+}
+
+/**
+ * A synthetic `.vmd`: the 30-byte ASCII banner every exporter writes, then a
+ * plausible body. Nothing here parses the body, and neither does the host 鈥?the
+ * bytes only have to be recognisable to `core.detectMotionFormat` and clearly not
+ * a model.
+ */
+function vmdFixture(label = '') {
+  const header = Buffer.alloc(30, 0);
+  header.write('Vocaloid Motion Data 0002', 0, 'ascii');
+  return Buffer.concat([header, Buffer.from(`motion:${label}`, 'utf8')]);
+}
+
+/**
+ * Pack a glTF document into a GLB, the way every exporter does: a 12-byte header, then one JSON chunk
+ * padded with spaces to a 4-byte boundary.
+ *
+ * Used by `vrmaFixture` below and by the cache test, which needs a SECOND model file that is genuinely
+ * different from the fixture yet still a VRM this plugin can describe: the fixture's own document, with
+ * meshes added to it, is exactly that.
+ */
+function glbFromJson(json) {
+  const bytes = Buffer.from(JSON.stringify(json), 'utf8');
+  const padded = Buffer.concat([bytes, Buffer.alloc((4 - (bytes.length % 4)) % 4, 0x20)]);
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546c67, 0);              // 'g' 'l' 'T' 'F'
+  header.writeUInt32LE(2, 4);                       // version
+  header.writeUInt32LE(12 + 8 + padded.length, 8);  // total length
+  const chunk = Buffer.alloc(8);
+  chunk.writeUInt32LE(padded.length, 0);
+  chunk.writeUInt32LE(0x4e4f534a, 4);               // 'J' 'S' 'O' 'N'
+  return Buffer.concat([header, chunk, padded]);
+}
+
+/** A synthetic `.vrma`: an ordinary GLB whose JSON chunk names `VRMC_vrm_animation`. */
+function vrmaFixture(label = '') {
+  return glbFromJson({
+    asset: { version: '2.0', generator: 'pet3d verify' },
+    extensions: { VRMC_vrm_animation: { specVersion: '1.0' } },
+    extras: { label },
+  });
+}
+
+/**
+ * The webserver's own matching rule, copied from `match()` in
+ * `@deepseek-ai/dsh-host-webserver`: the exact table first, then the longest
+ * prefix that ends on a `/` boundary.
+ *
+ * It is copied because the SHAPES this plugin registers are part of what is under
+ * test 鈥?above all `/pet3d/motions` against the `/pet3d/motion` prefix, two paths
+ * one letter apart. A real HTTP server plus this matcher exercises the registered
+ * table, the handlers and the shapes together; only a dozen lines of matching are
+ * a stand-in.
+ */
+function matchRoute(routes, pathname) {
+  const exact = routes.find(route => route.kind === 'exact' && route.path === pathname);
+  if (exact !== undefined) return exact;
+  let best;
+  for (const route of routes) {
+    if (route.kind !== 'prefix') continue;
+    if (pathname !== route.path && !pathname.startsWith(route.path + '/')) continue;
+    if (best === undefined || route.path.length > best.path.length) best = route;
+  }
+  return best;
+}
+
+/**
+ * Serve a live route table from a REAL HTTP server.
+ *
+ * The table is read per request, so a route registered or disposed after the
+ * server started is visible to the next request 鈥?that is what makes the
+ * activation and disposal checks below real rather than simulated.
+ *
+ * A hand-rolled fake `res` is not enough (see group 4): the handlers stream with
+ * `createReadStream(...).pipe(res)`, which needs an actual writable stream.
+ */
+async function serveRoutes(routes) {
+  const server = createServer((req, res) => {
+    let pathname;
+    try {
+      pathname = new URL(req.url ?? '/', 'http://x').pathname;
+    } catch {
+      res.writeHead(400);
+      res.end();
+      return;
+    }
+    const route = matchRoute(routes, pathname);
+    if (route === undefined) {
+      // What the webserver does with no named route and no fallback owner.
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    route.handler(req, res);
+  });
+  await listenOnUsablePort(server);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  return {
+    base,
+    async call(path, method = 'GET', body = undefined) {
+      const init = { method };
+      if (body !== undefined) {
+        init.body = body;
+        init.headers = { 'content-type': 'application/json' };
+      }
+      const response = await fetch(base + path, init);
+      const responseBody = method === 'HEAD' ? Buffer.alloc(0) : Buffer.from(await response.arrayBuffer());
+      const headers = {};
+      response.headers.forEach((value, key) => { headers[key] = value; });
+      return { status: response.status, headers, body: responseBody };
+    },
+    async json(path) {
+      const response = await this.call(path);
+      let payload = null;
+      try { payload = JSON.parse(response.body.toString('utf8')); } catch { payload = null; }
+      return { ...response, payload };
+    },
+    close() { return new Promise(resolveClose => server.close(resolveClose)); },
+  };
+}
+
+/**
+ * A minimal Loader context, mirroring the stub in `check-plugin-load.mjs` except
+ * that its web carrier keeps a real route table with the webserver's duplicate
+ * rule. That is what lets `apply` be driven for real here.
+ */
+function stubContext(options = {}) {
+  const routes = [];
+  const provided = new Map();
+  const effects = [];
+  const warnings = [];
+  const webServer = {
+    register(route) {
+      if (routes.some(existing => existing.kind === route.kind && existing.path === route.path)) {
+        throw new Error(`webserver: duplicate ${route.kind} route "${route.path}"`);
+      }
+      routes.push(route);
+      return () => {
+        const at = routes.indexOf(route);
+        if (at !== -1) routes.splice(at, 1);
+      };
+    },
+  };
+  const ctx = {
+    logger: { warn: message => warnings.push(String(message)), info: () => {} },
+    // `llm` is what the AI 碎碎念 route looks up; a context without one is the composition the route has to
+    // answer "no LLM service" for, which is why the lookup is lazy in the plugin too.
+    get: key => (key === 'agents'
+      ? { list: () => [], get: () => undefined, roots: () => [] }
+      : key === 'webServer' || key === 'webserver' ? webServer
+        : key === 'llm' ? options.llm : undefined),
+    provide: (key, value) => { provided.set(key, value); return () => provided.delete(key); },
+    on: () => () => {},
+    effect: (callback) => { const dispose = callback(); effects.push(dispose); return dispose; },
+  };
+  return { ctx, routes, provided, effects, warnings };
+}
+
+// ---------------------------------------------------------------------------
+group('1. path containment (isInside)');
+// ---------------------------------------------------------------------------
+{
+  const root = join(ROOT, 'build', 'fixtures');
+  ok(plugin.isInside(root, join(root, 'a', 'b.vrm')), 'a nested file is inside the root');
+  eq(plugin.isInside(root, root), true, 'the root itself is inside the root');
+  ok(!plugin.isInside(root, join(root, '..', 'outside.vrm')), 'a sibling of the root is outside');
+  // The classic prefix bug: `/models-evil` must not pass as a child of `/models`.
+  ok(!plugin.isInside(join(root, 'models'), join(root, 'models-evil', 'x.pmx')), 'a same-prefix sibling directory is outside');
+  ok(!plugin.isInside(root, 'C:\\Windows\\System32\\config'), 'an unrelated absolute path is outside');
+  eq(plugin.isInside(null, root), false, 'a null root is refused');
+  eq(plugin.isInside(root, null), false, 'a null target is refused');
+  // Separator handling: a path built with the platform separator must be inside.
+  ok(plugin.isInside(root, [root, 'deep', 'file.vrm'].join(sep)), 'platform-separator paths are inside');
+}
+
+// ---------------------------------------------------------------------------
+group('2. relative asset paths (resolveAssetPath)');
+// ---------------------------------------------------------------------------
+{
+  const root = join(ROOT, 'build', 'fixtures');
+  const inside = plugin.resolveAssetPath(root, 'tex/body.png');
+  ok(inside !== null && plugin.isInside(root, inside), 'a plain relative path resolves inside');
+
+  // Any `.` or `..` segment is refused, even one that would cancel out. This is
+  // stricter than "resolve and check containment", and deliberately so: a
+  // containment check against the wrong baseline is what let `../` through.
+  eq(plugin.resolveAssetPath(root, 'tex/../tex/a.png'), null, 'an inner `..` is refused, not normalised');
+  eq(plugin.resolveAssetPath(root, './a.png'), null, 'an inner `.` is refused');
+  eq(plugin.resolveAssetPath(root, 'tex/./a.png'), null, 'a mid-path `.` is refused');
+  ok(plugin.resolveAssetPath(root, 'tex/sub/a.png') !== null, 'a plain nested path is still accepted');
+
+  eq(plugin.resolveAssetPath(root, '../../etc/passwd'), null, 'parent traversal is refused');
+  eq(plugin.resolveAssetPath(root, 'a/../../b'), null, 'nested traversal is refused');
+  eq(plugin.resolveAssetPath(root, '/etc/passwd'), null, 'an absolute path is refused');
+  eq(plugin.resolveAssetPath(root, 'C:\\Windows\\win.ini'), null, 'a drive path is refused');
+  eq(plugin.resolveAssetPath(root, 'https://example.com/x.png'), null, 'an absolute URL is refused');
+  eq(plugin.resolveAssetPath(root, 'file:///etc/passwd'), null, 'a file URL is refused');
+  eq(plugin.resolveAssetPath(root, ''), null, 'an empty path is refused');
+  eq(plugin.resolveAssetPath(root, 'a\u0000b'), null, 'a NUL byte is refused');
+  eq(plugin.resolveAssetPath(root, 'x'.repeat(5000)), null, 'an over-long path is refused');
+  eq(plugin.resolveAssetPath(null, 'a.png'), null, 'a null root is refused');
+}
+
+// ---------------------------------------------------------------------------
+group('3. model catalog');
+// ---------------------------------------------------------------------------
+{
+  const sandbox = join(ROOT, 'build', 'fixtures', 'catalog-sandbox');
+  rmSync(sandbox, { recursive: true, force: true });
+  mkdirSync(join(sandbox, 'nested', 'deep'), { recursive: true });
+  writeFileSync(join(sandbox, 'a.vrm'), Buffer.alloc(16));
+  writeFileSync(join(sandbox, 'nested', 'b.pmx'), Buffer.alloc(32));
+  writeFileSync(join(sandbox, 'nested', 'deep', 'c.glb'), Buffer.alloc(48));
+  writeFileSync(join(sandbox, 'notes.txt'), 'not a model');
+  writeFileSync(join(sandbox, '.hidden.vrm'), Buffer.alloc(8));
+  mkdirSync(join(sandbox, 'node_modules'), { recursive: true });
+  writeFileSync(join(sandbox, 'node_modules', 'dep.vrm'), Buffer.alloc(8));
+
+  const catalog = plugin.buildCatalog({ modelDirs: [sandbox] });
+  /**
+   * The bundled model is part of every catalog now.
+   *
+   * `buildCatalog` scans `assets/models` FIRST (source `bundled`) and the configured directories after it, so the
+   * operator's built-in SampleModel.vrm (2026-10-10: "请务必做成默认模型并随插件分发") is listed beside the sandbox
+   * fixtures — and takes the first id, which is why these assertions are name-based rather than id-based.
+   */
+  const bundledModels = catalog.models.filter(model => model.source === 'bundled');
+  eq(bundledModels.map(model => model.name).join(','), 'SampleModel.vrm',
+    'the built-in model is listed first, from the bundled directory');
+  const fixtureModels = catalog.models.filter(model => model.source !== 'bundled');
+  const names = fixtureModels.map(model => model.name).sort();
+  eq(fixtureModels.length, 3, `only real model files are listed beside it (got: ${names.join(', ')})`);
+  ok(names.includes('a.vrm'), 'a top-level model is listed');
+  ok(names.includes('nested/b.pmx'), 'a nested model is listed with a relative name');
+  ok(names.includes('nested/deep/c.glb'), 'a deeply nested model is listed');
+  ok(!names.some(name => name.includes('notes.txt')), 'a non-model file is not listed');
+  ok(!names.some(name => name.includes('.hidden')), 'a dotfile is skipped');
+  ok(!names.some(name => name.includes('node_modules')), 'node_modules is skipped');
+
+  // Sizes are reported, which is what the settings panel shows.
+  const a = catalog.models.find(model => model.name === 'a.vrm');
+  eq(a.bytes, 16, 'the model size is reported');
+  eq(a.format, 'vrm', 'the format is derived from the extension');
+
+  // Ids are opaque and unique, and must not leak a path.
+  const ids = catalog.models.map(model => model.id);
+  eq(new Set(ids).size, ids.length, 'model ids are unique');
+  ok(!ids.some(id => id.includes('/') || id.includes('\\') || id.includes(sep)), 'ids do not contain path separators');
+  ok(!ids.some(id => id.includes('sandbox')), 'ids do not leak the directory name');
+
+  // Every id maps to a file inside its own root: the sandbox for the fixtures, the plugin for the bundled model.
+  for (const model of catalog.models) {
+    const entry = catalog.files.get(model.id);
+    ok(Boolean(entry), `id ${model.id} resolves to a file entry`);
+    if (!entry) continue;
+    const root = model.source === 'bundled' ? plugin.PLUGIN_ROOT : sandbox;
+    ok(plugin.isInside(root, entry.absolute), `id ${model.id} maps inside its own root (${model.source})`);
+  }
+
+  // The host rebuilds this catalog on every `/pet3d/catalog` request, and the page
+  // persists the selected id 鈥?so the id belongs to the path, not to the scan. This
+  // was measured broken in the live app: the import reply said `m1`, the next
+  // catalog read said `m3` for the same file.
+  const again = plugin.buildCatalog({ modelDirs: [sandbox] });
+  const idsByName = built => built.models.map(model => model.name + '=' + model.id).sort().join(',');
+  eq(idsByName(again), idsByName(catalog), 'model ids are stable across a rescan');
+
+  // A missing directory is tolerated rather than throwing.
+  const withMissing = plugin.buildCatalog({ modelDirs: [join(sandbox, 'nope')] });
+  ok(Array.isArray(withMissing.models), 'a missing directory yields an empty catalog, not a crash');
+
+  // A non-string entry in the config is ignored. The bundled model appears in every catalog, so this counts the
+  // fixtures rather than the total — the same adjustment the ids needed when it became the built-in default.
+  const withJunk = plugin.buildCatalog({ modelDirs: [null, 42, '', sandbox] });
+  eq(withJunk.models.filter(model => model.source !== 'bundled').length, 3, 'junk directory entries are ignored');
+
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('4. asset route');
+// ---------------------------------------------------------------------------
+{
+  const sandbox = join(ROOT, 'build', 'fixtures', 'route-sandbox');
+  rmSync(sandbox, { recursive: true, force: true });
+  mkdirSync(join(sandbox, 'tex'), { recursive: true });
+  const modelBytes = Buffer.from('PMX fake payload for the route test', 'utf8');
+  writeFileSync(join(sandbox, 'model.pmx'), modelBytes);
+  writeFileSync(join(sandbox, 'tex', 'skin.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+  const catalog = plugin.buildCatalog({ modelDirs: [sandbox] });
+  const store = { models: catalog.models, files: catalog.files };
+  const modelId = catalog.models.find(model => model.name === 'model.pmx').id;
+
+  /**
+   * Serve the handler from a real HTTP server and make a real request.
+   *
+   * A hand-rolled fake `res` is not enough here: the handler streams the file with
+   * `createReadStream(...).pipe(res)`, which needs an actual writable stream. A
+   * stub that only implements writeHead/end turns every successful serve into a
+   * 500, so the earlier version of this test could not tell a working route from a
+   * broken one.
+   */
+  const handler = plugin.createAssetHandler(store);
+  const poisonedFiles = new Map();
+  const server = createServer((req, res) => {
+    if (req.url.startsWith('/poisoned')) {
+      plugin.createAssetHandler({ files: poisonedFiles, models: [] })(req, res);
+      return;
+    }
+    handler(req, res);
+  });
+  await listenOnUsablePort(server);
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  async function call(path, method = 'GET') {
+    const response = await fetch(base + path, { method });
+    const body = method === 'HEAD' ? Buffer.alloc(0) : Buffer.from(await response.arrayBuffer());
+    const headers = {};
+    response.headers.forEach((value, key) => { headers[key] = value; });
+    return { status: response.status, headers, body };
+  }
+
+  // Happy path: the model itself.
+  let response = await call(`/pet3d/asset?m=${encodeURIComponent(modelId)}`);
+  eq(response.status, 200, 'the model is served');
+  eq(response.body.length, modelBytes.length, 'the whole file is streamed');
+  ok(response.body.equals(modelBytes), 'the bytes are unmodified');
+  eq(response.headers['content-type'], 'application/octet-stream', 'PMX is served as a binary type');
+  eq(response.headers['access-control-allow-origin'], '*', 'the route is readable by the page');
+  ok(/no-store/.test(response.headers['cache-control']), 'the response is not cached');
+
+  /**
+   * And the BUNDLED model is served too — that is what "随插件分发" has to mean end to end.
+   *
+   * The catalog lists it from `assets/models` (source `bundled`), and the asset route resolves ids through the
+   * same map, so the built-in default is fetchable by both pet surfaces with no user configuration at all. This
+   * is the one check that proves the bytes actually reach a page rather than merely sitting in the repository.
+   */
+  const builtIn = store.models.find(model => model.source === 'bundled');
+  ok(Boolean(builtIn), `the catalog carries the bundled model (${builtIn ? builtIn.name : 'none'})`);
+  if (builtIn) {
+    const served = await call(`/pet3d/asset?m=${encodeURIComponent(builtIn.id)}`);
+    eq(served.status, 200, 'and the asset route serves it');
+    eq(served.body.subarray(0, 4).toString('latin1'), 'glTF', 'as a real binary glTF');
+    eq(served.body.length, builtIn.bytes, 'the whole built-in model is streamed');
+    ok(served.body.toString('latin1').includes('redistribution=allow'),
+      'with the licence terms that allow shipping it still inside the file');
+  }
+
+  // A sibling texture.
+  response = await call(`/pet3d/asset?m=${encodeURIComponent(modelId)}&p=tex%2Fskin.png`);
+  eq(response.status, 200, 'a relative texture is served');
+  eq(response.headers['content-type'], 'image/png', 'the texture gets its own MIME type');
+
+  // HEAD returns headers and no body.
+  response = await call(`/pet3d/asset?m=${encodeURIComponent(modelId)}`, 'HEAD');
+  eq(response.status, 200, 'HEAD is allowed');
+  eq(response.body.length, 0, 'HEAD sends no body');
+
+  // Unknown id.
+  response = await call('/pet3d/asset?m=nope');
+  eq(response.status, 404, 'an unknown model id is a 404');
+
+  // Missing parameters.
+  response = await call('/pet3d/asset');
+  eq(response.status, 404, 'a missing model id is a 404');
+
+  // Traversal and absolute paths must be refused before touching the disk.
+  for (const path of ['../../../etc/passwd', '..%2F..%2Fwindows%2Fwin.ini', '/etc/passwd', 'file:///etc/passwd', 'C:\\Windows\\win.ini']) {
+    response = await call(`/pet3d/asset?m=${encodeURIComponent(modelId)}&p=${encodeURIComponent(path)}`);
+    ok(response.status === 400 || response.status === 404,
+      `a traversal attempt is refused (${path} -> ${response.status})`);
+  }
+
+  // The model's own directory must not become a way to read arbitrary files.
+  response = await call(`/pet3d/asset?m=${encodeURIComponent(modelId)}&p=nope.png`);
+  eq(response.status, 404, 'a missing sibling file is a 404');
+
+  // Methods other than GET/HEAD.
+  response = await call(`/pet3d/asset?m=${encodeURIComponent(modelId)}`, 'POST');
+  eq(response.status, 405, 'POST is refused');
+
+  // A store entry whose ROOT is outside the sandbox is still bounded by its own
+  // root, so `..` cannot walk out of it either.
+  const outside = join(ROOT, 'build', 'fixtures', 'outside-secret.txt');
+  writeFileSync(outside, 'secret');
+  poisonedFiles.set('evil', { absolute: join(sandbox, 'model.pmx'), root: outside });
+  const poisonedResponse = await call('/poisoned?m=evil&p=..%2Foutside-secret.txt');
+  ok(poisonedResponse.status === 400 || poisonedResponse.status === 404,
+    `an entry root cannot be escaped (status ${poisonedResponse.status})`);
+
+  await new Promise(resolveClose => server.close(resolveClose));
+  rmSync(outside, { force: true });
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('5. motion catalog');
+// ---------------------------------------------------------------------------
+{
+  // A fixture only has to be bytes with the right extension, but the point of
+  // these two is that the CLIENT's own detector accepts them: a file the page
+  // would reject proves nothing about the route that served it.
+  const waveBytes = vmdFixture('wave');
+  const danceBytes = vrmaFixture('dance');
+  eq(core.detectMotionFormat(waveBytes), 'vmd', 'the VMD fixture reads as a VMD to the client detector');
+  eq(core.detectMotionFormat(danceBytes), 'vrma', 'the VRMA fixture reads as a VRMA to the client detector');
+  // ...and it is byte-for-byte an ordinary GLB, which is precisely why the two
+  // catalogs cannot be told apart by content.
+  eq(core.detectFormat(danceBytes), 'glb', 'the VRMA fixture is also a plain GLB');
+
+  const sandbox = join(ROOT, 'build', 'fixtures', 'motion-sandbox');
+  rmSync(sandbox, { recursive: true, force: true });
+  mkdirSync(join(sandbox, 'nested', 'deep'), { recursive: true });
+  writeFileSync(join(sandbox, 'wave.vmd'), waveBytes);
+  writeFileSync(join(sandbox, 'nested', 'dance.vrma'), danceBytes);
+  writeFileSync(join(sandbox, 'nested', 'deep', 'idle.vmd'), vmdFixture('idle'));
+  writeFileSync(join(sandbox, 'notes.txt'), 'not a motion');
+  writeFileSync(join(sandbox, 'body.pmx'), Buffer.alloc(24));
+  writeFileSync(join(sandbox, '.hidden.vmd'), Buffer.alloc(8));
+  mkdirSync(join(sandbox, 'node_modules'), { recursive: true });
+  writeFileSync(join(sandbox, 'node_modules', 'dep.vmd'), Buffer.alloc(8));
+
+  const catalog = plugin.buildMotionCatalog({ motionDirs: [sandbox] });
+  const names = catalog.motions.map(motion => motion.name).sort();
+  eq(catalog.motions.length, 3, `only real motion files are listed (got: ${names.join(', ')})`);
+  ok(names.includes('wave.vmd'), 'a top-level motion is listed');
+  ok(names.includes('nested/dance.vrma'), 'a nested motion is listed with a relative name');
+  ok(names.includes('nested/deep/idle.vmd'), 'a deeply nested motion is listed');
+  ok(!names.some(name => name.includes('notes.txt')), 'a non-motion file is not listed');
+  ok(!names.some(name => name.includes('body.pmx')), 'a model in the same directory is not listed as a motion');
+  ok(!names.some(name => name.includes('.hidden')), 'a dotfile is skipped');
+  ok(!names.some(name => name.includes('node_modules')), 'node_modules is skipped');
+
+  // Sizes and formats are what a settings list renders.
+  const wave = catalog.motions.find(motion => motion.name === 'wave.vmd');
+  const dance = catalog.motions.find(motion => motion.name === 'nested/dance.vrma');
+  eq(wave.bytes, waveBytes.length, 'the motion size is reported');
+  eq(wave.format, 'vmd', 'the format is derived from the extension');
+  eq(dance.format, 'vrma', 'a VRMA reports its own format');
+  eq(wave.source, 'user', 'a motion is always user-supplied');
+
+  // Ids are opaque, unique, and cannot be confused with a model id.
+  const ids = catalog.motions.map(motion => motion.id);
+  eq(new Set(ids).size, ids.length, 'motion ids are unique');
+  ok(!ids.some(id => id.includes('/') || id.includes('\\') || id.includes(sep)),
+    'motion ids do not contain path separators');
+  ok(!ids.some(id => id.includes('sandbox')), 'motion ids do not leak the directory name');
+  ok(ids.every(id => id.startsWith('a')), 'motion ids carry their own namespace prefix');
+
+  // Every id maps to a file inside the configured root.
+  for (const motion of catalog.motions) {
+    const entry = catalog.files.get(motion.id);
+    ok(Boolean(entry), `motion id ${motion.id} resolves to a file entry`);
+    if (entry) ok(plugin.isInside(sandbox, entry.absolute), `motion id ${motion.id} maps inside the configured root`);
+  }
+
+  // The catalog is rebuilt on every visit to the settings panel, and the page
+  // persists `{ state: motionId }`. An id that moved would silently point at
+  // another clip, or at nothing.
+  const again = plugin.buildMotionCatalog({ motionDirs: [sandbox] });
+  const idsByName = built => built.motions.map(motion => motion.name + '=' + motion.id).sort().join(',');
+  eq(idsByName(again), idsByName(catalog), 'motion ids are stable across a rescan');
+
+  // A missing directory and junk entries are tolerated, exactly as for models.
+  const withMissing = plugin.buildMotionCatalog({ motionDirs: [join(sandbox, 'nope')] });
+  ok(Array.isArray(withMissing.motions) && withMissing.motions.length === 0,
+    'a missing motion directory yields an empty catalog, not a crash');
+  const withJunk = plugin.buildMotionCatalog({ motionDirs: [null, 42, '', sandbox] });
+  eq(withJunk.motions.length, 3, 'junk motion directory entries are ignored');
+
+  // The scan bounds are the only thing between a user-supplied directory and a
+  // frozen host, so they are exercised rather than assumed. `limits` exists on
+  // the builder for this check: the alternative is planting 4001 files on disk
+  // to reach the default bound.
+  const capped = plugin.buildMotionCatalog({ motionDirs: [sandbox] }, { maxEntries: 1 });
+  ok(capped.motions.length < catalog.motions.length,
+    `the entry bound truncates the walk (${capped.motions.length} of ${catalog.motions.length})`);
+  const generous = plugin.buildMotionCatalog({ motionDirs: [sandbox] }, { maxEntries: 100 });
+  eq(generous.motions.length, 3, 'a generous entry bound does not truncate');
+
+  // Depth: a file 8 directories down is reachable, one 9 down is past the bound.
+  const depthRoot = join(ROOT, 'build', 'fixtures', 'motion-depth-sandbox');
+  rmSync(depthRoot, { recursive: true, force: true });
+  const chain = [];
+  let cursor = depthRoot;
+  for (let level = 1; level <= 9; level += 1) {
+    cursor = join(cursor, 'd' + level);
+    chain.push(cursor);
+  }
+  mkdirSync(cursor, { recursive: true });
+  writeFileSync(join(chain[7], 'reachable.vmd'), vmdFixture('reachable'));
+  writeFileSync(join(chain[8], 'too-deep.vmd'), vmdFixture('too-deep'));
+  const depthCatalog = plugin.buildMotionCatalog({ motionDirs: [depthRoot] });
+  eq(depthCatalog.motions.length, 1,
+    `the depth bound stops at 8 levels (listed: ${depthCatalog.motions.map(motion => motion.name).join(', ')})`);
+  ok((depthCatalog.motions[0]?.name ?? '').endsWith('reachable.vmd'),
+    'the file inside the depth bound is the one listed');
+
+  // A directory link planted inside the root must not pull an outside directory
+  // in. `readdirSync` reports a junction as neither a directory nor a file, so
+  // the walker skips it 鈥?the same property the model scan relies on. A junction
+  // needs no elevation on Windows, unlike a file symlink, so this runs everywhere.
+  const outsideDir = join(ROOT, 'build', 'fixtures', 'motion-outside');
+  rmSync(outsideDir, { recursive: true, force: true });
+  mkdirSync(outsideDir, { recursive: true });
+  writeFileSync(join(outsideDir, 'escape.vmd'), vmdFixture('escape'));
+  let linked = false;
+  try {
+    symlinkSync(outsideDir, join(sandbox, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+    linked = true;
+  } catch (error) {
+    console.log(`  note: a directory link could not be created (${error.code}); the escape check is skipped.`);
+  }
+  if (linked) {
+    const withLink = plugin.buildMotionCatalog({ motionDirs: [sandbox] });
+    ok(!withLink.motions.some(motion => motion.name.includes('escape')),
+      'a directory link inside the root is not followed out of it');
+  }
+
+  rmSync(depthRoot, { recursive: true, force: true });
+  rmSync(outsideDir, { recursive: true, force: true });
+  rmSync(sandbox, { recursive: true, force: true });
+
+  // ---------------------------------------------------------------------------
+  // The per-directory manifest: which clips LOOP and which play ONCE.
+  //
+  // A `.vrma` says how the bones move and nothing about how it should be played, and
+  // the difference is not cosmetic: a one-shot clip played as a loop waves at the user
+  // forever, and a looping clip played once freezes the pet in its last frame until the
+  // state changes. The flag therefore lives beside the clips, in a plugin-owned file.
+  // ---------------------------------------------------------------------------
+  const manifestRoot = join(ROOT, 'build', 'fixtures', 'motion-manifest-sandbox');
+  rmSync(manifestRoot, { recursive: true, force: true });
+  mkdirSync(join(manifestRoot, 'nested'), { recursive: true });
+  writeFileSync(join(manifestRoot, 'rest.vrma'), vrmaFixture('rest'));
+  writeFileSync(join(manifestRoot, 'wave.vrma'), vrmaFixture('wave'));
+  writeFileSync(join(manifestRoot, 'nested', 'stretch.vmd'), vmdFixture('stretch'));
+
+  // No manifest at all is the normal case, and it has to mean LOOP: that is what
+  // every clip did before the flag existed.
+  const bare = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
+  eq(bare.motions.length, 3, 'the manifest sandbox lists its three clips');
+  ok(bare.motions.every(motion => motion.loop === true),
+    'with no manifest every clip loops, which is the behaviour that shipped before the flag');
+  eq(generator.MOTION_MANIFEST_FILE, plugin.MOTION_MANIFEST_FILE,
+    'the fixture generator writes the manifest under the name the host reads');
+
+  // A manifest declaring one-shot clips, one of them written with WINDOWS backslashes
+  // (a hand-edited file on this platform) and one under a name with no matching file.
+  writeFileSync(join(manifestRoot, plugin.MOTION_MANIFEST_FILE), JSON.stringify({
+    clips: {
+      'wave.vrma': { loop: false },
+      'nested\\stretch.vmd': { loop: false, somethingElse: 42 },
+      'rest.vrma': { loop: true },
+      'gone.vrma': { loop: false },
+      'ignored.vrma': 'not an object',
+      'bad-flag.vrma': { loop: 'yes' },
+    },
+  }, null, 2));
+  const declared = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
+  const byName = name => declared.motions.find(motion => motion.name === name);
+  eq(byName('wave.vrma').loop, false, 'a declared one-shot clip reports loop:false');
+  eq(byName('nested/stretch.vmd').loop, false,
+    'a backslash-separated key still matches, and an unknown field beside `loop` is ignored');
+  eq(byName('rest.vrma').loop, true, 'an explicit loop:true is carried through');
+  eq(declared.motions.length, 3,
+    'the manifest itself is not a motion, and an entry naming a file that does not exist adds nothing');
+  ok(declared.motions.every(motion => motion.id.startsWith('a')),
+    'declaring a clip never changes the ids, so a persisted map still points at the same files');
+
+  // Every failure is non-fatal: a corrupt manifest must not cost the user their clips.
+  for (const [label, body] of [
+    ['not JSON at all', '{ this is not json'],
+    ['no clips object', '{"clips": 7}'],
+    ['a bare array', '[]'],
+  ]) {
+    writeFileSync(join(manifestRoot, plugin.MOTION_MANIFEST_FILE), body);
+    const broken = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
+    eq(broken.motions.length, 3, `a manifest that is ${label} still lists every clip`);
+    ok(broken.motions.every(motion => motion.loop === true),
+      `a manifest that is ${label} means "no declarations", so everything loops`);
+  }
+  eq(JSON.stringify(plugin.readMotionManifest(join(manifestRoot, 'does-not-exist.json'))), '{}',
+    'reading a missing manifest answers an empty declaration rather than throwing');
+
+  // The bound exists for the same reason every other one does: this file is inside a
+  // directory the operator controls and is parsed on every catalog rebuild.
+  const many = { clips: {} };
+  for (let i = 0; i < 600; i += 1) many.clips[`c${i}.vrma`] = { loop: false };
+  writeFileSync(join(manifestRoot, plugin.MOTION_MANIFEST_FILE), JSON.stringify(many));
+  const bounded = plugin.readMotionManifest(join(manifestRoot, plugin.MOTION_MANIFEST_FILE));
+  eq(Object.keys(bounded).length, 512, 'the manifest entry bound truncates a 600-entry declaration');
+
+  rmSync(manifestRoot, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('6. the two catalogs are disjoint');
+// ---------------------------------------------------------------------------
+{
+  const mixed = join(ROOT, 'build', 'fixtures', 'mixed-sandbox');
+  rmSync(mixed, { recursive: true, force: true });
+  mkdirSync(mixed, { recursive: true });
+  writeFileSync(join(mixed, 'a.vrm'), Buffer.alloc(16));
+  writeFileSync(join(mixed, 'b.pmx'), Buffer.alloc(16));
+  writeFileSync(join(mixed, 'c.vmd'), vmdFixture('c'));
+  writeFileSync(join(mixed, 'd.vrma'), vrmaFixture('d'));
+  // The extension that decides is the LAST one, as in every other extension test
+  // in this plugin.
+  writeFileSync(join(mixed, 'e.vrm.vmd'), vmdFixture('e'));
+  writeFileSync(join(mixed, 'f.vmd.vrm'), Buffer.alloc(16));
+  // A VRMA renamed to `.glb` is still catalogued as a model. Membership is the
+  // extension, never the bytes: content cannot keep the two lists disjoint, and a
+  // file in both lists would be fetchable over both routes.
+  writeFileSync(join(mixed, 'g.glb'), vrmaFixture('g'));
+  writeFileSync(join(mixed, 'h.txt'), 'neither');
+
+  const asModels = plugin.buildCatalog({ modelDirs: [mixed] });
+  const asMotions = plugin.buildMotionCatalog({ motionDirs: [mixed] });
+  // The bundled model is listed in every model catalog now, so both of these count the MIXED directory's own
+  // entries — the extension rules are what is under test, not the built-in.
+  const modelNames = asModels.models.filter(model => model.source !== 'bundled').map(model => model.name).sort();
+  const motionNames = asMotions.motions.map(motion => motion.name).sort();
+  eq(modelNames.join(','), 'a.vrm,b.pmx,f.vmd.vrm,g.glb',
+    `the model catalog takes exactly the model extensions (got: ${modelNames.join(', ')})`);
+  eq(motionNames.join(','), 'c.vmd,d.vrma,e.vrm.vmd',
+    `the motion catalog takes exactly the motion extensions (got: ${motionNames.join(', ')})`);
+  eq(modelNames.filter(name => motionNames.includes(name)).length, 0, 'no file is offered by both catalogs');
+
+  const modelIds = new Set(asModels.models.map(model => model.id));
+  const motionIds = new Set(asMotions.motions.map(motion => motion.id));
+  ok([...motionIds].every(id => !modelIds.has(id)), 'no motion id collides with a model id');
+  ok([...modelIds].every(id => id.startsWith('m')), 'model ids keep their own namespace prefix');
+
+  rmSync(mixed, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('7. motion route (real HTTP)');
+// ---------------------------------------------------------------------------
+{
+  const sandbox = join(ROOT, 'build', 'fixtures', 'motion-route-sandbox');
+  rmSync(sandbox, { recursive: true, force: true });
+  mkdirSync(join(sandbox, 'tex'), { recursive: true });
+  const waveBytes = vmdFixture('route');
+  const danceBytes = vrmaFixture('route');
+  writeFileSync(join(sandbox, 'wave.vmd'), waveBytes);
+  writeFileSync(join(sandbox, 'dance.vrma'), danceBytes);
+  writeFileSync(join(sandbox, 'body.pmx'), Buffer.from('PMX fake payload', 'utf8'));
+  writeFileSync(join(sandbox, 'tex', 'skin.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+  const catalog = plugin.buildMotionCatalog({ motionDirs: [sandbox] });
+  const store = { motions: catalog.motions, files: catalog.files };
+  const waveId = catalog.motions.find(motion => motion.name === 'wave.vmd').id;
+  const danceId = catalog.motions.find(motion => motion.name === 'dance.vrma').id;
+
+  // A secret outside the root, and store entries that claim otherwise. The id map
+  // is the allowlist, but the containment the map implies is re-checked per
+  // request, so the two are attacked separately.
+  const secret = join(ROOT, 'build', 'fixtures', 'motion-outside-secret.txt');
+  const secretMarker = 'topsecret-' + randomUUID();
+  writeFileSync(secret, secretMarker);
+  const poisoned = new Map([
+    ['a1', { absolute: secret, root: sandbox }],
+    ['a2', { absolute: join(sandbox, 'tex'), root: sandbox }],
+  ]);
+
+  const server = await serveRoutes([
+    { kind: 'prefix', path: plugin.ROUTES.motion, handler: plugin.createMotionHandler(store) },
+    { kind: 'exact', path: '/poisoned-motion', handler: plugin.createMotionHandler({ files: poisoned, motions: [] }) },
+  ]);
+  const call = (path, method) => server.call(path, method);
+
+  // Happy path: the exact bytes, streamed.
+  let response = await call(`/pet3d/motion?m=${encodeURIComponent(waveId)}`);
+  eq(response.status, 200, 'the motion is served');
+  eq(response.body.length, waveBytes.length, 'the whole motion file is streamed');
+  ok(response.body.equals(waveBytes), 'the motion bytes are unmodified');
+  eq(response.headers['content-type'], 'application/octet-stream', 'a VMD is served as a binary type');
+  eq(response.headers['access-control-allow-origin'], '*', 'the motion route is readable by the page');
+  ok(/no-store/.test(response.headers['cache-control']), 'the motion response is not cached');
+
+  response = await call(`/pet3d/motion?m=${encodeURIComponent(danceId)}`);
+  eq(response.status, 200, 'a VRMA is served');
+  ok(response.body.equals(danceBytes), 'the VRMA bytes are unmodified');
+  eq(response.headers['content-type'], 'model/gltf-binary', 'a VRMA keeps the GLB media type');
+
+  // HEAD returns the headers and no body.
+  response = await call(`/pet3d/motion?m=${encodeURIComponent(waveId)}`, 'HEAD');
+  eq(response.status, 200, 'HEAD is allowed on the motion route');
+  eq(response.body.length, 0, 'HEAD sends no body');
+  eq(response.headers['content-length'], String(waveBytes.length), 'HEAD still reports the size');
+
+  // An unknown or missing id is a clean 404 in the same JSON shape as the asset
+  // route's.
+  response = await call('/pet3d/motion?m=nope');
+  eq(response.status, 404, 'an unknown motion id is a 404');
+  eq(response.headers['content-type'], 'application/json; charset=utf-8', 'the 404 is JSON');
+  ok(/unknown motion id/.test(response.body.toString('utf8')), 'the 404 names the lookup that failed');
+  response = await call('/pet3d/motion');
+  eq(response.status, 404, 'a missing motion id is a 404');
+
+  // Methods other than GET/HEAD.
+  response = await call(`/pet3d/motion?m=${encodeURIComponent(waveId)}`, 'POST');
+  eq(response.status, 405, 'POST is refused on the motion route');
+
+  // Traversal, adversarially. This route has no relative-path parameter at all,
+  // so the attack has to go through `m` 鈥?and no value of `m` names a path, because
+  // the server-held id map is the whole allowlist.
+  for (const attack of [
+    '../outside-secret.txt',
+    '..%2F..%2Foutside-secret.txt',
+    '....//....//outside-secret.txt',
+    '/etc/passwd',
+    'C:\\Windows\\win.ini',
+    'file:///etc/passwd',
+    'https://example.com/x.vmd',
+    '\u0000',
+  ]) {
+    response = await call(`/pet3d/motion?m=${encodeURIComponent(attack)}`);
+    ok(response.status === 404 && !response.body.includes(secretMarker),
+      `an id that names a path is refused (${JSON.stringify(attack)} -> ${response.status})`);
+  }
+
+  // ...and `p` is inert: the motion route has no such parameter, so a traversal
+  // in it cannot redirect the response away from the allowlisted file.
+  response = await call(`/pet3d/motion?m=${encodeURIComponent(waveId)}&p=${encodeURIComponent('../../../etc/passwd')}`);
+  eq(response.status, 200, 'a `p` parameter does not break the motion route');
+  ok(response.body.equals(waveBytes), 'a `p` parameter cannot redirect the motion route');
+  ok(!response.body.includes(secretMarker), 'a traversal in `p` returns no file outside the root');
+
+  // A store entry whose path escapes the root it claims is refused.
+  response = await call('/poisoned-motion?m=a1');
+  ok(response.status === 404 && !response.body.includes(secretMarker),
+    `a motion entry outside its own root is refused (status ${response.status})`);
+
+  // A store entry naming a directory must not become a listing.
+  response = await call('/poisoned-motion?m=a2');
+  eq(response.status, 404, 'a motion entry naming a directory is refused');
+  ok(!response.body.includes('skin.png') && !response.body.includes('wave.vmd'),
+    'a directory entry produces no listing');
+
+  // 413: the cap is enforced, not merely declared. The fixture genuinely has to be
+  // MAX_ASSET_BYTES + 1, so it lives in the OS temp directory: this workspace is a
+  // Synology Drive folder, and a half-gigabyte file in it would be handed to the
+  // sync client. It is extended, refused unread, and deleted immediately.
+  const tempRoot = join(tmpdir(), 'pet3d-verify-' + randomUUID());
+  mkdirSync(tempRoot, { recursive: true });
+  const oversized = join(tempRoot, 'oversized.vmd');
+  writeFileSync(oversized, vmdFixture('oversized'));
+  truncateSync(oversized, plugin.MAX_ASSET_BYTES + 1);
+  eq(statSync(oversized).size, plugin.MAX_ASSET_BYTES + 1, 'the oversized fixture is one byte past the cap');
+  const oversizeStore = { motions: [], files: new Map([['a1', { absolute: oversized, root: tempRoot }]]) };
+  const oversizeServer = await serveRoutes([
+    { kind: 'prefix', path: plugin.ROUTES.motion, handler: plugin.createMotionHandler(oversizeStore) },
+    { kind: 'prefix', path: plugin.ROUTES.asset, handler: plugin.createAssetHandler(oversizeStore) },
+  ]);
+  response = await oversizeServer.call('/pet3d/motion?m=a1');
+  eq(response.status, 413, 'an oversized motion is refused with 413');
+  response = await oversizeServer.call('/pet3d/asset?m=a1');
+  eq(response.status, 413, 'the asset route still enforces the same cap');
+  await oversizeServer.close();
+  rmSync(tempRoot, { recursive: true, force: true });
+
+  await server.close();
+  rmSync(secret, { force: true });
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('8. registered routes and both catalogs over HTTP');
+// ---------------------------------------------------------------------------
+{
+  const modelSandbox = join(ROOT, 'build', 'fixtures', 'registration-model-sandbox');
+  const motionSandbox = join(ROOT, 'build', 'fixtures', 'registration-motion-sandbox');
+  rmSync(modelSandbox, { recursive: true, force: true });
+  rmSync(motionSandbox, { recursive: true, force: true });
+  mkdirSync(modelSandbox, { recursive: true });
+  mkdirSync(motionSandbox, { recursive: true });
+  writeFileSync(join(modelSandbox, 'body.pmx'), Buffer.from('PMX fake payload', 'utf8'));
+  const waveBytes = vmdFixture('registered');
+  writeFileSync(join(motionSandbox, 'wave.vmd'), waveBytes);
+  writeFileSync(join(motionSandbox, 'body.glb'), Buffer.alloc(16));
+
+  // Drive the real `apply` and serve the route table it registered. The server
+  // reads the live table, so registration and disposal are exercised for real.
+  const { ctx, routes, provided, effects } = stubContext();
+  plugin.apply(ctx, { modelDirs: [modelSandbox], motionDirs: [motionSandbox] });
+  const service = provided.get('pet3d');
+  const server = await serveRoutes(routes);
+
+  eq(routes.map(route => `${route.kind} ${route.path}`).sort().join(' | '),
+    'exact /pet3d/catalog | exact /pet3d/config | exact /pet3d/desktop | exact /pet3d/global'
+      + ' | exact /pet3d/llm'
+      + ' | exact /pet3d/model-info | exact /pet3d/models | exact /pet3d/motions | exact /pet3d/preview'
+      + ' | exact /pet3d/say'
+      + ' | exact /pet3d/settings'
+      + ' | exact /pet3d/state'
+      + ' | exact /pet3d/whale'
+      + ' | exact /pet3d/window'
+      + ' | prefix /pet3d/asset | prefix /pet3d/motion | prefix /pet3d/window/lib',
+    'apply registers exactly the documented routes, both settings pages, both windows, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
+  // The window's source prefix must NOT end in a slash: the server matches a prefix with
+  // `pathname === prefix || pathname.startsWith(prefix + '/')`, so a trailing slash there makes
+  // every real request miss and 404s the whole page. Asserted as a property, not just as the
+  // string above, because that is the failure this check exists for.
+  ok(routes.every((route) => route.kind !== 'prefix' || !route.path.endsWith('/')),
+    'no prefix route ends in a slash, which the matcher would never match');
+  // The two motion paths are one letter apart, so this is the collision that
+  // matters: the catalog must win `/pet3d/motions` and the byte route
+  // `/pet3d/motion`, under the webserver's own matching rule.
+  ok(matchRoute(routes, '/pet3d/motions')?.path === '/pet3d/motions',
+    '/pet3d/motions is matched by the catalog route');
+  ok(matchRoute(routes, '/pet3d/motion')?.path === '/pet3d/motion',
+    '/pet3d/motion is matched by the byte route, not by the catalog');
+  ok(matchRoute(routes, '/pet3d/models')?.path === '/pet3d/models',
+    '/pet3d/models is matched by its own route');
+
+  /**
+   * DSH's animated whale mark, over real HTTP.
+   *
+   * The status prompt masks the whale through this image, so "the tail is not animated" is a delivery
+   * question before it is a styling one — and the two failure modes have to be told apart: a route that
+   * answers 404 (host half not restarted, or the asset never extracted) versus an image that arrives but is
+   * a STILL PNG (the app's fallback would then never animate, silently). Both are asserted, and the check is
+   * portable: a checkout with no extracted asset is expected to answer 404, because that is exactly the state
+   * in which both prompts fall back to the static SVG.
+   */
+  {
+    const whalePath = join(ROOT, 'assets', 'whale-tail.apng');
+    const whale = await server.call('/pet3d/whale');
+    if (existsSync(whalePath)) {
+      eq(whale.status, 200, '/pet3d/whale serves the extracted mark');
+      eq(whale.headers['content-type'], 'image/apng', 'as an APNG');
+      const bytes = whale.body;
+      eq(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'whose bytes are a PNG');
+      const text = bytes.toString('latin1');
+      ok(text.includes('acTL') && text.includes('fcTL'),
+        `and an ANIMATED one (${(text.match(/fcTL/g) || []).length} frames, not a still fallback)`);
+      eq(bytes.length, readFileSync(whalePath).length, 'byte for byte what the extractor wrote');
+    } else {
+      eq(whale.status, 404,
+        '/pet3d/whale answers 404 when the mark was never extracted (the static SVG is the fallback)');
+    }
+  }
+
+  const modelCatalog = await server.json('/pet3d/catalog');
+  eq(modelCatalog.status, 200, '/pet3d/catalog still answers');
+  ok(Array.isArray(modelCatalog.payload?.models), 'the model catalog payload keeps its shape');
+  eq(modelCatalog.payload.modelDirs.length, 1, 'the model catalog still reports its directories');
+  ok(String(modelCatalog.payload.bundledDir).endsWith(join('assets', 'models')),
+    'the model catalog still reports its bundled directory');
+
+  const motionCatalog = await server.json('/pet3d/motions');
+  eq(motionCatalog.status, 200, '/pet3d/motions answers');
+  ok(Array.isArray(motionCatalog.payload?.motions),
+    '/pet3d/motions reaches the catalog, not the /pet3d/motion byte route');
+  const listed = motionCatalog.payload.motions.map(motion => motion.name).sort();
+  eq(listed.join(','), 'wave.vmd', `the motion catalog lists the fixture (got: ${listed.join(', ')})`);
+  eq(motionCatalog.payload.motionDirs.length, 1, 'the motion catalog reports its directories');
+  eq(motionCatalog.payload.motionDirs[0], resolve(motionSandbox), 'the motion directory is resolved');
+  eq(motionCatalog.headers['access-control-allow-origin'], '*', 'the motion catalog is readable by the page');
+
+  // The two catalogs are disjoint at the payload level and at the route level. The bundled model is a MODEL and
+  // must never appear among the motions; the fixture directory here holds one model and one motion.
+  const modelNames = modelCatalog.payload.models.filter(model => model.source !== 'bundled')
+    .map(model => model.name).sort();
+  eq(modelNames.join(','), 'body.pmx', `a motion is never offered as a model (got: ${modelNames.join(', ')})`);
+  const modelId = modelCatalog.payload.models[0].id;
+  const motionId = motionCatalog.payload.motions[0].id;
+  ok(!motionCatalog.payload.motions.some(motion => motion.id === modelId),
+    'no model id appears in the motion catalog');
+  ok(!modelCatalog.payload.models.some(model => model.id === motionId),
+    'no motion id appears in the model catalog');
+
+  let response = await server.call(`/pet3d/motion?m=${encodeURIComponent(motionId)}`);
+  eq(response.status, 200, 'the registered motion route streams the file');
+  ok(response.body.equals(waveBytes), 'the registered motion route streams the exact bytes');
+  response = await server.call(`/pet3d/motion?m=${encodeURIComponent(modelId)}`);
+  eq(response.status, 404, 'a model id is not a motion id');
+  response = await server.call(`/pet3d/asset?m=${encodeURIComponent(motionId)}`);
+  eq(response.status, 404, 'a motion id is not a model id');
+  response = await server.call(`/pet3d/asset?m=${encodeURIComponent(modelId)}`);
+  eq(response.status, 200, 'the asset route is unchanged for a real model id');
+
+  // The user-visible half of the id-stability rule: the settings panel refetches the
+  // catalog, and the catalog handler rebuilds the store on every request, so an id
+  // read before a rebuild must still stream its file afterwards. Measured broken live:
+  // the same file was `m1` and then `m3`, and a page that kept the first id was told
+  // "unknown model id" 鈥?which reads as a broken model file.
+  const refreshed = await server.json('/pet3d/catalog');
+  eq(refreshed.payload.models[0].id, modelId, 'a model id is unchanged by reading the catalog again');
+  response = await server.call(`/pet3d/asset?m=${encodeURIComponent(modelId)}`);
+  eq(response.status, 200, 'the id captured before a rebuild still streams its model');
+
+  // describe() and the frozen route map the Loader reads.
+  eq(service.describe().motionCount, 1, 'describe() counts the motions');
+  // +1 for the bundled SampleModel, which is in every catalog since 2026-10-10.
+  eq(service.describe().modelCount, 2, 'describe() still counts the models (the fixture plus the built-in)');
+  eq(service.assetRoutes.motions, '/pet3d/motions', 'assetRoutes names the motion catalog route');
+  eq(service.assetRoutes.motion, '/pet3d/motion', 'assetRoutes names the motion byte route');
+  eq(service.assetRoutes.catalog, '/pet3d/catalog', 'the existing catalog path is unchanged');
+  eq(service.assetRoutes.asset, '/pet3d/asset', 'the existing asset path is unchanged');
+  ok(Object.isFrozen(service.assetRoutes), 'assetRoutes is frozen');
+
+  /**
+   * ---- the preview channel, over real HTTP ---------------------------------
+   *
+   * The settings window posts what the model should be showing while a clip's expression and mouth are being
+   * chosen, and both pet surfaces poll it (operator's request, 2026-10-09). Three properties have to hold, and
+   * each is a way the feature would be silently broken: a cleared preview is distinguishable from an absent
+   * one (the `seq` counter, which is the whole reason it exists), nothing about it is persisted, and the value
+   * that comes back is the CLEANED one rather than whatever a page posted.
+   */
+  const readPreview = async () => {
+    const response = await server.call('/pet3d/preview');
+    return { status: response.status, payload: JSON.parse(response.body.toString('utf8')) };
+  };
+  const postPreview = async (body) => {
+    const response = await server.call('/pet3d/preview', 'POST', JSON.stringify(body));
+    return { status: response.status, payload: JSON.parse(response.body.toString('utf8')) };
+  };
+  let preview = await readPreview();
+  eq(preview.payload.preview, null, 'the preview starts empty');
+  const seqBefore = preview.payload.seq;
+  preview = await postPreview({ preview: { state: 'resting', motionId: 'a1', expression: 'Joy', mouth: 'A' } });
+  eq(JSON.stringify(preview.payload.preview), JSON.stringify({ state: 'resting', motionId: 'a1', expression: 'Joy', mouth: 'A' }),
+    'and holds what a surface posted');
+  ok(preview.payload.seq > seqBefore, 'with a counter that moved, so a poller sees the change');
+  const seqAfterSet = preview.payload.seq;
+  preview = await postPreview({ preview: { state: 'held', motionId: '' } });
+  eq(preview.payload.preview, null, 'an instruction with nothing in it CLEARS the preview');
+  ok(preview.payload.seq > seqAfterSet,
+    'and clearing moves the counter too — otherwise a cleared preview would be indistinguishable from an old one');
+  const storedAfterPreview = await server.json('/pet3d/settings');
+  eq(JSON.stringify(storedAfterPreview.payload.preferences.motionClips), '{}',
+    'and none of it was persisted: a preview is not a preference');
+
+  /**
+   * ---- the state channel, over real HTTP -----------------------------------
+   *
+   * The in-app pet resolves the session state and the floating window cannot, so the app posts it here and the
+   * window polls it. Same shape as the preview channel (`seq` plus a value) and for the same reason: the pet
+   * returns to `resting` between turns, so a poller comparing VALUES would miss every second entry into
+   * `working` — which is the whole prompt.
+   */
+  const readState = async () => {
+    const response = await server.call('/pet3d/state');
+    return { status: response.status, payload: JSON.parse(response.body.toString('utf8')) };
+  };
+  const postState = async (body) => {
+    const response = await server.call('/pet3d/state', 'POST', JSON.stringify(body));
+    return { status: response.status, payload: JSON.parse(response.body.toString('utf8')) };
+  };
+  let petState = await readState();
+  eq(petState.status, 200, 'the state route answers');
+  eq(petState.payload.state, null, 'and starts with no state, because nothing has reported one yet');
+  const stateSeqBefore = petState.payload.seq;
+  petState = await postState({ state: 'working' });
+  eq(petState.payload.state, 'working', 'the in-app pet reports what it resolved');
+  ok(petState.payload.seq > stateSeqBefore, 'and the counter moves, so a poller notices');
+  // The repeat is the case the counter exists for: same value, still a new event.
+  const stateSeqWorking = petState.payload.seq;
+  petState = await postState({ state: 'resting' });
+  petState = await postState({ state: 'working' });
+  ok(petState.payload.seq > stateSeqWorking + 1,
+    'a state entered twice still moves the counter: the value is repeatable, the event is not');
+  petState = await postState({ state: 'not-a-state' });
+  eq(petState.payload.state, null, 'an unknown state is refused rather than stored');
+  /**
+   * The 碎碎念 line travels in the SAME body.
+   *
+   * This is the floating window's only source for it — the page has no session of its own to react to — and
+   * the boundary sanitises it rather than trusting the client: one line, capped. A multi-line string would
+   * grow the window past the pet, which is exactly what the bubble's rectangle exists to avoid.
+   */
+  petState = await postState({ state: 'working', line: '开始干活了' });
+  eq(petState.payload.line, '开始干活了', 'the pet can publish a 碎碎念 line with its state');
+  petState = await readState();
+  eq(petState.payload.line, '开始干活了', 'and the window reads it back on the next poll');
+  petState = await postState({ state: 'working' });
+  eq(petState.payload.line, null,
+    'a report with NO line clears it, so a bubble cannot outlive the remark it belongs to');
+  petState = await postState({ state: 'working', line: 'first\nsecond\ttabbed' });
+  eq(petState.payload.line, 'first second tabbed', 'a multi-line report is flattened to one line');
+  petState = await postState({ state: 'working', line: 'x'.repeat(400) });
+  eq(petState.payload.line.length <= 80, true,
+    `and a long one is capped (${petState.payload.line.length} chars), because the window is sized from it`);
+  petState = await postState({ state: 'working', line: 42 });
+  eq(petState.payload.line, null, 'and a non-string is refused rather than rendered');
+  /**
+   * The PRESS travels the same way — which part of the model it landed on.
+   *
+   * Relayed for the same reason the line is: the answer lives only in the page that measured it, and "I clicked
+   * its eye and nothing happened" cannot be answered from outside without it. Sanitised at this boundary like
+   * everything else a page sends: strings only, each capped, and a body with neither a reason nor a region is
+   * not a press at all.
+   */
+  petState = await postState({ state: 'working', touch: { reason: 'click', region: 'eye', bone: 'leftEye', at: 1234 } });
+  eq(petState.payload.touch && petState.payload.touch.region, 'eye', 'a press reports which part it landed on');
+  eq(petState.payload.touch.bone, 'leftEye', 'with the model\'s own name for that part, for diagnosis');
+  petState = await readState();
+  eq(petState.payload.touch.region, 'eye', 'and the window reads it back on the next poll');
+  /**
+   * And WHICH of the user's own parts owns that structure — the label included.
+   *
+   * `region` is the default classification and `part` is the row the user built, so a user whose ear is their own
+   * part sees `part: 'ear'` beside `region: 'head'`: without both, "I clicked its ear and nothing happened" cannot
+   * be told apart from "the raycast landed on the head".
+   */
+  petState = await postState({
+    state: 'working',
+    touch: { reason: 'hold', part: 'ear', label: '耳朵', region: 'head', bone: 'ErDuo.L.002' },
+  });
+  eq(petState.payload.touch.part, 'ear', 'and which of the user\'s parts owns it');
+  eq(petState.payload.touch.label, '耳朵',
+    'with the label the settings list shows, because that is the word a person knows');
+  eq(petState.payload.touch.bone, 'ErDuo.L.002', 'and the model\'s own structure name, which explains a surprise');
+  petState = await postState({ state: 'working', touch: { reason: 'hold', region: 'head', bone: '頭'.repeat(80) } });
+  eq(petState.payload.touch.region, 'head', 'a 长按 is a press too, with its own reason');
+  eq(petState.payload.touch.bone.length <= 64, true,
+    `and a long bone name is capped (${petState.payload.touch.bone.length}), because this is a readout`);
+  petState = await postState({ state: 'working', touch: { bone: 'leftEye' } });
+  eq(petState.payload.touch, null, 'while a touch with neither reason nor region is not a press');
+  petState = await postState({ state: 'working', touch: 'nonsense' });
+  eq(petState.payload.touch, null, 'and a non-object is refused rather than rendered');
+  petState = await postState({ state: 'working' });
+  eq(petState.payload.touch, null, 'a report with no touch clears it, like the line');
+  const storedAfterState = await server.json('/pet3d/settings');
+  eq(JSON.stringify(storedAfterState.payload.preferences.status), '{}',
+    'and the state channel persisted nothing either: it is live telemetry, not a preference');
+
+  // ---- the desktop window's routes, over real HTTP -------------------------
+  //
+  // These requests are the ones that would have caught the bug this section exists for: the
+  // source prefix was registered WITH a trailing slash, the server matches a prefix as
+  // `pathname === prefix || pathname.startsWith(prefix + '/')`, and so every source 404'd. The
+  // window opened, the page loaded, the glue never ran, and the pet was invisible 鈥?while the
+  // suite stayed green, because it inlines the glue and serves the sources itself.
+  const page = await server.call('/pet3d/window');
+  eq(page.status, 200, "the window's page is served");
+  eq(page.headers['content-type'], 'text/html; charset=utf-8', 'the page is served as HTML');
+  ok(page.body.toString('utf8').includes('/pet3d/window/lib/desktop-page.js'),
+    'the page asks for its sources from the plugin itself');
+
+  /**
+   * The sources the window's page is allowed to fetch.
+   *
+   * `placeholder.js` was in this list until 2026-10-10, when the operator removed the built-in avatar ("内置的
+   * 占位模型还是没删掉，把Sample Model设为内置模型"). It is now asserted to be REFUSED rather than served: the file
+   * stays in the tree as the fixture the geometry suites inline directly, and the host must not hand it to a
+   * page that has no use for it — a whitelist is only worth having if it also says no.
+   */
+  const sources = ['client.vendor.js', 'core.js', 'pet3d.js', 'client.js', 'desktop-page.js'];
+  for (const name of sources) {
+    const source = await server.call(`/pet3d/window/lib/${name}`);
+    eq(source.status, 200, `the page's source ${name} is served`);
+    eq(source.headers['content-type'], 'text/javascript; charset=utf-8', `${name} is served as JavaScript`);
+    ok(source.body.length > 0, `${name} is not empty`);
+  }
+  const removedSource = await server.call('/pet3d/window/lib/placeholder.js');
+  eq(removedSource.status, 404, 'and the built-in avatar is no longer served to any page');
+  const glue = await server.call('/pet3d/window/lib/desktop-page.js');
+  ok(glue.body.toString('utf8').includes('__PET3D_DESKTOP__'),
+    'the glue served to the window publishes the global the page mounts');
+
+  /**
+   * What each whitelisted name is served AS — the check that was MISSING when the two settings windows
+   * became a wall of unstyled text (operator, 2026-10-10: "插件面板设置窗口完全变成了无格式文本的堆积").
+   *
+   * The route hard-coded `text/javascript` for every name in the whitelist, `pages.css` included, and a
+   * browser refuses to apply a stylesheet whose response is not CSS: the pages loaded, their scripts ran,
+   * and every rule in `lib/pages.css` was dropped before it reached the document. Nothing above this line
+   * can see that — a 200 with 16 KB of bytes is a 200 with 16 KB of bytes — and the desktop suite could not
+   * either, because its page server answers `pages.css` itself with `text/css` (see its line ~1038). The
+   * one request that mattered was the one no harness made, so the real handler is asked here.
+   *
+   * The whitelist and the type table are the plugin's OWN exported constants rather than a copy written out
+   * again here: a copy is how a list and the thing it checks drift apart, and a name added to the real set is
+   * covered by this loop on the run that adds it.
+   */
+  const sourceNames = [...plugin.WINDOW_SOURCES];
+  const sourceTypes = plugin.WINDOW_SOURCE_TYPES;
+  /**
+   * The default for an extension with no entry, and the only two extensions in the whitelist: JavaScript
+   * for `.js` (the route's original, correct behaviour) and CSS for `.css` (the fix, and the one a
+   * stylesheet needs). A name of neither extension would be a new class of page source, and this says so
+   * rather than guessing a type for it.
+   */
+  const expectedType = name => sourceTypes[extname(name).toLowerCase()]
+    ?? (name.endsWith('.js') ? 'text/javascript; charset=utf-8' : null);
+  ok(sourceNames.length === 8 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js'),
+    'the whitelist being checked is the route\'s own (eight names, the stylesheet and the settings script among them)');
+  for (const name of sourceNames) {
+    const source = await server.call(`/pet3d/window/lib/${name}`);
+    eq(source.headers['content-type'], expectedType(name),
+      `the page source ${name} is served with the type a browser will accept for it`);
+  }
+  eq(sourceTypes['.css'], 'text/css; charset=utf-8', 'and the stylesheet type is CSS, not the route\'s default');
+
+  response = await server.call('/pet3d/window/lib/secrets.env');
+  eq(response.status, 404, 'a name outside the whitelist is refused');
+  response = await server.call('/pet3d/window/lib/..%2f..%2f..%2fpackage.json');
+  eq(response.status, 404, 'a traversal attempt in the source name is refused');
+  response = await server.call('/pet3d/window/other.js');
+  eq(response.status, 404, 'the page route does not open the rest of the directory');
+
+  const desktopStatus = await server.json('/pet3d/desktop');
+  eq(desktopStatus.status, 200, 'the window control route reports its status');
+  eq(desktopStatus.payload.state, 'stopped', 'and nothing is running under test');
+  eq(desktopStatus.payload.routes.window, '/pet3d/window', 'and it names the page route');
+  const badAction = await server.call('/pet3d/desktop', 'POST', JSON.stringify({ action: 'launch-a-window-please' }));
+  eq(badAction.status, 400, 'an unknown action is refused rather than guessed at');
+  const refusedDisable = await server.call('/pet3d/desktop', 'POST', JSON.stringify({ action: 'disable' }));
+  eq(refusedDisable.status, 200, 'disabling a window that is not running is accepted');
+  eq(JSON.parse(refusedDisable.body.toString('utf8')).running, false, 'and reports it as stopped');
+
+  // Disposal: an unload takes every route with it, the new ones included.
+  for (const dispose of effects) dispose();
+  eq(routes.length, 0, 'unloading removes every registered route');
+  response = await server.call(`/pet3d/motion?m=${encodeURIComponent(motionId)}`);
+  eq(response.status, 404, 'the motion route is gone after unload');
+
+  await server.close();
+  rmSync(modelSandbox, { recursive: true, force: true });
+  rmSync(motionSandbox, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('9. boundary hub');
+// ---------------------------------------------------------------------------
+{
+  const agents = {
+    list: () => [{ id: 'a' }, { id: 'b' }],
+    get: (id) => ({ id }),
+    roots: () => [{ id: 'a' }],
+  };
+  const hub = new plugin.Pet3DBoundaryHub({ agents, epoch: 'epoch-1' });
+  const controller = new AbortController();
+  const iterator = hub.watch(controller.signal);
+
+  const baseline = await iterator.next();
+  eq(baseline.done, false, 'the stream opens with a frame');
+  eq(baseline.value.type, 'baseline', 'the opening frame is a baseline');
+  eq(baseline.value.hostEpoch, 'epoch-1', 'the baseline carries the host epoch');
+  eq(baseline.value.identities.length, 2, 'the baseline lists every agent');
+
+  const subagent = baseline.value.identities.find(identity => identity.sessionId === 'b');
+  eq(subagent.isSubagent, true, 'a non-root agent is classified as a subagent');
+  const root = baseline.value.identities.find(identity => identity.sessionId === 'a');
+  eq(root.isSubagent, false, 'a root agent is not a subagent');
+
+  // Only turn boundaries are forwarded.
+  hub.accept({ id: 'a' }, { type: 'message/delta', seq: 1, time: 1 });
+  hub.accept({ id: 'a' }, { type: 'turn/start', seq: 2, time: 2 });
+  const started = await iterator.next();
+  eq(started.value.type, 'turn/start', 'a turn start is forwarded');
+  eq(started.value.sessionId, 'a', 'the boundary names its session');
+  eq(started.value.streamSeq, 1, 'the first forwarded frame has stream sequence 1');
+
+  hub.accept({ id: 'a' }, { type: 'turn/end', seq: 3, time: 3, data: { reason: { kind: 'completed' } } });
+  const ended = await iterator.next();
+  eq(ended.value.type, 'turn/end', 'a turn end is forwarded');
+  eq(ended.value.reason, 'completed', 'the completion reason is carried');
+
+  // Replayed and out-of-order boundaries are dropped.
+  hub.accept({ id: 'a' }, { type: 'turn/start', seq: 2, time: 2 });
+  hub.accept({ id: 'a' }, { type: 'turn/start', seq: 1, time: 1 });
+  hub.accept({ id: 'a' }, { type: 'turn/start', seq: 4, time: 4 });
+  const next = await iterator.next();
+  eq(next.value.seq, 4, 'only the newest boundary is delivered');
+
+  // A malformed event must not throw or reach the client.
+  hub.accept({ id: 'a' }, { type: 'turn/start', seq: 'x' });
+  hub.accept({ id: '' }, { type: 'turn/start', seq: 99 });
+  hub.accept(null, { type: 'turn/start', seq: 98 });
+  hub.accept({ id: 'a' }, null);
+  ok(true, 'malformed events are ignored');
+
+  // Aborting closes the stream.
+  controller.abort();
+  const done = await iterator.next();
+  eq(done.done, true, 'aborting the signal ends the stream');
+
+  hub.dispose();
+  const afterDispose = hub.watch(new AbortController().signal);
+  const disposedFrame = await afterDispose.next();
+  eq(disposedFrame.done, true, 'a disposed hub hands out a closed stream');
+}
+
+// ---------------------------------------------------------------------------
+group('10. imported model directories over HTTP');
+// ---------------------------------------------------------------------------
+{
+  // The scratch list is redirected once, at the top of this file, so that no group
+  // can read or write the user's own import list. See `IMPORTED_DIRS_FILE` there.
+  const scratch = IMPORTED_DIRS_FILE;
+  const baseSandbox = join(ROOT, 'build', 'fixtures', 'import-base-sandbox');
+  const importSandbox = join(ROOT, 'build', 'fixtures', 'import-guest-sandbox');
+  const notADirectory = join(ROOT, 'build', 'fixtures', 'import-not-a-dir.txt');
+  const missing = join(ROOT, 'build', 'fixtures', 'import-missing-' + randomUUID());
+  rmSync(scratch, { force: true });
+  rmSync(baseSandbox, { recursive: true, force: true });
+  rmSync(importSandbox, { recursive: true, force: true });
+  rmSync(notADirectory, { force: true });
+  mkdirSync(baseSandbox, { recursive: true });
+  mkdirSync(importSandbox, { recursive: true });
+  writeFileSync(join(baseSandbox, 'body.pmx'), Buffer.from('PMX fake payload', 'utf8'));
+  writeFileSync(join(importSandbox, 'guest.vrm'), Buffer.alloc(24));
+  writeFileSync(notADirectory, 'this is a file, not a directory');
+
+  const { ctx, routes, provided, effects } = stubContext();
+  plugin.apply(ctx, { modelDirs: [baseSandbox] });
+  const service = provided.get('pet3d');
+  const server = await serveRoutes(routes);
+
+  /** A request that keeps the headers, because CORS is part of the contract. */
+  async function request(path, init) {
+    const response = await fetch(server.base + path, init);
+    const text = Buffer.from(await response.arrayBuffer()).toString('utf8');
+    let payload = null;
+    try { payload = JSON.parse(text); } catch { payload = null; }
+    const headers = {};
+    response.headers.forEach((value, key) => { headers[key] = value; });
+    return { status: response.status, headers, payload, text };
+  }
+  const list = () => request('/pet3d/models');
+  const post = (body) => request('/pet3d/models', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+
+  // The route exists and describes the state the panel has to draw.
+  let state = await list();
+  eq(state.status, 200, 'GET /pet3d/models answers');
+  eq(state.headers['content-type'], 'application/json; charset=utf-8', 'the list is JSON');
+  eq(state.headers['access-control-allow-origin'], '*', 'the list is readable by the page');
+  eq(state.payload.importedDirs.length, 0, 'a first run has no imported directories');
+  eq(state.payload.modelCount, 2, 'the count covers the configured directory and the built-in model');
+  eq(state.payload.catalogFile, resolve(scratch), 'the route names the file it persists to');
+
+  // Adding a directory is live immediately: the reply carries the rebuilt catalog,
+  // so the panel does not have to race a second request against the rebuild.
+  let added = await post({ add: importSandbox });
+  eq(added.status, 200, 'POST add imports a directory');
+  eq(added.payload.persisted, true, 'the import is persisted, not only held in memory');
+  eq(added.payload.persistError, null, 'a successful write reports no error');
+  eq(added.payload.importedDirs.length, 1, 'the reply carries the refreshed list');
+  eq(added.payload.importedDirs[0], resolve(importSandbox), 'the directory is stored resolved');
+  eq(added.payload.modelCount, 3, 'the reply carries the refreshed catalog count (two fixtures plus the built-in)');
+  ok(added.payload.models.some(model => model.name === 'guest.vrm'),
+    'the imported model is in the reply catalog');
+
+  // ...and the state is real, not just reported: a separate read agrees.
+  const afterAdd = await server.json('/pet3d/catalog');
+  ok(afterAdd.payload.models.some(model => model.name === 'guest.vrm'),
+    'the next catalog read includes the imported model');
+  ok(afterAdd.payload.importedDirs.includes(resolve(importSandbox)),
+    'the catalog reports the imported directory');
+
+  // Persistence is the point of the route: a restart must find the same list.
+  const persisted = JSON.parse(readFileSync(scratch, 'utf8'));
+  eq(persisted.modelDirs.length, 1, 'the list is written to the plugin-owned file');
+  eq(persisted.modelDirs[0], resolve(importSandbox), 'the persisted entry is the resolved path');
+
+  // Importing the same directory twice must not list its models twice.
+  const again = await post({ add: importSandbox });
+  eq(again.status, 200, 'importing the same directory again succeeds');
+  eq(again.payload.importedDirs.length, 1, 'importing the same directory twice is a no-op');
+  eq(again.payload.modelCount, 3, 'the catalog does not double-count the second import');
+
+  // Refusals. Each names its own reason, and none of them touches the list.
+  let refused = await post({ add: missing });
+  eq(refused.status, 400, 'importing a directory that does not exist is refused');
+  ok(/no such directory/.test(refused.payload?.error ?? ''), 'the refusal names the missing directory');
+  refused = await post({ add: notADirectory });
+  eq(refused.status, 400, 'importing a file rather than a directory is refused');
+  ok(/not a directory/.test(refused.payload?.error ?? ''), 'the refusal says which check failed');
+  refused = await post('{ not json');
+  eq(refused.status, 400, 'a malformed body is refused');
+  ok(/invalid JSON/.test(refused.payload?.error ?? ''), 'the refusal names the parse failure');
+  refused = await post({});
+  eq(refused.status, 400, 'a body with neither add nor remove is refused');
+  ok(/expected \{add\} or \{remove\}/.test(refused.payload?.error ?? ''),
+    'the refusal states the accepted shape');
+  refused = await request('/pet3d/models', { method: 'PUT', body: '{}' });
+  eq(refused.status, 405, 'an unsupported method is refused');
+  const unchanged = await list();
+  eq(unchanged.payload.importedDirs.length, 1, 'no refusal mutates the list');
+
+  // A removal is as live as an addition, and equally persistent.
+  const removed = await post({ remove: importSandbox });
+  eq(removed.status, 200, 'POST remove drops a directory');
+  eq(removed.payload.importedDirs.length, 0, 'the reply carries the list after the removal');
+  eq(removed.payload.modelCount, 2, 'the catalog drops the imported model, and keeps only the fixture and the built-in');
+  ok(!removed.payload.models.some(model => model.name === 'guest.vrm'),
+    'the removed model is gone from the reply catalog');
+  eq(JSON.parse(readFileSync(scratch, 'utf8')).modelDirs.length, 0, 'the removal is persisted');
+  const removedAgain = await post({ remove: importSandbox });
+  eq(removedAgain.status, 200, 'removing a directory that is not imported succeeds');
+  eq(removedAgain.payload.importedDirs.length, 0, 'removing an absent directory is a no-op');
+
+  // The service half of the same state, for a caller that never makes a request.
+  ok(Array.isArray(service.importedModelDirs()), 'the service exposes the imported list');
+  ok(service.importedModelDirs() !== service.importedModelDirs(),
+    'the exposed list is a copy, not the live array');
+
+  // Disposal takes the route with it, like every other route.
+  for (const dispose of effects) dispose();
+  eq(routes.length, 0, 'unloading removes the models route too');
+  await server.close();
+
+  // The env override stays set for the rest of the run: it is the scratch path, not
+  // a temporary patch, and leaving it in place is what keeps the last groups isolated.
+  rmSync(scratch, { force: true });
+  rmSync(baseSandbox, { recursive: true, force: true });
+  rmSync(importSandbox, { recursive: true, force: true });
+  rmSync(notADirectory, { force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('10b. imported motion directories over HTTP');
+// ---------------------------------------------------------------------------
+{
+  // The same shape as group 10, for the OTHER list. Motions could previously only come from the plugin's
+  // own `config.motionDirs`, so a `.vrma` needed a config edit plus a DSH restart to be usable at all; the
+  // import list is what makes "put the file in a folder and pick it" work. Worth its own checks because the
+  // two lists are scanned from different directories and served by different routes.
+  const scratch = IMPORTED_MOTIONS_FILE;
+  const baseMotions = join(ROOT, 'build', 'fixtures', 'motion-base-sandbox');
+  const importMotions = join(ROOT, 'build', 'fixtures', 'motion-guest-sandbox');
+  const notADirectory = join(ROOT, 'build', 'fixtures', 'motion-not-a-dir.txt');
+  rmSync(scratch, { force: true });
+  rmSync(baseMotions, { recursive: true, force: true });
+  rmSync(importMotions, { recursive: true, force: true });
+  rmSync(notADirectory, { force: true });
+  mkdirSync(baseMotions, { recursive: true });
+  mkdirSync(importMotions, { recursive: true });
+  writeFileSync(join(baseMotions, 'base.vrma'), Buffer.from('glTF base', 'utf8'));
+  // A real wave file: the catalog only needs the extension to list it, and the byte route hands the bytes
+  // back unchanged, so this checks the plumbing rather than a parser.
+  const waveBytes = readFileSync(join(ROOT, 'build', 'fixtures', 'vrma', 'pet3d-wave.vrma'));
+  writeFileSync(join(importMotions, 'pet3d-wave.vrma'), waveBytes);
+  // The guest directory declares its clip as a one-shot, so the flag has to survive the
+  // whole route: read off disk, into the catalog, out over `/pet3d/motions`, where the
+  // page picks it up and hands it to the scene with the bytes.
+  writeFileSync(join(importMotions, plugin.MOTION_MANIFEST_FILE),
+    JSON.stringify({ clips: { 'pet3d-wave.vrma': { loop: false } } }));
+  writeFileSync(notADirectory, 'this is a file, not a directory');
+
+  const { ctx, routes, effects } = stubContext();
+  plugin.apply(ctx, { motionDirs: [baseMotions] });
+  const server = await serveRoutes(routes);
+  const request = async (path, method = 'GET', body) => {
+    const response = await server.call(path, method, body);
+    let payload = null;
+    try { payload = JSON.parse(response.body.toString('utf8')); } catch { payload = null; }
+    return { ...response, payload };
+  };
+  const get = () => request('/pet3d/motions');
+  const post = (body) => request('/pet3d/motions', 'POST', JSON.stringify(body));
+
+  const state = await get();
+  eq(state.status, 200, 'GET /pet3d/motions answers with the imported list');
+  eq(state.payload.importedDirs.length, 0, 'a first run imports no motion directory');
+  eq(state.payload.catalogFile, resolve(scratch), 'the route names the file it persists to');
+  eq(state.payload.motions.length, 1, 'the configured directory is scanned');
+  eq(state.payload.motions[0].name, 'base.vrma', 'and lists the motion in it');
+
+  // The import is live on the next read — no restart, which is the whole point of this list.
+  const added = await post({ add: importMotions });
+  eq(added.status, 200, 'POST add imports a motion directory');
+  eq(added.payload.persisted, true, 'the import is persisted');
+  eq(added.payload.importedDirs[0], resolve(importMotions), 'stored resolved');
+  ok(added.payload.motions.some((motion) => motion.name === 'pet3d-wave.vrma'),
+    'the imported wave is in the reply catalog');
+  const again = await get();
+  ok(again.payload.motions.some((motion) => motion.name === 'pet3d-wave.vrma'),
+    'and in the next read too, so the import is live rather than reported');
+  eq(again.payload.motions.length, 2, 'both directories are scanned, and neither is duplicated');
+  ok(again.payload.motionDirs.includes(resolve(baseMotions))
+    && again.payload.motionDirs.includes(resolve(importMotions)),
+  'the dirs in force are the configured ones plus the imported ones');
+
+  // The byte route serves the imported file by the id the catalog minted: that is what the page fetches.
+  const wave = again.payload.motions.find((motion) => motion.name === 'pet3d-wave.vrma');
+  const bytes = await server.call('/pet3d/motion?m=' + encodeURIComponent(wave.id));
+  eq(bytes.status, 200, 'the imported motion is served by its id');
+  ok(Buffer.from(bytes.body).equals(waveBytes), 'and the bytes come back unchanged');
+  eq(wave.loop, false, "the guest directory's manifest reaches the route: the wave is a one-shot");
+  const baseEntry = again.payload.motions.find((motion) => motion.name === 'base.vrma');
+  eq(baseEntry.loop, true, 'a directory without a manifest still reports every clip as a loop');
+
+  const persisted = JSON.parse(readFileSync(scratch, 'utf8'));
+  eq(persisted.motionDirs.length, 1, 'the list is written to the plugin-owned file');
+  eq(persisted.motionDirs[0], resolve(importMotions), 'the persisted entry is the resolved path');
+
+  // Refusals mirror the model route, and none of them mutates the list.
+  const refusedMissing = await post({ add: join(ROOT, 'build', 'fixtures', 'nope-' + randomUUID()) });
+  eq(refusedMissing.status, 400, 'a missing directory is refused');
+  const refusedFile = await post({ add: notADirectory });
+  eq(refusedFile.status, 400, 'a file rather than a directory is refused');
+  const refusedBody = await post({});
+  eq(refusedBody.status, 400, 'a body with neither add nor remove is refused');
+  const refusedMethod = await request('/pet3d/motions', 'PUT', '{}');
+  eq(refusedMethod.status, 405, 'an unsupported method is refused');
+  const unchanged = await get();
+  eq(unchanged.payload.importedDirs.length, 1, 'no refusal mutates the list');
+
+  const removed = await post({ remove: importMotions });
+  eq(removed.status, 200, 'POST remove drops a motion directory');
+  eq(removed.payload.importedDirs.length, 0, 'the reply carries the list after the removal');
+  ok(!removed.payload.motions.some((motion) => motion.name === 'pet3d-wave.vrma'),
+    'and the catalog no longer lists its file');
+
+  for (const dispose of effects) dispose();
+  rmSync(scratch, { force: true });
+  rmSync(baseMotions, { recursive: true, force: true });
+  rmSync(importMotions, { recursive: true, force: true });
+  rmSync(notADirectory, { force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('11. fixture availability (for the browser MMD probe)');
+// ---------------------------------------------------------------------------
+{
+  const fixture = process.env.MMD_FIXTURE || join(ROOT, 'build', 'fixtures', 'miku', 'miku_v2.pmd');
+  if (existsSync(fixture)) {
+    const size = statSync(fixture).size;
+    const head = readFileSync(fixture).subarray(0, 4);
+    ok(size > 100000, `the MMD fixture is present (${size} bytes)`);
+    ok(head[0] === 0x50 && head[1] === 0x6d && head[2] === 0x64 && head[3] === 0x00,
+      'the MMD fixture has the Pmd magic');
+  } else {
+    console.log('  note: the MMD fixture is absent; the browser MMD probe will skip.');
+    console.log('        fetch it with: node scripts/verify-model.mjs --fetch');
+  }
+}
+
+// ---------------------------------------------------------------------------
+group('12. what a model contains, over real HTTP (the settings window reads this)');
+// ---------------------------------------------------------------------------
+{
+  const sandbox = join(ROOT, 'build', 'fixtures', 'model-info-sandbox');
+  rmSync(sandbox, { recursive: true, force: true });
+  mkdirSync(sandbox, { recursive: true });
+
+  // The committed VRM fixture, which carries what the route has to report: expressions (one of them
+  // declared and EMPTY), two spring chains with different physics, and three morph targets with no
+  // names at all 鈥?so the expression table is the only thing that says what target #0 is.
+  const vrmPath = join(ROOT, 'build', 'fixtures', 'vrma', 'pet3d-minimal.vrm');
+  ok(existsSync(vrmPath), 'the VRM fixture is present to describe');
+  writeFileSync(join(sandbox, 'fish.vrm'), readFileSync(vrmPath));
+  // Not a GLB at all: the answer is "cannot describe this", not a 500.
+  writeFileSync(join(sandbox, 'body.pmx'), Buffer.from('PMX fake payload', 'utf8'));
+
+  const { ctx, routes, provided, effects } = stubContext();
+  plugin.apply(ctx, { modelDirs: [sandbox] });
+  const server = await serveRoutes(routes);
+  const catalog = await server.json('/pet3d/catalog');
+  const vrmId = catalog.payload.models.find((model) => model.name === 'fish.vrm')?.id;
+  const pmxId = catalog.payload.models.find((model) => model.name === 'body.pmx')?.id;
+  ok(typeof vrmId === 'string', `the fixture is catalogued (${vrmId})`);
+
+  const info = await server.json(`/pet3d/model-info?m=${encodeURIComponent(vrmId)}`);
+  eq(info.status, 200, 'the model-info route answers for a catalogued model');
+  eq(info.payload.supported, true, 'and reports it as a VRM it can describe');
+  eq(info.payload.id, vrmId, 'and echoes the id it was asked about');
+  eq(info.payload.vrmSpec, '1.0 (extensions.VRMC_vrm)', 'and names the VRM flavour it found');
+  const names = (info.payload.expressions || []).map((expression) => expression.name);
+  ok(names.includes('blink') && names.includes('happy') && names.includes('wag'),
+    `the expressions are listed by name (${names.join(', ')})`);
+  eq((info.payload.expressions || []).find((expression) => expression.name === 'surprised')?.binds.length, 0,
+    'an expression declared with no binds is listed, and reported as empty');
+  // The reverse map, which is the point: the morph targets are unnamed, so the bind is the only
+  // evidence that target #0 is `blink`.
+  eq(info.payload.expressions.find((expression) => expression.name === 'blink').binds[0].target, 0,
+    'an expression reports the morph target index it drives');
+  eq(info.payload.expressions.find((expression) => expression.name === 'blink').binds[0].targetName, null,
+    'and reports the target as unnamed, exactly as the file has it');
+
+  const groups = (info.payload.springs && info.payload.springs.groups) || [];
+  const hair = groups.find((group) => group.name === 'hair');
+  const tail = groups.find((group) => group.name === 'tail');
+  ok(Boolean(hair) && Boolean(tail), `both spring chains are listed (${groups.map((g) => g.name).join(', ')})`);
+  eq(hair.stiffness, 0.4, "a chain carries the file's own stiffness, which is what \"default\" means in the UI");
+  eq(hair.dragForce, 0.3, 'and its drag');
+  eq(hair.gravityPower, 0.02, 'and its gravity');
+  ok(tail.stiffness !== hair.stiffness, 'two chains keep their different physics apart');
+  eq(hair.bones, 2, 'a chain reports how many joints it has');
+
+  /**
+   * And its KEY, which has to be the same string the renderer stores overrides under.
+   *
+   * This is the drift guard for a rule that lives in two files on purpose: `lib/vrm-info.js` imports nothing
+   * (no dependency beyond `node:fs`), so it mirrors `core.springChainKey`, and the two halves disagreeing is
+   * exactly the bug that made every unnamed chain's sliders inert (operator: "设置面板中存在大量无法修改的未命名
+   * 链", 2026-10-09). Compared against core here, and asserted NON-EMPTY, because an empty key can be neither
+   * stored nor looked up.
+   */
+  const coreModule = globalThis.__PET3D_CORE__;
+  ok(Boolean(coreModule && coreModule.springChainKey), 'core publishes the chain-key rule');
+  const mismatches = [];
+  groups.forEach((group) => {
+    if (!group.key) mismatches.push(`${group.index}: empty`);
+    // The compact shape calls the declared name `name` (it comes from the file's `comment`); the indexed
+    // fallback is what a chain with no name gets, which is the common case in VRM 0.x.
+    const expected = coreModule.springChainKey({ name: group.name, kind: 'vrm1' }, group.index);
+    if (group.key !== expected) mismatches.push(`${group.index}: ${group.key} != ${expected}`);
+  });
+  eq(mismatches.join(', '), '', 'every chain key matches the rule the renderer uses, and none is empty');
+  ok(info.payload.meta && info.payload.meta.licenseUrl === 'https://vrm.dev/licenses/1.0/',
+    'and the licence the author wrote into the file travels with it');
+
+  // Cached by (path, size, mtime): the second request must answer the same thing.
+  const again = await server.json(`/pet3d/model-info?m=${encodeURIComponent(vrmId)}`);
+  eq(again.payload.expressions.length, info.payload.expressions.length, 'the answer is cached and stable');
+
+  /**
+   * The described model lives in MEMORY, so opening the settings window does not re-parse the file
+   * (operator, 2026-10-11: "模型参数加载太慢了，让它的信息和当前模型一样常驻内存").
+   *
+   * Two answers from a cache and two answers from two parses are byte-identical, so "it did not parse
+   * again" is not assertable over HTTP: it is asserted against the cache's OWN parse counter, read here
+   * directly from `lib/vrm-info.js`. Everything below is a DELTA, never an absolute, because the counter
+   * is process-wide and earlier groups may already have described a model.
+   */
+  vrmInfo.clearModelInfoCache();
+  const beforeCache = vrmInfo.cacheStats();
+  eq(beforeCache.size, 0, 'the described-model cache can be emptied, and says so');
+  const firstOverHttp = await server.json(`/pet3d/model-info?m=${encodeURIComponent(vrmId)}`);
+  const afterFirstCache = vrmInfo.cacheStats();
+  eq(afterFirstCache.parses - beforeCache.parses, 1, 'the first request for a model parses the file');
+  eq(afterFirstCache.size, 1, 'and the parsed report is what stays resident');
+
+  const secondOverHttp = await server.json(`/pet3d/model-info?m=${encodeURIComponent(vrmId)}`);
+  const afterSecondCache = vrmInfo.cacheStats();
+  eq(afterSecondCache.parses - beforeCache.parses, 1,
+    'the second request for the SAME unchanged file does not parse it again — it is answered from memory');
+  eq(afterSecondCache.hits - beforeCache.hits, 1, 'and the cache reports it as a hit');
+  eq(secondOverHttp.payload.expressions.length, firstOverHttp.payload.expressions.length,
+    'with an answer identical in shape to the parsed one');
+
+  /**
+   * A file that CHANGED is re-parsed, at the SAME path: the freshness check is the size+mtime pair, so a
+   * user dropping a new model over an old one is still seen.
+   *
+   * The edit adds two meshes to the fixture's own glTF document, which is a statement about a NUMBER
+   * (`counts.meshes`) rather than about a shape two reports could share — a stale report cannot produce it.
+   * The mtime is set explicitly as well as the size changing, so the check is exercised on both halves.
+   */
+  const edited = JSON.parse(JSON.stringify(vrmInfo.readGlb(vrmPath).json));
+  edited.meshes.push({ name: 'extra-a', primitives: [] }, { name: 'extra-b', primitives: [] });
+  const editedPath = join(sandbox, 'fish.vrm');
+  writeFileSync(editedPath, glbFromJson(edited));
+  const editedAt = new Date(Date.now() + 2000);
+  utimesSync(editedPath, editedAt, editedAt);
+  ok(statSync(editedPath).size !== statSync(vrmPath).size, 'the replacement model is a different size');
+
+  const changed = await server.json(`/pet3d/model-info?m=${encodeURIComponent(vrmId)}`);
+  const changedStats = vrmInfo.cacheStats();
+  eq(changedStats.parses - afterSecondCache.parses, 1, 'a file that changed is parsed again');
+  eq(changed.payload.counts.meshes, info.payload.counts.meshes + 2,
+    'and described from the file on disk, not from the report the cache still holds');
+  eq(changed.payload.supported, true, 'and the changed model is still describable at all');
+
+  /**
+   * And a path the host KNOWS changed is re-parsed at once, without waiting for the size/mtime check: this
+   * is the explicit half of the invalidation, the half the import route calls.
+   */
+  ok(vrmInfo.forgetModelInfo(editedPath), 'a cached model can be forgotten by path');
+  eq(vrmInfo.cacheStats().size, changedStats.size - 1, 'and forgetting it drops exactly that entry');
+  eq(vrmInfo.cacheStats().keys.indexOf(resolve(editedPath)), -1, 'with the path itself gone from the cache');
+  const afterForget = await server.json(`/pet3d/model-info?m=${encodeURIComponent(vrmId)}`);
+  eq(vrmInfo.cacheStats().parses - changedStats.parses, 1, 'so the next request parses the file again');
+  eq(afterForget.payload.counts.meshes, changed.payload.counts.meshes, 'and answers with what it re-read');
+
+  /**
+   * The bound, driven for real: one distinct path per model, past the stated capacity.
+   *
+   * The failure this prevents is not a wrong answer but a GROWTH — the panel walks a directory of models,
+   * and a cache that never evicts would be a second copy of everything the user ever imported.
+   */
+  const overflowBytes = readFileSync(join(sandbox, 'fish.vrm'));
+  const overflow = [];
+  for (let i = 0; i < vrmInfo.MODEL_INFO_CACHE_CAPACITY + 2; i += 1) {
+    const name = `overflow-${i}.vrm`;
+    writeFileSync(join(sandbox, name), overflowBytes);
+    overflow.push(name);
+  }
+  // The same server: `/pet3d/catalog` rebuilds the catalog on every request, so the new files are listed
+  // by the time they are asked for and no second listener is needed.
+  for (const name of overflow) {
+    const listed = await server.json('/pet3d/catalog');
+    const id = listed.payload.models.find((model) => model.name === name)?.id;
+    await server.json(`/pet3d/model-info?m=${encodeURIComponent(id)}`);
+  }
+  const bounded = vrmInfo.cacheStats();
+  eq(bounded.capacity, 4, 'the described-model cache holds four models');
+  eq(bounded.size, bounded.capacity, 'and never holds more than its capacity, however many models are asked for');
+  eq(bounded.size <= bounded.capacity, true, 'so it is bounded, not a second copy of the directory');
+  ok(bounded.evictions > 0, 'the oldest entry is the one dropped when it overflows');
+  vrmInfo.clearModelInfoCache();
+
+  /**
+   * The STRUCTURES the parts editor offers, and this is the list that makes a user-built part possible.
+   *
+   * The page lets a user add "the structures this part owns" by name, so the names have to travel: node names are
+   * what a bone-driven hit resolves to, mesh and material names are what an unskinned hit falls back to. The
+   * fixture's own fixture names are asserted by name — `hair`, `hair_mid`, `hair_end`, `tail`, `leftEye` — so a
+   * list that came back empty, or one that carried only indices, fails here rather than in the settings window.
+   */
+  const structures = info.payload.structures;
+  ok(Array.isArray(structures) && structures.length > 0, `the model lists its structures (${structures.length})`);
+  const structureNames = structures.map((entry) => entry.name);
+  ok(structureNames.indexOf('hair') !== -1 && structureNames.indexOf('tail') !== -1,
+    'including the names a press can actually land on');
+  eq(structureNames.indexOf('head') !== -1, true, 'and the humanoid nodes the raycast resolves to');
+  eq(new Set(structureNames).size, structureNames.length, 'a name appears once, whatever kind of thing it is');
+  eq(structures.every((entry) => ['node', 'mesh', 'material'].indexOf(entry.kind) !== -1), true,
+    'every entry says what kind of structure it is, so the picker can group them');
+  eq(structureNames.indexOf('pet3d-fixture-mesh') !== -1, true, 'and mesh names are in the list too');
+  ok(structures.every((entry) => entry.name.length <= 128), 'with every name capped, because this crosses the wire');
+
+  const notGlb = await server.json(`/pet3d/model-info?m=${encodeURIComponent(pmxId)}`);
+  eq(notGlb.status, 200, 'a model that is not a GLB is answered, not failed');
+  eq(notGlb.payload.supported, false, 'and is reported as undescribable');
+  ok(typeof notGlb.payload.reason === 'string' && notGlb.payload.reason.length > 0,
+    'with a reason the UI can show');
+
+  const unknown = await server.json('/pet3d/model-info?m=nope');
+  eq(unknown.status, 404, 'an unknown model id is refused like the asset route refuses it');
+
+  // The settings page, and the one source it needs: the page is a host route like the pet's own, so
+  // "the window opens blank" is a 404 here rather than a mystery inside a window nobody can inspect.
+  const settingsPage = await server.call('/pet3d/config');
+  eq(settingsPage.status, 200, 'the model-parameter page is served');
+  const settingsHtml = settingsPage.body.toString('utf8');
+  ok(settingsHtml.includes('config-page.js'), 'and it loads its own script rather than inlining it');
+  ok(settingsHtml.includes('/pet3d/window/lib/core.js'), 'and core, which is where the settings rules live');
+  /**
+   * The containers every section is built into — and WHICH of the two pages carries it.
+   *
+   * `expression-body` was one of them until 2026-10-09, when the operator asked for the standalone expression/
+   * 口型 table to be closed: what replaced it is the emotion table plus the per-clip expression and mouth
+   * dropdowns in the 动作 section — and those are built by the script INTO `motion-list`. `motion-modes` is gone
+   * with the per-clip table the per-state dropdowns replaced.
+   *
+   * Since 2026-10-11 the settings are TWO pages, so the same three assertions also pin the split from the host
+   * side: the 模型参数 page serves the emotion table and the spring list (and NOT the 状态 container), the
+   * 通用设置 page serves the motion list and the 碎碎念 boxes (and NONE of the per-model containers), and both
+   * link the one stylesheet. A route that answered with the wrong file, or with one shared file, would leave a
+   * window whose section is simply absent — the failure the `data-page` assertions in the desktop suite catch in
+   * a real window, and this catches without one.
+   */
+  const globalPage = await server.call('/pet3d/global');
+  const globalHtml = globalPage.body.toString('utf8');
+  const styleSheet = await server.call('/pet3d/window/lib/pages.css');
+  ok(settingsHtml.includes('emotion-body') && settingsHtml.includes('spring-list')
+    && !settingsHtml.includes('motion-list') && !settingsHtml.includes('speech-states')
+    && settingsHtml.includes('/pet3d/window/lib/pages.css') && styleSheet.status === 200,
+    'with the containers the 模型参数 page builds its sections into (and none of the other page\'s)'
+      + ', over the one stylesheet both pages link and the host serves');
+  ok(globalPage.status === 200
+    && globalHtml.includes('motion-list') && globalHtml.includes('speech-states')
+    && globalHtml.includes('config-page.js')
+    && globalHtml.includes('/pet3d/window/lib/pages.css')
+    && !globalHtml.includes('emotion-body') && !globalHtml.includes('spring-list') && !globalHtml.includes('part-body')
+    && !settingsHtml.includes('expression-body') && !settingsHtml.includes('motion-modes'),
+    'and the 通用设置 page, a second document with its own sections and the same script,'
+      + ' without the per-model ones or the tables the operator asked to close');
+  const settingsSource = await server.call('/pet3d/window/lib/config-page.js');
+  eq(settingsSource.status, 200, 'the settings page\'s own script is whitelisted');
+  ok(settingsSource.body.length > 2000, 'and is served whole');
+  const notWhitelisted = await server.call('/pet3d/window/lib/../index.js');
+  eq(notWhitelisted.status, 404, 'and the whitelist still refuses anything else');
+
+  for (const dispose of effects) dispose();
+  eq(routes.length, 0, 'unloading removes the model-info route too');
+  await server.close();
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('13. the AI 碎碎念 route: one call, made here, from nothing but the settings');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * A stand-in for an OpenAI-compatible endpoint that RECORDS what it was sent.
+   *
+   * The record is the point of this group: "nothing about the session reaches the model" is a statement about
+   * the REQUEST BODY, and only a real server on the other end can hold the route to it.
+   */
+  const seen = [];
+  let answer = '  模型写的一句话  ';
+  let providerStatus = 200;
+  let providerDelayMs = 0;
+  const provider = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => { raw += chunk; });
+    req.on('end', () => {
+      let body = null;
+      try { body = JSON.parse(raw); } catch { body = null; }
+      seen.push({ url: req.url, headers: req.headers, body });
+      const reply = () => {
+        if (providerStatus !== 200) {
+          res.writeHead(providerStatus, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'nope' } }));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: answer } }] }));
+      };
+      if (providerDelayMs) setTimeout(reply, providerDelayMs);
+      else reply();
+    });
+  });
+  await listenOnUsablePort(provider);
+  const providerBase = `http://127.0.0.1:${provider.address().port}/v1`;
+
+  /**
+   * DSH's own service, stood in for: it records the call and answers with a scripted stream.
+   *
+   * The chunk shapes are the REAL protocol, read out of the installed `app.asar`: deltas are
+   * `{ type: 'text-delta' | 'reasoning-delta', index, text }` and the terminal chunk is
+   * `{ type: 'finish', reason: { kind, failure? } }`. The first version of this stub invented
+   * `{ type: 'finish', kind: … }` — the same wrong assumption the host code made — which is precisely why it
+   * could not catch the host reading `chunk.kind` and swallowing every stream failure.
+   */
+  const llmCalls = [];
+  let dshChunks = [
+    { type: 'text-delta', index: 0, text: 'DSH ' },
+    { type: 'text-delta', index: 0, text: '说的一句' },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ];
+  const llm = {
+    listProviders: () => [
+      { provider: 'fake-official', displayName: '假官方' },
+      { provider: 'fake-other', displayName: '另一个' },
+    ],
+    listModels: async (id) => (id === 'fake-official'
+      ? [{ provider: id, id: 'fake-1', name: '假模型一' }, { provider: id, id: 'fake-2', name: '假模型二' }]
+      : []),
+    stream(options) {
+      llmCalls.push(options);
+      const chunks = dshChunks;
+      return { async *[Symbol.asyncIterator]() { for (const chunk of chunks) yield chunk; } };
+    },
+  };
+
+  const { ctx, routes, effects } = stubContext({ llm });
+  plugin.apply(ctx, {});
+  const server = await serveRoutes(routes);
+  const json = async (path, method = 'GET', body) => {
+    const response = await server.call(path, method, body === undefined ? undefined : JSON.stringify(body));
+    let payload = null;
+    try { payload = JSON.parse(response.body.toString('utf8')); } catch { payload = null; }
+    return { ...response, payload };
+  };
+  const put = (speech) => json('/pet3d/settings', 'POST', { preferences: { speech } });
+
+  // --- the custom provider ---------------------------------------------------
+  const configured = await put({
+    source: 'ai',
+    lines: { working: '兜底的一句' },
+    ai: {
+      provider: 'custom',
+      baseUrl: providerBase,
+      model: 'stub-model',
+      apiKey: 'k-secret-123',
+      persona: '你是一条蓝色小肥鱼',
+      prompts: { working: '说一句正在干活的自言自语。' },
+      temperature: 1.2,
+    },
+  });
+  eq(configured.status, 200, 'the speech settings are written through the host store');
+
+  const said = await json('/pet3d/say?event=working');
+  eq(said.status, 200, 'GET /pet3d/say answers');
+  eq(said.payload.text, '模型写的一句话', 'with the model\'s line, trimmed');
+  eq(said.payload.provider, 'custom', 'naming the provider that produced it');
+  eq(said.payload.model, 'stub-model', 'and the model');
+  ok(Number.isFinite(said.payload.ms), 'and how long it took, which is what 试一句 shows');
+  eq(seen.length, 1, 'exactly one call reached the provider');
+  eq(seen[0].url, '/v1/chat/completions', 'at the OpenAI-compatible path under the configured base URL');
+  eq(seen[0].headers.authorization, 'Bearer k-secret-123', 'with the key as a bearer token');
+  eq(seen[0].body.model, 'stub-model', 'and the configured model');
+  eq(seen[0].body.temperature, 1.2, 'and the configured temperature');
+  /**
+   * The privacy rule, asserted ON THE WIRE rather than in prose: the request is the persona, the fixed rules
+   * and the state's own instruction — nothing else. A route that leaked session text would have to put it in
+   * one of these two strings.
+   */
+  const systemMessage = seen[0].body.messages[0];
+  const userMessage = seen[0].body.messages[1];
+  eq(systemMessage.role, 'system', 'the persona is the system message');
+  ok(systemMessage.content.startsWith('你是一条蓝色小肥鱼'), 'and it opens with what the user wrote');
+  ok(systemMessage.content.includes('不要提到代码、文件名、路径'),
+    'followed by the rules that keep a line drawable and free of session content');
+  eq(userMessage.role, 'user', 'the per-state instruction is the user message');
+  eq(userMessage.content, '说一句正在干活的自言自语。', 'and it is exactly what the user wrote for that state');
+
+  /**
+   * The SECOND reason this route exists: a press on a PART.
+   *
+   * The user writes a prompt per part in the settings ("被摸到耳朵时说一句"), and `part` is what selects it — so
+   * the assertion is on the WIRE again: the request's user turn must be that part's own instruction, not the
+   * state's. The answer echoes the part, and an id nothing knows falls back to the state rather than failing,
+   * because a page left open while a part was deleted must keep working.
+   */
+  /**
+   * `parts` is a TOP-LEVEL preference, next to `speech` rather than inside it — `mergePreferences` merges
+   * top-level keys only, so a parts table sent inside a speech patch is silently dropped (which is exactly what
+   * the first version of this test did, and why the part resolved to null).
+   */
+  const partsWritten = await json('/pet3d/settings', 'POST', {
+    preferences: {
+      parts: {
+        // Offered every shipped region: this fixture is about which part a press resolves to, and the migration
+        // of 2026-10-12 would otherwise insert the rows it has never offered into the list being asserted.
+        seeded: ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+        items: [
+          { id: 'ear', label: '耳朵', match: ['ErDuo'], speech: { lines: ['别摸耳朵'], prompt: '被摸到耳朵时，说一句撒娇的话。' } },
+          { id: 'body', label: '身体', region: 'body', speech: { lines: [], prompt: '' } },
+          // A SHIPPED row, with both boxes EMPTY: its instruction and its lines come from the tables in core.
+          { id: 'chest', label: '胸部', region: 'chest', speech: { lines: [], prompt: '' } },
+          { id: 'butt', label: '屁股', region: 'butt', speech: { lines: [], prompt: '' } },
+        ],
+      },
+    },
+  });
+  eq(partsWritten.status, 200, 'a part with its own prompt is written through the host store');
+  eq(partsWritten.payload.preferences.parts.items.length, 4, 'and the store keeps the four the user built');
+  /**
+   * NOTE (2026-10-11): the guard that REFUSES a defaults-only patch over authored settings lives in `lib/settings.js`
+   * (`authoredWeight` plus `update`'s refusal, unless the caller passes `reset: true`). It was added after the settings
+   * page — booting with defaults because eight of its status elements had been deleted from its markup — sent its whole
+   * preferences object and wiped every authored field: part structures, per-part 碎碎念, the AI prompts, the status lines.
+   *
+   * Its dedicated assertions are NOT here yet, and that is a gap worth naming rather than hiding. The first attempt
+   * cleared the very parts the checks BELOW depend on, so it has to be written at the END of this group — or against its
+   * own store instance — and my last pass through it left the tree red, which is worse than an honest gap.
+   */
+  answer = '耳朵痒痒的';
+  const byPart = await json('/pet3d/say?state=working&part=ear');
+  eq(byPart.payload.text, '耳朵痒痒的', 'a press can ask for a line about a part');
+  eq(byPart.payload.part, 'ear', 'and the answer says which part it was for');
+  eq(seen[seen.length - 1].body.messages[1].content, '被摸到耳朵时，说一句撒娇的话。',
+    'with the part\'s own prompt as the instruction, not the state\'s');
+  const byStalePart = await json('/pet3d/say?state=working&part=deleted-part');
+  eq(byStalePart.payload.part, null, 'an id the settings no longer hold is answered as no part at all');
+  eq(seen[seen.length - 1].body.messages[1].content, '说一句正在干活的自言自语。',
+    'and falls back to the state\'s instruction rather than failing a page that was left open');
+  // A part with an EMPTY prompt uses the state's instruction too: the pet is still working while it is touched.
+  const barePart = await json('/pet3d/say?state=working&part=body');
+  eq(barePart.payload.part, 'body', 'a part with no prompt of its own still answers as that part');
+  eq(seen[seen.length - 1].body.messages[1].content, '说一句正在干活的自言自语。',
+    'while the instruction is the state\'s');
+  /**
+   * A SHIPPED part brings its OWN instruction, with nothing written in its box (operator, 2026-10-12: 「默认AI提示词
+   * "被主人摸到胸部了，必须要傲娇的回骂这个摸人家胸的变态主人才行。"（匹配词和AI提示词写进系统底层，AI提示词那里默认留空，
+   * 跟未输入状态一样，如果输入了，则以输入的为准）」).
+   *
+   * Asserted ON THE WIRE because the host is the only half that builds the request — both surfaces send a part ID
+   * and nothing else about what to say.
+   */
+  answer = '变态！';
+  const shippedPart = await json('/pet3d/say?state=working&part=chest');
+  eq(shippedPart.payload.part, 'chest', 'a shipped 胸部 part answers as that part');
+  eq(seen[seen.length - 1].body.messages[1].content,
+    '被主人摸到胸部了，必须要傲娇的回骂这个摸人家胸的变态主人才行。',
+    'and its own instruction reaches the model, with its box empty');
+  // The part's answer is more specific than the NAME of what was touched, so a structure does not outrank it.
+  await json('/pet3d/say?state=working&part=chest&structure=bust&chain=Bust');
+  eq(seen[seen.length - 1].body.messages[1].content,
+    '被主人摸到胸部了，必须要傲娇的回骂这个摸人家胸的变态主人才行。',
+    'which stays the instruction whatever the model named the structure it was touched on');
+  const shippedButt = await json('/pet3d/say?state=working&part=butt');
+  eq(seen[seen.length - 1].body.messages[1].content,
+    '被主人摸到屁股了，必须要傲娇的回骂这个摸人家屁股的变态主人才行。',
+    'and 屁股 has one of its own');
+  /**
+   * And the user's own box replaces it — the operator's condition: 「如果输入了，则以输入的为准」.
+   */
+  await json('/pet3d/settings', 'POST', {
+    preferences: {
+      parts: {
+        seeded: ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+        items: [
+          { id: 'ear', label: '耳朵', match: ['ErDuo'], speech: { lines: ['别摸耳朵'], prompt: '被摸到耳朵时，说一句撒娇的话。' } },
+          { id: 'body', label: '身体', region: 'body', speech: { lines: [], prompt: '' } },
+          { id: 'chest', label: '胸部', region: 'chest', speech: { lines: [], prompt: '我自己的胸部提示词' } },
+        ],
+      },
+    },
+  });
+  await json('/pet3d/say?state=working&part=chest');
+  eq(seen[seen.length - 1].body.messages[1].content, '我自己的胸部提示词',
+    'while a prompt the user writes replaces the shipped one');
+  await json('/pet3d/settings', 'POST', {
+    preferences: {
+      parts: {
+        seeded: ['eye', 'head', 'hand', 'body', 'upperLeg', 'lowerLeg', 'foot', 'chest', 'butt', 'tail'],
+        items: [
+          { id: 'ear', label: '耳朵', match: ['ErDuo'], speech: { lines: ['别摸耳朵'], prompt: '被摸到耳朵时，说一句撒娇的话。' } },
+          { id: 'body', label: '身体', region: 'body', speech: { lines: [], prompt: '' } },
+          { id: 'chest', label: '胸部', region: 'chest', speech: { lines: [], prompt: '' } },
+          { id: 'butt', label: '屁股', region: 'butt', speech: { lines: [], prompt: '' } },
+        ],
+      },
+    },
+  });
+  /**
+   * And when the press names WHAT it touched, that name IS the instruction.
+   *
+   * This is the operator's request of 2026-10-11: "如果是默认未设置部位的结构，例如 bust，就传给 LLM 让它生成 bust 被
+   * 触摸的碎碎念". `bust` is a mesh of 蓝色小肥鱼 that no part claims, so the only thing known about it is the name the
+   * model file uses — and it is passed through VERBATIM, because translating it here would be a guess.
+   *
+   * The part is `body` here on purpose: `bust` belongs to the shipped 胸部 row now (2026-10-12), so the row that
+   * has no instruction of its own is what shows the structure name being used as one.
+   */
+  answer = '别碰那里';
+  const byStructure = await json('/pet3d/say?state=working&part=body&structure=bust');
+  eq(byStructure.payload.structure, 'bust', 'the structure that was touched is echoed back');
+  eq(byStructure.payload.part, 'body', 'with the part that answered for it');
+  ok(seen[seen.length - 1].body.messages[1].content.includes('bust'),
+    'and the instruction NAMES it, which is what lets a part with no prompt be answered');
+  ok(seen[seen.length - 1].body.messages[1].content !== '说一句正在干活的自言自语。',
+    'instead of falling back to the state\'s instruction');
+  // The part's own prompt still WINS over the structure: a user who wrote one meant it.
+  const structureButPrompt = await json('/pet3d/say?state=working&part=ear&structure=bust');
+  eq(seen[seen.length - 1].body.messages[1].content, '被摸到耳朵时，说一句撒娇的话。',
+    'while a part that HAS a prompt keeps it, whatever structure was touched');
+  // A structure name is capped and flattened like every other string from a page: it goes into a prompt.
+  const longStructure = await json('/pet3d/say?state=working&part=body&structure=' + encodeURIComponent('x'.repeat(300)));
+  eq(longStructure.payload.structure.length, 64, 'a long structure name is cut to what a prompt can hold');
+  const junkStructure = await json('/pet3d/say?state=working&part=body&structure=' + encodeURIComponent('a\nb\tc'));
+  eq(junkStructure.payload.structure, 'a b c', 'and a multi-line one is flattened to a single word');
+  /**
+   * And the SPRING CHAIN, which LEADS the instruction when there is one.
+   *
+   * Operator, 2026-10-11: "触发点击碎碎念的时候，把对应的链名和结构名一起发给 LLM，链名的优先级大于结构名". Both names
+   * are on the wire and both are echoed; the instruction opens with the chain, because `LiuHai` is what a person
+   * and the model understand while `LiuHai.002` is the rig's own bookkeeping.
+   */
+  answer = '别拽我的刘海';
+  const byChain = await json('/pet3d/say?state=working&part=body&structure=LiuHai.002&chain=LiuHai');
+  eq(byChain.payload.chain, 'LiuHai', 'the spring chain that was touched is echoed back');
+  eq(byChain.payload.structure, 'LiuHai.002', 'together with the structure it hangs from');
+  const chainInstruction = seen[seen.length - 1].body.messages[1].content;
+  ok(chainInstruction.includes('LiuHai'), 'and the instruction names the chain');
+  ok(chainInstruction.includes('LiuHai.002'), 'with the structure still mentioned inside it');
+  ok(chainInstruction.indexOf('LiuHai') < chainInstruction.indexOf('LiuHai.002'),
+    'the chain coming FIRST, which is what "链名的优先级大于结构名" means on the wire');
+  // A chain with no structure at all is still answerable: the name is the whole instruction.
+  const chainOnly = await json('/pet3d/say?state=working&part=body&chain=WeiBa');
+  ok(seen[seen.length - 1].body.messages[1].content.includes('WeiBa'),
+    'a chain on its own names the thing that was touched');
+  eq(chainOnly.payload.structure, null, 'with no structure to report');
+  // The part's own prompt still beats BOTH: a user who wrote one meant it.
+  await json('/pet3d/say?state=working&part=ear&structure=LiuHai.002&chain=LiuHai');
+  eq(seen[seen.length - 1].body.messages[1].content, '被摸到耳朵时，说一句撒娇的话。',
+    'while a part that HAS a prompt keeps it, whatever chain and structure were touched');
+  // A chain name is capped and flattened like every other string from a page: it goes into a prompt.
+  const longChain = await json('/pet3d/say?state=working&part=body&chain=' + encodeURIComponent('y'.repeat(300)));
+  eq(longChain.payload.chain.length, 64, 'a long chain name is cut to what a prompt can hold');
+  const junkChain = await json('/pet3d/say?state=working&part=body&chain=' + encodeURIComponent('a\nb'));
+  eq(junkChain.payload.chain, 'a b', 'and a multi-line one is flattened');
+  const junkPart = await json('/pet3d/say?state=working&part=' + encodeURIComponent('../../etc/passwd'));
+  eq(junkPart.payload.part, null, 'and a part id that is not a plain key is refused as an id, not looked up');
+
+  const customCatalog = await json('/pet3d/llm');
+  eq(customCatalog.payload.custom.configured, true, 'and the catalog reports the custom provider as configured');
+  ok(!JSON.stringify(customCatalog.payload).includes('k-secret-123'), 'without ever echoing the credential');
+
+  // The answer is sanitised at the boundary the bubble uses.
+  answer = '第一行\n第二行';
+  const flattened = await json('/pet3d/say?state=done');
+  eq(flattened.payload.text, '第一行 第二行', 'a multi-line answer is flattened into the one line a bubble draws');
+  answer = 'x'.repeat(400);
+  const capped = await json('/pet3d/say?state=done');
+  eq(capped.payload.text.length, 80, 'and a paragraph is cut to the relay cap');
+  answer = '   ';
+  const empty = await json('/pet3d/say?state=done');
+  eq(empty.payload.text, null, 'an answer with no text in it is no line at all');
+  /**
+   * A 200 with no text is its own diagnosis: an endpoint answering with a tool call, a refusal, or an empty
+   * `choices` array looks identical from the outside otherwise, which is how "试一句 失败" becomes unattributable.
+   */
+  ok(String(empty.payload.error).includes('HTTP 200') && String(empty.payload.error).includes('choices=1'),
+    'and the reason says what the endpoint actually answered');
+
+  // Refusals the settings page can show, and a state nothing knows.
+  providerStatus = 500;
+  const failed = await json('/pet3d/say?state=working');
+  eq(failed.payload.text, null, 'a provider failure produces no line, so the user\'s fallback stays up');
+  ok(String(failed.payload.error).includes('500'), 'and the reason names the HTTP status');
+  providerStatus = 200;
+  const unknown = await json('/pet3d/say?state=nonsense');
+  eq(unknown.payload.text, null, 'an unknown state is refused');
+  eq(unknown.payload.error, 'unknown state', 'with a reason rather than an invented state');
+
+  /**
+   * Only ONE call may be in flight. Two at once is the shape a page produces when a state flickers, and the
+   * second is told so rather than queued behind the first.
+   */
+  answer = '并发的一句';
+  providerDelayMs = 150;
+  const [first, second] = await Promise.all([json('/pet3d/say?state=working'), json('/pet3d/say?state=working')]);
+  providerDelayMs = 0;
+  eq([first, second].filter((entry) => entry.payload.text !== null).length, 1,
+    'two simultaneous requests produce ONE call, not two');
+  eq(([first, second].find((entry) => entry.payload.text !== null) || { payload: {} }).payload.text, '并发的一句',
+    'and the one that ran is the one that answered');
+  ok([first, second].some((entry) => entry.payload.error === '已经有一句在生成中了'),
+    'and the other one is told so');
+
+  // --- DSH's own provider ----------------------------------------------------
+  /**
+   * The provider and the model are refused SEPARATELY, and the operator's own report is why (2026-10-12):
+   * 「即便配置了DeepSeek Account，点击试一句那里的生成，仍然会报错'失败：还没有选择 DSH 的 provider 和模型'」.
+   *
+   * The provider WAS configured — `dshProvider: 'deepseek-account'` was in the store — and only `dshModel` was
+   * empty, while the window's model picker went on displaying a model (a `<select>` with no matching value shows
+   * its first option). One message for two missing fields is what made that unanswerable from the screen, so the
+   * refusal now names the one that is actually missing. Asserted before the complete pair below, so the two
+   * halves are read against the same stub.
+   */
+  await put({ source: 'ai', ai: { provider: 'dsh', dshProvider: 'fake-official', dshModel: '' } });
+  const noModel = await json('/pet3d/say?event=done');
+  eq(noModel.payload.text, null, 'a DSH route with no model produces no line');
+  eq(noModel.payload.error, '还没有选择 DSH 的模型',
+    'and says WHICH of the two is missing — the model, when the provider is set');
+  eq(llmCalls.length, 0, 'without asking the LLM service at all, because the route is incomplete');
+  await put({ source: 'ai', ai: { provider: 'dsh', dshProvider: '', dshModel: 'fake-1' } });
+  const noProvider = await json('/pet3d/say?event=done');
+  eq(noProvider.payload.error, '还没有选择 DSH 的 provider', 'and the provider, when THAT is what is missing');
+  eq(llmCalls.length, 0, 'with no call in that case either');
+
+  const dshConfigured = await put({
+    source: 'ai',
+    ai: {
+      provider: 'dsh',
+      dshProvider: 'fake-official',
+      dshModel: 'fake-1',
+      persona: '你是一条蓝色小肥鱼',
+      prompts: { done: '说一句收工的话。' },
+    },
+  });
+  eq(dshConfigured.status, 200, 'the DSH provider is selected in the same settings');
+  const dshSaid = await json('/pet3d/say?event=done');
+  eq(dshSaid.payload.text, 'DSH 说的一句', 'and its streamed answer becomes the line');
+  eq(dshSaid.payload.model, 'fake-official/fake-1', 'reported as the route that produced it');
+  eq(llmCalls.length, 1, 'exactly one call reached the service');
+  eq(llmCalls[0].provider, 'fake-official', 'with the chosen provider');
+  eq(llmCalls[0].model, 'fake-1', 'and the chosen model');
+  eq(llmCalls[0].purpose, 'pet3d-speech', 'and a purpose that names what the call is for');
+  ok(llmCalls[0].system.includes('你是一条蓝色小肥鱼'), 'the persona goes in the system field');
+  eq(llmCalls[0].messages[0].content[0].text, '说一句收工的话。', 'and the state instruction is the user turn');
+  /**
+   * The two options that cost the operator a real failure on 2026-10-10, asserted by NAME because nothing else
+   * in the tree can see them: the DSH adapter defaults the reasoning effort to `high` when the caller says
+   * nothing (`dsh-llm-deepseek`: `options.reasoningEffort ?? connection.defaults.reasoningEffort ?? … : "high"`),
+   * and `max_tokens` is billed against the THINKING as well as the answer. A 64-token budget therefore came back
+   * `max-tokens` with no visible text, and the pet fell back to its own line.
+   */
+  eq(llmCalls[0].reasoningEffort, 'off',
+    'a 碎碎念 asks for NO reasoning, which is what DSH itself does for its own auxiliary short calls');
+  eq(llmCalls[0].maxTokens, 256,
+    'and a budget with room for a route that thinks anyway, rather than one the answer alone would fill');
+
+  // A stream that ends in failure IS a failure, not a silent empty line. The terminal chunk is
+  // `{ type: 'finish', reason: {...} }` — the KIND lives inside `reason`, which is what `BlockAssembler` reads.
+  dshChunks = [
+    { type: 'text-delta', index: 0, text: '半' },
+    { type: 'finish', reason: { kind: 'error', failure: { code: 'AUTH', message: 'bad key' } } },
+  ];
+  const dshFailed = await json('/pet3d/say?event=done');
+  eq(dshFailed.payload.text, null, 'a stream that fails produces no line');
+  ok(String(dshFailed.payload.error).includes('AUTH'), 'and the reason carries the failure code');
+  ok(String(dshFailed.payload.error).includes('finish=error'), 'naming the finish kind as well as the code');
+
+  /**
+   * The failure the operator actually hit: a budget spent on THINKING, so the stream ends `max-tokens` with
+   * reasoning deltas and no text at all. It has to come back as a refusal that says so — "the model produced
+   * nothing" and "the model thought until the budget ran out" are different problems with different fixes.
+   */
+  dshChunks = [
+    { type: 'reasoning-delta', index: 0, text: '让我想想'.repeat(6) },
+    { type: 'finish', reason: { kind: 'max-tokens' } },
+  ];
+  const thoughtOut = await json('/pet3d/say?event=done');
+  eq(thoughtOut.payload.text, null, 'a stream that only thought produces no line');
+  ok(String(thoughtOut.payload.error).includes('finish=max-tokens'), 'and says the budget ran out');
+  ok(String(thoughtOut.payload.error).includes('思考 24 字'), 'with how much thinking that budget bought');
+  ok(String(thoughtOut.payload.error).includes('正文 0 字'), 'and that no text arrived at all');
+
+  // --- the catalog the settings page reads ------------------------------------
+  const catalog = await json('/pet3d/llm');
+  eq(catalog.status, 200, 'GET /pet3d/llm answers');
+  eq(catalog.payload.dsh.available, true, 'and reports that this app has an LLM service');
+  eq(catalog.payload.dsh.providers.length, 2, 'with the live provider routes');
+  eq(catalog.payload.dsh.providers[0].id, 'fake-official', 'named by their route id');
+  eq(catalog.payload.dsh.providers[0].name, '假官方', 'and labelled for a human');
+  eq(catalog.payload.dsh.models.length, 0, 'but no model list until a provider is asked about');
+  const models = await json('/pet3d/llm?provider=fake-official');
+  eq(models.payload.dsh.models.length, 2, 'asking about one provider lists its models');
+  eq(models.payload.dsh.models[1].id, 'fake-2', 'with their ids');
+  /**
+   * The credential rides in the SETTINGS snapshot — the operator's own choice — but never in the STATE channel,
+   * which is the one the floating window polls many times a second.
+   */
+  const state = await json('/pet3d/state');
+  ok(!JSON.stringify(state.payload).includes('k-secret-123'), 'the state channel carries no credential');
+
+  // A composition with no LLM service says so instead of failing obscurely.
+  for (const dispose of effects) dispose();
+  const bare = stubContext();
+  plugin.apply(bare.ctx, {});
+  const bareServer = await serveRoutes(bare.routes);
+  const noService = await bareServer.json('/pet3d/llm');
+  eq(noService.payload.dsh.available, false, 'a composition with no LLM service reports it honestly');
+  const noCall = await bareServer.json('/pet3d/say?event=working');
+  eq(noCall.payload.text, null, 'and a request for a line produces none');
+  ok(String(noCall.payload.error).includes('LLM'), 'with a reason that names the missing service');
+  for (const dispose of bare.effects) dispose();
+  await bareServer.close();
+  await server.close();
+  provider.close();
+}
+
+// ---------------------------------------------------------------------------
+group('13b. the state channel stops believing a report that has gone quiet');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * THE REPORT (operator, 2026-10-11): "有时候开始工作的碎碎念不消失，完成任务后还在显示深度求索中".
+   *
+   * The floating window reacts only when `seq` moves, so this route serving the last report for ever meant a pet whose
+   * page had stopped — Chromium stops the frame loop while the DSH window is hidden, so a turn that ends in the
+   * background is never computed nor sent — left 工作中 / 深度求索中 on screen underneath a counting clock, with
+   * nothing able to tell that from a real long turn. The rule itself lives in `core.hostStateView` and is unit-tested
+   * at its edges in `verify.mjs`; what THIS proves is that the route applies it, with a 30 ms window so the test does
+   * not wait ninety seconds for the shipped one.
+   */
+  const { ctx, routes, effects } = stubContext();
+  plugin.apply(ctx, { stateStaleMs: 30 });
+  const server = await serveRoutes(routes);
+  const post = (body) => server.call('/pet3d/state', 'POST', JSON.stringify(body));
+
+  const never = await server.json('/pet3d/state');
+  eq(never.payload.state, null, 'a pet that has never reported has no state to serve');
+  eq(never.payload.stale, false, 'and is not called stale, because nothing has gone quiet yet');
+
+  await post({ state: 'working', line: '深度求索中' });
+  const fresh = await server.json('/pet3d/state');
+  eq(fresh.payload.state, 'working', 'a fresh report is served as it was reported');
+  eq(fresh.payload.line, '深度求索中', 'with its line');
+  eq(fresh.payload.stale, false, 'and is marked fresh');
+  // Mutable: the clock posts below move the sequence on, and the staleness bump is measured from a fresh baseline.
+  let seqFresh = fresh.payload.seq;
+  /**
+   * And the TURN CLOCK rides with it — including the stream-less sentinel.
+   *
+   * The floating window has no turn frames of its own, so this relay is the only way its 用时 can be the app's number.
+   * The sentinel is the case that BIT: a deployment whose boundary stream is not wired sends `'state'`, and a sanitiser
+   * that turned it into null made the window drop the duration entirely — the operator's "深度求索中的时间也没了".
+   */
+  await post({ state: 'working', clock: { startedAt: 1_700_000_000_000, endedAt: null } });
+  eq((await server.json('/pet3d/state')).payload.clock.startedAt, 1_700_000_000_000,
+    'a turn clock is relayed to the window, which has no frames of its own');
+  await post({ state: 'working', clock: 'state' });
+  eq((await server.json('/pet3d/state')).payload.clock, 'state',
+    'and the stream-less sentinel is relayed AS ITSELF, not collapsed to null');
+  await post({ state: 'working', clock: { startedAt: 'nonsense' } });
+  eq((await server.json('/pet3d/state')).payload.clock, null, 'while a clock that is not a clock is refused');
+  await post({ state: 'working' });
+  // Re-baselined AFTER the clock posts above, which legitimately moved the sequence on: what is under test here is
+  // that going stale bumps it exactly once, not what the absolute number is.
+  seqFresh = (await server.json('/pet3d/state')).payload.seq;
+
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  const aged = await server.json('/pet3d/state');
+  eq(aged.payload.state, null, 'once the report is older than the window it is answered as NO PET REPORTING');
+  eq(aged.payload.line, null, 'so the window clears the status label and the 碎碎念 bubble');
+  eq(aged.payload.stale, true, 'and says why it did');
+  eq(aged.payload.seq, seqFresh + 1,
+    'with the sequence bumped ONCE, because the window only looks again when it moves');
+  const again = await server.json('/pet3d/state');
+  eq(again.payload.seq, aged.payload.seq, 'and it is not bumped again on every read');
+  eq(again.payload.state, null, 'while the answer stays "no pet is reporting"');
+  eq(again.payload.stale, true, 'with the same reason');
+
+  await post({ state: 'working' });
+  const revived = await server.json('/pet3d/state');
+  eq(revived.payload.state, 'working', 'and a new report revives the pet');
+  eq(revived.payload.stale, false, 'as fresh again');
+  ok(revived.payload.seq > again.payload.seq, 'on a sequence the window cannot miss, so it redraws');
+
+  for (const dispose of effects) dispose();
+  await server.close();
+}
+
+// ---------------------------------------------------------------------------
+if (process.argv.includes('--fetch')) {
+  const target = join(ROOT, 'build', 'fixtures', 'miku');
+  const files = [
+    ['miku_v2.pmd', 'https://cdn.jsdelivr.net/gh/moeru-ai/three-mmd@main/examples/vanilla/src/assets/miku/miku_v2.pmd'],
+    ['eyeM2.bmp', 'https://cdn.jsdelivr.net/gh/moeru-ai/three-mmd@main/examples/vanilla/src/assets/miku/eyeM2.bmp'],
+  ];
+  mkdirSync(target, { recursive: true });
+  for (const [name, url] of files) {
+    const destination = join(target, name);
+    if (existsSync(destination)) {
+      console.log(`  have  ${name}`);
+      continue;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`  FAIL  ${name}: HTTP ${response.status}`);
+      process.exitCode = 1;
+      continue;
+    }
+    writeFileSync(destination, Buffer.from(await response.arrayBuffer()));
+    console.log(`  got   ${name} (${(statSync(destination).size / 1024).toFixed(0)} KB)`);
+  }
+}
+
+console.log(`\n${'-'.repeat(60)}`);
+if (failed === 0) {
+  console.log(`host + model: ${passed} checks passed`);
+  process.exit(process.exitCode ?? 0);
+}
+console.log(`host + model: ${passed} passed, ${failed} FAILED`);
+for (const failure of failures) console.log(`  - ${failure}`);
+process.exit(1);

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pet3d · 通用设置</title>
+  <meta name="color-scheme" content="dark light">
+  <!--
+    The stylesheet both settings pages share. One file rather than a copy in each page: the two pages render
+    the same rows, tables and status lines, and a copy is how the two drift apart.
+
+    The 通用设置 page (`/pet3d/global`) groups appearance, gaze, interaction, state actions,
+    speech and imported libraries. Per-model controls live on the separate model page.
+    `lib/config-page.js` drives both: every DOM lookup in it is guarded, so one script serves two pages.
+  -->
+  <link rel="stylesheet" href="/pet3d/window/lib/pages.css">
+</head>
+<body data-page="global">
+  <header class="page-header"><div class="eyebrow">PET3D · SETTINGS</div><h1>通用设置</h1><p class="page-description">调整桌宠显示、互动、动作与说话方式。</p><div id="status" role="status" aria-live="polite">正在读取…</div></header>
+  <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">显示与外观</a><a href="#settings-1">视线</a><a href="#settings-2">鼠标互动与物理</a><a href="#settings-3">状态与动作</a><a href="#settings-4">碎碎念</a><a href="#settings-5">模型导入</a><a href="#settings-6">动作导入</a></nav>
+  <main>
+<section class="settings-section" id="settings-0">
+  <h2>显示与外观</h2>
+  <p class="section-description">分别调整应用内桌宠与独立悬浮窗的大小。</p>
+  <div class="card">
+
+    <div class="row">
+      <label class="k" for="pref-size">应用内大小</label>
+      <input type="range" id="pref-size" min="40" max="260" step="1">
+      <span class="value" id="pref-size-value">100%</span>
+      <button id="pref-size-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-window-size">悬浮窗大小</label>
+      <input type="range" id="pref-window-size" min="10" max="400" step="1">
+      <span class="value" id="pref-window-size-value">100%</span>
+      <button id="pref-window-size-reset" class="ghost">复位</button>
+    </div>
+    <!--
+      空闲休眠: how long the pet may sit idle before it naps (`sleepAfterMs`).
+
+      This row is the one thing the deleted pet settings panel owned that had NO other home — `cleanPreferences`
+      accepts exactly three values, so removing the panel left the preference unreachable from every surface
+      (the right-click menu is about the pet, and its eight entries do not carry this). A select rather than a
+      number for the same reason: the cleaner's list IS the set of choices.
+    -->
+    <div class="row">
+      <label class="k" for="pref-sleep">空闲休眠</label>
+      <select id="pref-sleep">
+        <option value="30000">30 秒</option>
+        <option value="120000">2 分钟</option>
+        <option value="300000">5 分钟</option>
+      </select>
+    </div>
+    <!--
+      调试模式: the two surfaces at once.
+
+      Normally they are exclusive by design — while the floating window runs, the pet inside the app is hidden —
+      which is exactly what makes a difference between the two renderers impossible to see. Switching this on
+      shows both, so the same state, prompt, pose or size can be compared side by side. It is the `both` value
+      of 显示位置, not a second flag (see `core.PET_SURFACES`), so clearing it returns the pet to 自动.
+    -->
+    <div class="row">
+      <label class="k" for="pref-both">调试模式</label>
+      <label class="inline"><input type="checkbox" id="pref-both"> 独立桌宠与内置桌宠同时显示</label>
+    </div>
+    <p class="hint">开启后两个桌宠会一起出现（对比两套渲染）；关闭后回到「自动」，即由宿主决定。</p>
+    <div class="row">
+      <label class="k" for="pref-hidden">视角</label>
+      <button id="pref-view-reset">复位视角</button>
+      <span class="k sub">宠物</span>
+      <label class="inline"><input type="checkbox" id="pref-hidden"> 隐藏</label>
+    </div>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-1">
+  <h2>视线</h2>
+  <p class="section-description">控制桌宠看向光标的响应范围与停看时间。</p>
+  <div class="card" id="gaze-body">
+    <div class="row"><label class="k" for="pref-look">看向光标</label><label class="inline"><input type="checkbox" id="pref-look"> 开启</label></div>
+
+    <div class="row">
+      <label class="k" for="pref-gaze-curve">曲率</label>
+      <input type="range" id="pref-gaze-curve" min="10" max="100" step="5">
+      <span class="value" id="pref-gaze-curve-value">0.40</span>
+      <button id="pref-gaze-curve-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-gaze-span-x">满偏距离</label>
+      <input type="number" id="pref-gaze-span-x" step="10" min="0" max="6000"> px 横向
+      <input type="number" id="pref-gaze-span-y" step="10" min="0" max="6000"> px 纵向
+      <button id="pref-gaze-span-reset" class="ghost">自动</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-gaze-idle">静止停看</label>
+      <input type="number" id="pref-gaze-idle" step="1" min="0" max="600"> 秒
+      <button id="pref-gaze-idle-reset" class="ghost">复位</button>
+    </div>
+    <p class="hint" id="pref-gaze-span-auto"></p>
+    <p class="hint applied" id="pref-gaze-applied">（正在读取悬浮窗…）</p>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-2">
+  <h2>鼠标互动与物理</h2>
+  <p class="section-description">控制物理模拟，以及鼠标划过模型时的摆动。</p>
+  <div class="card">
+    <div class="row"><label class="k" for="pref-physics">弹簧骨物理</label><label class="inline"><input type="checkbox" id="pref-physics"> 开启</label></div>
+
+    <div class="row">
+      <label class="k" for="pref-wind-power">划过强度</label>
+      <input type="range" id="pref-wind-power" min="0" max="200" step="5">
+      <span class="value" id="pref-wind-power-value">0.32</span>
+      <button id="pref-wind-power-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-wind-radius">作用范围</label>
+      <input type="range" id="pref-wind-radius" min="0" max="100" step="5">
+      <span class="value" id="pref-wind-radius-value">45%</span>
+      <button id="pref-wind-radius-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-wind-decay">余韵</label>
+      <input type="number" id="pref-wind-decay" step="0.02" min="0.02" max="2"> 秒
+      <button id="pref-wind-decay-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-wind-speed">满力速度</label>
+      <input type="number" id="pref-wind-speed" step="100" min="100" max="6000"> px/秒
+      <button id="pref-wind-speed-reset" class="ghost">复位</button>
+    </div>
+    <p class="hint applied" id="pref-wind-applied">（正在读取悬浮窗…）</p>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-3">
+  <h2>状态与动作 <span id="motion-count"></span></h2>
+  <p class="section-description">按会话状态设置动作与头顶状态文字。</p>
+  <div class="card">
+    <div class="row"><label class="k" for="pref-motion">播放动画</label><label class="inline"><input type="checkbox" id="pref-motion"> 开启</label></div>
+
+    <div id="motion-list"></div>
+    <p class="hint" id="motion-note"></p>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-4">
+  <h2>碎碎念</h2>
+  <p class="section-description">设置台词来源、显示时长与说话频率。</p>
+  <div class="card">
+    <div class="row">
+      <label class="k" for="pref-speech">开启</label>
+      <label class="inline"><input type="checkbox" id="pref-speech"> 说话</label>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-speech-hold">每句显示</label>
+      <input type="number" id="pref-speech-hold" min="1" max="30" step="1"> 秒
+      <button id="pref-speech-hold-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-speech-gap">最短间隔</label>
+      <input type="number" id="pref-speech-gap" min="0" max="600" step="1"> 秒
+      <button id="pref-speech-gap-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-speech-idle-min">空闲嘀咕间隔</label>
+      <input type="number" id="pref-speech-idle-min" min="0" max="3600" step="5"> –
+      <input type="number" id="pref-speech-idle-max" min="0" max="3600" step="5"> 秒
+      <button id="pref-speech-idle-reset" class="ghost">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-speech-source">台词来源</label>
+      <select id="pref-speech-source">
+        <option value="builtin">内置短语</option>
+        <option value="custom">自定义短语</option>
+        <option value="ai">AI 生成</option>
+      </select>
+    </div>
+    <div id="speech-states"></div>
+    <div id="speech-ai">
+      <div class="row">
+        <label class="k" for="pref-speech-provider">AI 来源</label>
+        <select id="pref-speech-provider">
+          <option value="dsh">DSH 的 Provider</option>
+          <option value="custom">自定义 Provider</option>
+        </select>
+      </div>
+      <div class="row" id="speech-dsh-provider-row">
+        <label class="k" for="pref-speech-dsh-provider">Provider</label>
+        <select id="pref-speech-dsh-provider"></select>
+      </div>
+      <div class="row" id="speech-dsh-model-row">
+        <label class="k" for="pref-speech-dsh-model">模型</label>
+        <select id="pref-speech-dsh-model"></select>
+      </div>
+      <div class="row" id="speech-custom-url-row">
+        <label class="k" for="pref-speech-base-url">Base URL</label>
+        <input type="text" id="pref-speech-base-url" placeholder="https://api.example.com/v1" spellcheck="false">
+      </div>
+      <div class="row" id="speech-custom-model-row">
+        <label class="k" for="pref-speech-model">模型</label>
+        <input type="text" id="pref-speech-model" placeholder="deepseek-chat" spellcheck="false">
+      </div>
+      <div class="row" id="speech-custom-key-row">
+        <label class="k" for="pref-speech-api-key">API Key</label>
+        <input type="password" id="pref-speech-api-key" spellcheck="false" autocomplete="off">
+        <button id="pref-speech-key-clear" class="ghost">清除</button>
+      </div>
+      <div class="row"><span class="k">人格（灌进 system prompt）</span></div>
+      <textarea id="pref-speech-persona" class="speech-persona" rows="3" spellcheck="false"
+        placeholder="例：你是一只住在屏幕角落的蓝色小肥鱼，说话简短、有点懒，偶尔吐槽。"></textarea>
+      <div class="row">
+        <label class="k" for="pref-speech-temperature">温度</label>
+        <input type="range" id="pref-speech-temperature" min="0" max="20" step="1">
+        <span class="value" id="pref-speech-temperature-value">0.90</span>
+      </div>
+      <div class="row">
+        <label class="k" for="pref-speech-timeout">超时</label>
+        <input type="number" id="pref-speech-timeout" min="1" max="60" step="1"> 秒
+      </div>
+      <!--
+        试一句 and its own answer, in ONE row.
+
+        The answer used to sit above this whole block, so a refusal appeared several rows away from the button
+        that asked for it (operator, 2026-10-12: "报错的提示位置和「生成」按钮太远，不仔细找都找不到"). It is a
+        sibling of 生成 now, on a full line of its own under it, and gold while it is a refusal.
+      -->
+      <div class="row">
+        <label class="k" for="pref-speech-test-state">试一句</label>
+        <select id="pref-speech-test-state"></select>
+        <button id="pref-speech-test" class="ghost">生成</button>
+        <p class="hint" id="pref-speech-test-result" role="status" aria-live="polite"></p>
+      </div>
+      <p class="hint" id="speech-llm-note"></p>
+    </div>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-5">
+  <h2>模型导入</h2>
+  <p class="section-description">添加模型所在的目录；移除目录不会删除文件。</p>
+  <div class="card">
+    <div class="row">
+      <span class="k">导入目录</span>
+      <button id="model-import-pick">选择文件夹…</button>
+      <button id="model-import-manual" class="ghost">手动输入路径</button>
+    </div>
+    <div class="row" id="model-import-manual-row" hidden>
+      <label class="k" for="model-import-path">路径</label>
+      <input type="text" id="model-import-path" class="grow" placeholder="D:\Models">
+      <button id="model-import-add">添加</button>
+    </div>
+    <div id="model-import-list"></div>
+    <p class="hint" id="model-import-note"></p>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-6">
+  <h2>动作导入</h2>
+  <p class="section-description">添加 VMD / VRMA 动作目录，再到状态与动作中分配。</p>
+  <div class="card">
+    <div class="row">
+      <span class="k">导入目录</span>
+      <button id="motion-import-pick">选择文件夹…</button>
+      <button id="motion-import-manual" class="ghost">手动输入路径</button>
+    </div>
+    <div class="row" id="motion-import-manual-row" hidden>
+      <label class="k" for="motion-import-path">路径</label>
+      <input type="text" id="motion-import-path" class="grow" placeholder="D:\Motions">
+      <button id="motion-import-add">添加</button>
+    </div>
+    <div id="motion-import-list"></div>
+    <p class="hint" id="motion-import-note"></p>
+  </div>
+
+</section>
+  </main>
+  <!--
+    The bootstrap reporter.
+
+    A settings page that can only say "正在读取…" is useless when something fails: the text is the HTML's
+    own placeholder, and a script that never ran, 404'd or threw at its first line looks exactly like a
+    slow host. So this runs FIRST, catches what it can, and after two seconds says what is actually wrong.
+  -->
+  <script>
+    (function () {
+      function show(message) {
+        var status = document.getElementById("status");
+        if (status) { status.textContent = message; status.className = "warn"; }
+      }
+      window.addEventListener("error", function (event) {
+        show("页面脚本出错：" + (event.message || event.type) + (event.filename ? " （" + event.filename + "）" : ""));
+      }, true);
+      window.setTimeout(function () {
+        if (window.__PET3D_CONFIG_STATE__) return;
+        if (!window.__PET3D_CORE__) {
+          show("初始化卡住：core.js 没有加载（检查 /pet3d/window/lib/core.js 是否 404）。");
+          return;
+        }
+        show("初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /pet3d/settings）。");
+      }, 2000);
+    })();
+  </script>
+  <script src="/pet3d/window/lib/core.js"></script>
+  <script src="/pet3d/window/lib/config-page.js"></script>
+</body>
+</html>

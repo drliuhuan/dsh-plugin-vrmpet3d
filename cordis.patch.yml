@@ -1,0 +1,7 @@
+# Add only our plugin row. This patch replaces no official DSH component.
+#
+# The row must be named exactly like the package, because the client module
+# system resolves a plugin's client bundle from its Loader entry name.
+- insert:
+    - id: pet3d
+      name: dsh-plugin-pet3d

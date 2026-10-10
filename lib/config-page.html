@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pet3d · 模型参数</title>
+  <meta name="color-scheme" content="dark light">
+  <!--
+    The stylesheet both settings pages share. One file rather than a copy in each page: the two pages
+    render the same rows, tables and status lines, and a copy is how the two drift apart.
+
+    The MODEL page (`/pet3d/config`). Its sections are the ones that are about ONE model, in this order:
+    模型 → 表情 → 部位 → 弹簧骨. Everything else (导入, 状态, 碎碎念, 视线, 鼠标互动, 其他) is a section of
+    the 通用设置 page (`/pet3d/global`), which is a SEPARATE page — not a hidden half of this one.
+    `lib/config-page.js` drives both: every DOM lookup in it is guarded, so one script serves two pages.
+  -->
+  <link rel="stylesheet" href="/pet3d/window/lib/pages.css">
+</head>
+<body data-page="model">
+  <header class="page-header"><div class="eyebrow">PET3D · SETTINGS</div><h1>模型参数</h1><p class="page-description">为当前模型调整表情、互动部位与弹簧骨。</p><div id="status" role="status" aria-live="polite">正在读取…</div></header>
+  <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">模型</a><a href="#settings-1">表情</a><a href="#settings-2">部位</a><a href="#settings-3">弹簧骨</a></nav>
+  <main>
+<section class="settings-section" id="settings-0">
+  <h2>模型</h2>
+  <p class="section-description">选择要配置的模型，查看格式与可用信息。</p>
+  <div class="card">
+    <div class="row">
+      <label class="k" for="model-select">当前模型</label>
+      <select id="model-select" class="grow"></select>
+      <span class="pill" id="model-spec">—</span>
+    </div>
+    <div class="row"><span class="k">可用信息</span><span class="grow note" id="model-meta">—</span></div>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-1">
+  <h2>表情 <span id="expression-count"></span></h2>
+  <p class="section-description">设置自动眨眼，以及不同互动情境使用的表情。</p>
+  <div class="card">
+    <div class="row">
+      <label class="k" for="blink-enabled">眨眼</label>
+      <label class="inline"><input type="checkbox" id="blink-enabled"> 开启</label>
+      <span class="k sub">间隔</span>
+      <input type="number" id="blink-min" step="0.5" min="0.5" max="60"> –
+      <input type="number" id="blink-max" step="0.5" min="0.5" max="60"> 秒
+    </div>
+    <div class="row">
+      <label class="k" for="emotion-enabled">情绪</label>
+      <label class="inline"><input type="checkbox" id="emotion-enabled"> 开启</label>
+      <span class="k sub">空闲间隔</span>
+      <input type="number" id="emotion-idle-min" step="1" min="2" max="600"> –
+      <input type="number" id="emotion-idle-max" step="1" min="2" max="600"> 秒
+    </div>
+    <table id="emotion-table">
+      <thead><tr><th style="width:76px">情境</th><th style="width:58px">使用</th><th>表情</th><th style="width:104px">持续时间</th></tr></thead>
+      <tbody id="emotion-body"></tbody>
+    </table>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-2">
+  <h2>部位 <span id="part-count"></span></h2>
+  <p class="section-description">按部位分配结构、表情和互动台词。</p>
+  <div class="card">
+    <table id="part-table">
+      <thead><tr>
+        <th style="width:150px">部位</th>
+        <th style="width:58px">使用</th>
+        <th>表情</th>
+        <th style="width:104px">持续时间</th>
+        <th style="width:290px">结构</th>
+        <th style="width:58px"></th>
+      </tr></thead>
+      <tbody id="part-body"></tbody>
+    </table>
+    <div class="row" style="margin-top:10px">
+      <button id="part-add" type="button">新增部位</button>
+      <span class="note">最多 <span id="part-max"></span> 个；删掉的部位，它的结构会回落到默认部位</span>
+    </div>
+    <!--
+      The structure BROWSER. It replaced a native `<input list>` + `<datalist>`: in the settings window that popup
+      could not be scrolled and showed no scrollbar, so most of a 160-name rig was unreachable. This panel is drawn
+      by the page, so it is bounded, scrollable, filterable — and checkable from a suite.
+    -->
+    <div class="part-picker" id="part-picker" hidden>
+      <div class="part-picker-head">
+        <input type="text" id="part-picker-filter" placeholder="筛选结构名（例如 hair / LiuHai / bust）">
+        <span class="note" id="part-picker-count"></span>
+        <button type="button" id="part-picker-close">关闭</button>
+      </div>
+      <div class="part-picker-list" id="part-picker-list" tabindex="0"></div>
+    </div>
+  </div>
+
+</section>
+
+<section class="settings-section" id="settings-3">
+  <h2>弹簧骨 <span id="spring-count"></span></h2>
+  <p class="section-description">调整模型结构的弹性与摆动；可随时恢复模型默认值。</p>
+  <div class="card">
+    <div id="spring-list"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="spring-reset-all">全部恢复默认</button>
+      <span class="note">只写被改动的字段；未改动的字段始终跟随模型文件里的值。</span>
+    </div>
+  </div>
+
+</section>
+  </main>
+  <!--
+    The bootstrap reporter.
+
+    A settings page that can only say "正在读取…" is useless when something fails: the text is the HTML's
+    own placeholder, and a script that never ran, 404'd or threw at its first line looks exactly like a
+    slow host. So this runs FIRST, catches what it can, and after two seconds says what is actually wrong.
+  -->
+  <script>
+    (function () {
+      function show(message) {
+        var status = document.getElementById("status");
+        if (status) { status.textContent = message; status.className = "warn"; }
+      }
+      window.addEventListener("error", function (event) {
+        show("页面脚本出错：" + (event.message || event.type) + (event.filename ? " （" + event.filename + "）" : ""));
+      }, true);
+      window.setTimeout(function () {
+        if (window.__PET3D_CONFIG_STATE__) return;
+        if (!window.__PET3D_CORE__) {
+          show("初始化卡住：core.js 没有加载（检查 /pet3d/window/lib/core.js 是否 404）。");
+          return;
+        }
+        show("初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /pet3d/settings）。");
+      }, 2000);
+    })();
+  </script>
+  <script src="/pet3d/window/lib/core.js"></script>
+  <script src="/pet3d/window/lib/config-page.js"></script>
+</body>
+</html>
