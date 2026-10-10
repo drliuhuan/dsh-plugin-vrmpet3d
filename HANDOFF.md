@@ -4,6 +4,10 @@ Last updated: 2026-10-12. **This file is STATE, not history.** The pass-by-pass 
 in git (see §10); what is here is what a session on another machine needs to pick the project up without asking
 anything.
 
+**▶ NEXT SESSION, in the operator's own order (§3):** finish today's install and run the first LIVE pass (one reload
+of the DSH page is the operator's click, §2) → 「继续修复状态显示」, which still needs a reproduction → 碎碎念 to the
+model with the TIME plus the greeting feature (早/中/晚, 吃饭了没有, 睡觉了没有, 辛苦了) → another batch of VRMA.
+
 **The tree is green: 9 suites, 1945 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
@@ -30,38 +34,63 @@ The project was renamed from `dsh-plugin-pet3d` in the same pass, so the package
 `/vrmpet3d/*`), every browser global (`__PET3D_*` → `__VRMPET3D_*`), the renderer file (pet3d.js →
 [lib/scene.js](lib/scene.js)) and the docs all moved. **A running install therefore needs §2.**
 
-## 2. THE INSTALL NEEDS ONE STEP, and it is this
+## 2. THE INSTALL: DONE ON THIS MACHINE, and one click short of complete
 
-The profile still names the OLD package, and that mismatch is the whole problem: the folder declares
-`dsh-plugin-vrmpet3d` while the profile asks for `dsh-plugin-pet3d`.
+**Installed into `C:\Users\LIUHUAN\.dsh\profiles\desktop` on 2026-10-12** (the operator asked for it in the session
+that cleaned this file). What the profile says now:
 
 | Thing | State right now |
 |---|---|
-| `dependencies["dsh-plugin-pet3d"]` | `link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d` — the OLD name, pointing at this same folder |
-| `dsh.profile.bundles` | lists `dsh-plugin-pet3d`; the bundle's own patch now inserts `vrmpet3d` |
-| `cordis.yml` | materialized (69 KB). A row for the old name is an unresolved insert row, and DSH fails that entry |
-| `dsh-plugin-whale-pet` | still a dependency, **disabled** and not in `bundles` (both pets own `shell.overlay`) |
-| imported model directory | `F:\SynologyDrive\FatFish-pet\Models`, persisted in `pet3d-model-dirs.json` — a name the new build still READS |
+| `dependencies["dsh-plugin-vrmpet3d"]` | `link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d` (the folder keeps its old name on purpose) |
+| `dsh.profile.bundles` | `… , dsh-plugin-vrmpet3d` — the OLD package name is gone from both places |
+| `node_modules\dsh-plugin-vrmpet3d` | a junction to this checkout |
+| `dsh-plugin-fatfish-pet` | dependency + junction still present, **already absent from `bundles`** — left exactly as it was. It registers the SAME `shell.overlay` slot, so the two must never both be enabled |
+| imported model directory | `F:\SynologyDrive\FatFish-pet\Models` → 4 models in the picker (bundled SampleModel + HatsuneMikuNT + a user SampleModel + 蓝色小肥鱼), persisted in `vrmpet3d-model-dirs.json` |
+| state directory | `…\profiles\desktop\vrmpet3d-desktop\` — `vrmpet3d-settings.json` (fresh profile: this profile had no pre-rename settings, so nothing was migrated) and `runtime\` (the Electron borrowed by HARD LINKS, `copied: false`) |
 
-Stop DSH first (the host half is not hot-reloaded), then:
+**What is already live, without a restart** — DSH's profile watcher composed the new bundle the moment the manifest
+changed:
+
+```
+check-plugin-load.mjs --profile …   → plugin load preflight: PASSED
+check-profile.mjs     --profile …   → profile wiring: PASSED (9 checks)
+/vrmpet3d/{catalog,motions,state,settings,desktop}  → 200
+/pet3d/{catalog,state}                              → 404  (no old half left running)
+/vrmpet3d/desktop → state: running, pid 44588, webgl2: true, ANGLE (NVIDIA RTX 5070 Ti), motion.kind: vrm
+```
+
+**THE ONE STEP LEFT: reload the DSH page (Ctrl+R).** The in-app pet's client half is fetched by the shell when the
+page boots, and the bundle appeared after this page was already loaded — `/vrmpet3d/state` still answers
+`{"seq":0,"state":null}` because nothing in the page has mounted. The floating window does not need it (it is its own
+page, and it is already up). Then the first live pass in §3.
+
+**Backups and rollback** (all in the profile): `package.json.bak-before-vrmpet3d-2026-10-10T23-41-21` (hand-made,
+before the install), `package.json.bak-2026-10-10T15-41-21-215Z` (written by the installer) and
+`package.json.bak-bundles-2026-10-10T15-41-37-675Z` (a no-op edit that removed nothing). Roll back by copying the
+first over `package.json` and deleting `node_modules\dsh-plugin-vrmpet3d`, or by removing the bundle through the
+plugin manager.
+
+### If this has to be done on ANOTHER machine (or after the old package returns)
+
+The general shape of the rename swap, because the profile names the package and the FOLDER still carries the old
+name:
 
 ```powershell
 $profile = "$env:USERPROFILE\.dsh\profiles\desktop"
 
-# 1. What the profile says today (read-only). Expect the OLD name in both places.
+# 1. What the profile says (read-only). On a pre-rename install expect the OLD name in both places.
 node -e "const m=require(process.argv[1]+'/package.json');console.log(m.dependencies['dsh-plugin-pet3d'],(m.dsh.profile.bundles||[]).includes('dsh-plugin-pet3d'))" $profile
 
-# 2. Two edits in <profile>/package.json: delete dependencies["dsh-plugin-pet3d"], and drop the same string from
-#    dsh.profile.bundles. Then remove the stale link (a junction, not a copy):
+# 2. Delete dependencies["dsh-plugin-pet3d"] and drop the same string from dsh.profile.bundles, then:
 Remove-Item -Recurse -Force "$profile\node_modules\dsh-plugin-pet3d"
 
-# 3. Install the new name. The installer writes package.json.bak-<stamp> itself.
+# 3. Install the new name (the installer writes package.json.bak-<stamp> itself):
 node scripts/install-desktop-plugin.mjs --profile $profile
 
 # 4. Prove the profile resolves it — PASSED before anyone looks at the screen:
 node scripts/check-plugin-load.mjs --profile $profile
 
-# 5. If cordis.yml still carries a row for the old name, re-materialize it (plugin manager install_bundle with the
+# 5. If cordis.yml carries a row for the old name, re-materialize it (plugin manager install_bundle with the
 #    link: spec) or edit that row; an unresolved insert row fails the entry.
 ```
 
@@ -77,10 +106,21 @@ is a deliberate, separate decision.
 
 ## 3. What to do next
 
-1. **「继续修复状态显示」 — ASK FIRST.** No reproduction was ever given. What 「状态显示」 covers is one visible thing
-   drawn by BOTH halves: the per-state box sets on the 通用设置 page's 状态 section, the whale mask, the live clock,
-   the tone (任务达成 gold / 出错 red), the rectangle and the font scale. Ask which surface, which state, what it
-   shows and what it should show. Then check, in this order:
+Written down at the end of the 2026-10-12 session, in the operator's own order: finish what today left open, then the
+greeting feature, then another batch of VRMA.
+
+1. **FINISH TODAY'S INSTALL AND RUN THE FIRST LIVE PASS.** One click of it is the operator's (§2: reload the DSH
+   page so the in-app pet's client half mounts); then, once and for all, exercise against the RUNNING app what the
+   last four passes only asserted statically: the in-app pet appearing beside the floating window's (调试模式 puts
+   both on screen), the two settings pages over `/vrmpet3d/config` and `/vrmpet3d/global`, model switching between
+   the four imported models, a motion assigned to a state, a press on a 部位 (the shipped 胸部/屁股 lines under
+   内置短语, and under AI the model answering instead), the status line against a real turn, and the AI 碎碎念 in
+   each of the three 台词来源 modes. **Nothing in the last four passes has been seen live yet** (§9), so this is the
+   pass that can still find a wiring mistake no suite can see.
+2. **「继续修复状态显示」 — ASK FIRST.** No reproduction was ever given, and the item has been open since the
+   fortieth pass. What 「状态显示」 covers is one visible thing drawn by BOTH halves: the per-state box sets on the
+   通用设置 page's 状态 section, the whale mask, the live clock, the tone (任务达成 gold / 出错 red), the rectangle and
+   the font scale. Ask which surface, which state, what it shows and what it should show. Then check, in this order:
    * **the launcher's copy list** — `announce()` in [desktop/main.js](desktop/main.js) relays a FIXED list of fields
      out of the window's published state. A field the page publishes but the launcher does not relay looks exactly
      like a page that never published it. This class of bug has happened twice (`status.scale`, and the motion
@@ -93,8 +133,49 @@ is a deliberate, separate decision.
    (`motions.statusTexts` / `statusAnimations` / `statusRows`, the tones, the refused field) and
    `verify-browser.mjs --page client-test` (the `status` block: text, clock, icon path, rectangle, scale, tone
    colours, cleared-on-null). A fix that moves none of those changed nothing.
-2. **Nothing else is open.** Everything the operator has asked for is implemented and asserted; the last three
-   passes were the 部位 rows, the AI 碎碎念 source rule, and the rename (§1).
+3. **碎碎念 to the model WITH THE TIME, and a greeting feature.** Operator, 2026-10-12, verbatim:
+   「碎碎念再给LLM传数据的时候带上时间，增加问候功能：早中午问候，关心主人吃饭了没有，睡觉了没有，说主人辛苦了。」
+
+   **The time on the wire is the easy half.** The request is built in ONE place — `speechPromptFor` and the
+   `/vrmpet3d/say` handler in [lib/index.js](lib/index.js) — and both surfaces call that route
+   ([lib/client.js](lib/client.js)'s AI path and [lib/desktop-page.js](lib/desktop-page.js)'s `askPartLine`). So the
+   host prepends a line to the INSTRUCTION (the user turn) from its own clock, e.g. 「现在是 2026-10-12 23:41，深夜」:
+   enough for 「早/中/晚」 and for 「该睡觉了」, and nothing drawn from the session. Two assertions already pin that
+   wire and must be EXTENDED rather than loosened: the stub provider in `verify-model.mjs` records the request and
+   asserts the persona plus the state's own instruction, and the privacy rule (no session text, no tool arguments)
+   is asserted there too.
+
+   **The greetings are the design question, so ask before building.** 早/中/晚问候, 吃饭了没有, 睡觉了没有 and
+   辛苦了 are the CONTENT; the content needs a MOMENT to arrive in. Put these to the operator:
+   * a **time-of-day bucket** (早上 / 中午 / 下午 / 晚上 / 深夜) crossed while the pet is idle;
+   * the **first 碎碎念 after a long gap** — the 空闲 settings already exist (`idleMinSeconds` / `idleMaxSeconds`),
+     as does the 休眠 timeout `sleepAfterMs`;
+   * **coming back from 休眠**, where 吃饭了没有 / 睡觉了没有 reads as care rather than as nagging;
+   * the **任务达成 moment**, which is where 「辛苦了」 fits most naturally.
+   Whichever it is, it deserves its OWN event beside `idle`, with a built-in table and its own AI prompt box, so
+   台词来源 keeps the shape the forty-first pass settled: the shipped table belongs to the built-in source and is
+   switched OFF in AI/自定义 mode, while the TIME reaches the model in every mode. Greetings want a switch of their
+   own in the 碎碎念 section, and the greeting lines want the same 「如果输入了，则以输入的为准」 rule as everything
+   else. Tests: `verify.mjs` (the time formatting, the greeting table, the source rule), `verify-model.mjs` (the
+   instruction on the wire carries the time), `build/probe/client-test.js` (the local line still stands while the
+   model thinks).
+4. **「再生成一批VRMA。」** Operator, 2026-10-12. The generator is
+   [scripts/make-vrma-fixtures.mjs](scripts/make-vrma-fixtures.mjs): it authors keyframes in code and writes the
+   current batch into `build/fixtures/vrma/` — a minimal VRM plus rest / wave / look-around / happy-hop / stretch /
+   weight-shift / test clips, and a manifest beside them. That batch is also a SUITE input: `verify-model.mjs` and
+   [scripts/verify-motion.mjs](scripts/verify-motion.mjs) replay those files, so a new batch is a change to the
+   generator AND to whatever asserts it.
+
+   **Ask which of the two it is, because they end differently:**
+   * **a motion pack for the pet to actually use** — the clips go into a folder the operator imports (通用设置 →
+     动作导入), and each one needs a decision about 循环/单次 (a manifest beside the clips, or the per-clip row in
+     状态与动作) and which states may use it. Note the tie-in with item 3: greeting motions (招手 / 鞠躬 / 点头 /
+     摇头 / 伸懒腰 / 打招呼) are exactly what the greeting event will want to play.
+   * **test fixtures** — the same files, but registered so a broken clip fails a suite: their names are cited by
+     `verify-model.mjs` group 11 and inlined by the client page, and the docs' counts move with them.
+   Either way, remember the trap this project has paid for: a clip whose tracks bind to none of the model's bones
+   parses perfectly and animates nothing, so every new clip needs a real-track check (that is what
+   `verify-motion.mjs` exists for) and a sane duration when it is a one-shot.
 
 ## 4. Frozen zones — do not touch these on the way past
 
@@ -158,7 +239,11 @@ Two habits that are not optional:
 
 ## 7. Environment facts for THIS machine
 
-* the DSH profile is `%USERPROFILE%\.dsh\profiles\desktop` (its state is in §2);
+* the DSH profile is `%USERPROFILE%\.dsh\profiles\desktop`, and the plugin is INSTALLED into it (§2). The running app
+  is at `http://127.0.0.1:19387`, which is also where the floating window's page is served (`/vrmpet3d/window`) — the
+  address `check-profile.mjs` and the live probes use;
+* the operator's own VRMs live in `F:\SynologyDrive\FatFish-pet\Models` and are already imported (four models in the
+  picker, §2). No motion directory is imported yet;
 * the installed DSH archive is `F:\DeepSeek\Harness\resources\app.asar`; the chunk-delivery suite finds it by
   itself, and `VRMPET3D_DSH_ASAR` is only needed for an unusual install path;
 * the floating window borrows the Electron runtime from that installation by HARD LINKS into
@@ -206,10 +291,17 @@ Two habits that are not optional:
 
 ## 9. What is NOT proven
 
-**Nothing in the last four passes has been exercised against a running DSH since the rename.** The suites cover the
-code paths, and `verify-desktop.mjs` borrows a real Electron and opens a real window — but a live session is what
-proves the routes and the two surfaces together. The first live check is §2 step 4
-(`node scripts/check-plugin-load.mjs --profile …` must print PASSED), then the pet on screen.
+**The host half IS live and proven to that point**: the routes answer, `/pet3d/*` is gone, the profile preflight
+passes and the floating window is up with a real WebGL2 context (§2). What is NOT proven is anything that needs the
+in-app half or a human at the screen:
+
+* the **in-app pet** has not mounted yet — the client half is fetched when the DSH page boots, and the bundle arrived
+  after this page loaded (§2: reload it);
+* therefore no live pass has seen the two surfaces TOGETHER, the settings pages driven through their real controls,
+  a model switch, a 部位 press, the status line over a real turn, or the AI 碎碎念 in its three 台词来源 modes. Every
+  one of those is asserted only statically so far;
+* a live session is what proves the routes and the two surfaces together — the suites cannot, and neither replaces
+  the other.
 
 ## 10. Where the history went
 
