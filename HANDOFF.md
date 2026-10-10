@@ -6,7 +6,9 @@ anything.
 
 **▶ NEXT SESSION, in the operator's own order (§3):** finish today's install and run the first LIVE pass (one reload
 of the DSH page is the operator's click, §2) → 「继续修复状态显示」, which still needs a reproduction → 碎碎念 to the
-model with the TIME plus the greeting feature (早/中/晚, 吃饭了没有, 睡觉了没有, 辛苦了) → another batch of VRMA.
+model with the TIME plus the greeting feature (早/中/晚, 吃饭了没有, 睡觉了没有, 辛苦了) → the VRMA motion pack: it is
+committed and shipping, and what is left is more clips, the rest-pose defect that stops them driving default states
+today, and the bundled-motions wiring behind it.
 
 **The tree is green: 9 suites, 1945 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
@@ -159,41 +161,46 @@ greeting feature, then another batch of VRMA.
    else. Tests: `verify.mjs` (the time formatting, the greeting table, the source rule), `verify-model.mjs` (the
    instruction on the wire carries the time), `build/probe/client-test.js` (the local line still stands while the
    model thinks).
-4. **「再生成一批VRMA。」** Operator, 2026-10-12 — and there is already evidence of what "a batch" looks like: TWO
-   `.vrma` files sit in `assets/motions/`, added the same evening (23:42 / 23:51) and **currently UNTRACKED** (nothing
-   in `.gitignore` covers that folder, so a later `git add -A` would commit them — that is a decision, not an
-   accident):
+4. **THE VRMA MOTION PACK — committed, and one measured defect to fix before it drives default states.** Operator,
+   2026-10-12, verbatim: 「这是我自己设计的要随插件分发的动作包，没有版权问题，我只是构造的很慢，所有动作都配置好后，
+   我还要把这些都配置到默认状态里，所以都要上传，要随插件分发。」
 
-   | file | bytes | channels | notes |
+   So this is settled: the pack is the operator's own work, it belongs in the repository, and it SHIPS with the plugin.
+   It lives in `assets/motions/` (committed 2026-10-12 together with its own README, which records the provenance, the
+   licence position and the caveat below), and `assets` is already listed in `package.json`'s `files[]`, so a packed
+   install carries it. What is still to come, in the operator's own order: **more clips** (they generate them slowly),
+   and then **wiring the folder up as a bundled motion source and mapping clips to default states**.
+
+   | file | bytes | channels | drives |
    |---|---|---|---|
-   | `coolIdleGlance.vrma` | 20,644 | 37 | `"generator": "text-to-motion"` |
-   | `innocentStandIdle.vrma` | 18,984 | 35 | `"generator": "text-to-motion"` |
+   | `coolIdleGlance.vrma` | 20,644 | 37 | the humanoid rig, plus `J_hips.translation` and the off-rig `E_neutral` / `E_blink` |
+   | `innocentStandIdle.vrma` | 18,984 | 35 | the humanoid rig, plus `J_hips.translation` and the off-rig `E_relaxed` / `E_blink` |
 
-   Both are real VRM animations — GLB magic, a parseable JSON chunk, `VRMC_vrm_animation` 1.0 addressing 44 humanoid
-   bones — so `Scene.loadMotion` will accept them as they are.
+   Both are valid VRM animations (GLB magic, a parseable JSON chunk, `VRMC_vrm_animation` 1.0 over 44 humanoid bones),
+   and both really drive a real model: the rig moves, the rotations stay finite, and the RAW skinned bone follows the
+   clip — measured with `scripts/verify-motion.mjs` against the bundled VRM.
 
-   The generator this repo OWNS is [scripts/make-vrma-fixtures.mjs](scripts/make-vrma-fixtures.mjs): it authors
-   keyframes in code and writes the current batch into `build/fixtures/vrma/` — a minimal VRM plus rest / wave /
-   look-around / happy-hop / stretch / weight-shift / test clips and a manifest beside them. Those files are also a
-   SUITE input: `verify-model.mjs` and [scripts/verify-motion.mjs](scripts/verify-motion.mjs) replay them, so a new
-   batch is a change to the generator AND to whatever asserts it.
+   **THE DEFECT, and it has to be fixed before these drive default states: stopping a clip does not fully restore the
+   rest pose.** Both files drive channels that are NOT on the humanoid rig (`E_*`), and the reset
+   (`resetAvatarPose` → `humanoid.resetNormalizedPose()` in [lib/scene.js](lib/scene.js)) covers only the humanoid rig —
+   so the model keeps a leftover offset. That is the "frozen in the clip's last frame" family of bug this project has
+   already fixed once, and it is the difference between a clip pack that is a feature and one that makes the pet's pose
+   wrong after every drag. The measurement: `scripts/verify-motion.mjs` fails exactly its two rest-pose checks on these
+   two files ("a drag state drops the clip and returns to the procedural pose", "clearMotions() returns the model to
+   its rest pose") and passes all 61 on a humanoid-only clip; **the same failure reproduces on the pre-rename commit**,
+   so it is a property of the clips and not of the rename. Two fixes, not exclusive:
+   * **export the clips without the `E_*` tracks** — they address nodes a VRM humanoid retarget has no use for;
+   * **snapshot and restore the WHOLE skeleton on stop** — what the removed MMD path used to do for its own rigs, which
+     is the general fix and makes any future clip behave.
+   Whichever is chosen, the four drag/fall assertions in `verify-browser.mjs --page client-test` must stay green, and
+   each new clip has to be re-checked by hand: `scripts/verify-motion.mjs --model assets/models/SampleModel.vrm
+   --motion assets/motions/<clip>.vrma` (that script is NOT wired into any suite, so nothing else will run it).
 
-   **Three decisions to put to the operator before writing anything:**
-   * **where a batch COMES FROM** — the same text-to-motion source that produced the two files above, more authored
-     keyframes in `scripts/make-vrma-fixtures.mjs`, or both;
-   * **what it is FOR** — either a **motion pack to ship and use**, which is a real feature and not just files: the
-     motion catalog would have to learn about a BUNDLED motions folder the way it already knows `assets/models`
-     (today it scans only `config.motionDirs` plus the imported directories, so nothing in the repo is offered out of
-     the box), each clip needs 循环/单次 (a `vrmpet3d-motions.json` manifest beside the clips, or the per-clip row in
-     状态与动作), and `.gitignore` plus `package.json`'s `files[]` need the folder — or **fixtures a suite replays**,
-     whose names are cited by `verify-model.mjs` group 11 and inlined by the client page, with the docs' counts
-     moving alongside;
-   * **whether the two files already in `assets/motions/` are the START of that pack** (they are valid, and committed
-     nowhere yet) or scratch to delete.
-   Either way, remember the trap this project has paid for: a clip whose tracks bind to none of the model's bones
-   parses perfectly and animates nothing, so every new clip needs a real-track check (that is what
-   `verify-motion.mjs` exists for) and a sane duration when it is a one-shot. The two files above already pass the
-   cheap half of that check.
+   **And the wiring, which is a real feature and not just files.** The motion catalogue scans only
+   `config.motionDirs` plus the imported directories, so NOTHING under `assets/` is offered out of the box today — a
+   bundled motions source is new code, the way `assets/models` already works for models. Each clip also needs 循环/单次
+   (a `vrmpet3d-motions.json` manifest beside the files, or the per-clip row in 状态与动作), and then the default
+   mapping the operator wants: which states get which clips when a user has configured nothing.
 
 ## 4. Frozen zones — do not touch these on the way past
 
@@ -261,9 +268,11 @@ Two habits that are not optional:
   is at `http://127.0.0.1:19387`, which is also where the floating window's page is served (`/vrmpet3d/window`) — the
   address `check-profile.mjs` and the live probes use;
 * the operator's own VRMs live in `F:\SynologyDrive\FatFish-pet\Models` and are already imported (four models in the
-  picker, §2). No motion directory is imported yet;
-* **two VRMA files the operator generated sit in `assets/motions/` and are UNTRACKED** (`coolIdleGlance.vrma` and
-  `innocentStandIdle.vrma` — §3 item 4 says what they are and what has to be decided about them);
+  picker, §2). No motion directory is imported yet — the two clips in `assets/motions/` are committed but not imported,
+  so the picker does not offer them yet (§3 item 4);
+* **the operator's motion pack lives in `assets/motions/` and is COMMITTED** (`coolIdleGlance.vrma`,
+  `innocentStandIdle.vrma`, plus the folder's README) — it ships with the plugin; see §3 item 4 for the defect to fix
+  before it drives default states;
 * the installed DSH archive is `F:\DeepSeek\Harness\resources\app.asar`; the chunk-delivery suite finds it by
   itself, and `VRMPET3D_DSH_ASAR` is only needed for an unusual install path;
 * the floating window borrows the Electron runtime from that installation by HARD LINKS into
