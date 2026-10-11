@@ -2898,6 +2898,212 @@
   });
 
   /**
+   * A POSED MODEL IS STILL MEASURABLE — the check the operator's report earned.
+   *
+   * Operator, 2026-10-13: 「当在执行动作时，点击身体部位的碎碎念反馈消失了」, on BOTH surfaces at once. Both halves measure a
+   * press through `Scene.anatomyAt`, and `three`'s own `SkinnedMesh.raycast` opens with BOUNDING-VOLUME rejections:
+   *
+   *   if (this.boundingSphere === null) this.computeBoundingSphere();
+   *   if (raycaster.ray.intersectsSphere(sphere) === false) return;
+   *   if (this.boundingBox !== null && ray.intersectsBox(this.boundingBox) === false) return;
+   *
+   * Each volume is computed ONCE and kept, and a clip only moves the PIXELS — the mixer re-poses the bones without
+   * touching them. So the first press of a session cached the rest pose, every press after a clip had moved the
+   * model was measured against that rest pose, and a hand (or a head, or a tail) outside it was rejected before a
+   * single triangle was tested: `anatomyAt` answered null, no part was named, and the pet said nothing — on both
+   * surfaces, which is what pointed at the shared measurement instead of either press path.
+   *
+   * The pose is written onto the skeleton DIRECTLY rather than played from a clip, and that is not a shortcut: what
+   * the rejection consults is the skeleton's extent, and a clip reaches it through the same bones. (Driving it
+   * through the mixer was tried first and is not usable here — the widget's own model lifecycle runs alongside this
+   * check and clears the scene's motion cache mid-flight, measured as `bytes: []` with the clip record gone.)
+   *
+   * The whole measurement is then SYNCHRONOUS, in one turn of the event loop, so nothing can swap the avatar
+   * between the parse and the ray.
+   */
+  asyncCheck('a posed model is still measurable: the part hit test never uses stale bounds', function () {
+    var scene = widget.scene;
+    var THREE = scene && scene.THREE;
+    var vrmBase64 = globalThis.__VRMPET3D_VRM_BASE64__;
+    if (!scene || !THREE || !vrmBase64 || !widget.canvas || typeof scene.parse !== 'function') return false;
+    var wasPlaceholder = scene.kind === 'placeholder';
+    var vrmBytes = Uint8Array.from(atob(vrmBase64), function (c) { return c.charCodeAt(0); });
+    var restoreAll = function () {
+      if (wasPlaceholder && typeof scene.usePlaceholder === 'function') scene.usePlaceholder();
+      return widget.applyMotions();
+    };
+    return scene.parse(vrmBytes.buffer, 'probe-posed').then(function (status) {
+      var humanoid = scene.avatar && scene.avatar.vrm ? scene.avatar.vrm.humanoid : null;
+      var root = scene.avatar && scene.avatar.root;
+      if (!status || status.ok !== true || scene.avatar.kind !== 'vrm' || !humanoid || !root) {
+        report.posedAnatomy = { stage: 'no-vrm-avatar', status: status ? status.error || status.kind : null };
+        return false;
+      }
+      var width = widget.canvas.clientWidth || widget.canvas.width;
+      var height = widget.canvas.clientHeight || widget.canvas.height;
+      var vector = new THREE.Vector3();
+      /** The canvas pixels `anatomyAt` wants, from a world position — its own convention. */
+      var pixelsOf = function (node) {
+        vector.setFromMatrixPosition(node.matrixWorld).project(scene.camera);
+        return { x: (vector.x * 0.5 + 0.5) * width, y: (1 - (vector.y * 0.5 + 0.5)) * height };
+      };
+      /**
+       * The bones this fixture actually DEFORMS.
+       *
+       * `vrmpet3d-minimal.vrm` declares three joints — `hips`, `spine` and the head — so rotating an arm bone moves
+       * a node and deforms NOTHING: the first version of this check posed `rightUpperArm`, measured a box that never
+       * changed, and would have called the fix broken for the wrong reason. What is posed is the SPINE (the head
+       * rides on it) and what is aimed at is the HEAD's own projected position.
+       */
+      var spine = humanoid.getNormalizedBoneNode('spine');
+      var head = (scene.avatar.bones && scene.avatar.bones.head) || humanoid.getRawBoneNode('head');
+      var skinnedMesh = null;
+      root.traverse(function (node) { if (!skinnedMesh && node && node.isSkinnedMesh) skinnedMesh = node; });
+      if (!spine || !head) { report.posedAnatomy = { stage: 'no-spine-or-head' }; return false; }
+      var restQuat = spine.quaternion.clone();
+      var vertex = new THREE.Vector3();
+      /** Where the first skinned vertex sits in the world — the DEFORMATION, not just the bones. */
+      var vertexWorld = function () {
+        if (!skinnedMesh || typeof skinnedMesh.getVertexPosition !== 'function') return null;
+        skinnedMesh.getVertexPosition(0, vertex);
+        vertex.applyMatrix4(skinnedMesh.matrixWorld);
+        return [+vertex.x.toFixed(3), +vertex.y.toFixed(3), +vertex.z.toFixed(3)];
+      };
+      /**
+       * Pose, then do what the RENDERER does on every drawn frame.
+       *
+       * three's `applyBoneTransform` — and therefore every bound computation — reads `skeleton.boneMatrices`, which
+       * are filled by `Skeleton.update()` during RENDERING, not by `updateMatrixWorld`. This check runs BETWEEN
+       * frames, so a pose written here is invisible to the bounds until the skeletons are updated: without this the
+       * measurement below would be of the previously rendered pose, with or without the fix under test.
+       */
+      var update = function () {
+        humanoid.update();
+        root.updateMatrixWorld(true);
+        root.traverse(function (node) {
+          if (node && node.isSkinnedMesh && node.skeleton && typeof node.skeleton.update === 'function') {
+            node.skeleton.update();
+          }
+        });
+      };
+      update();
+      // 1. The measurement that CACHES three's volumes: at the rest pose this is the behaviour that always worked.
+      var restPixels = pixelsOf(head);
+      var restVertex = vertexWorld();
+      var restHit = scene.anatomyAt(restPixels.x, restPixels.y);
+      /**
+       * 2. The pose a clip makes. WHICH rotation does not matter and cannot be assumed — the fixture's own axes are
+       * not the human's — so the check tries each axis at two magnitudes and keeps the head position furthest from
+       * rest that is still inside the canvas. A pose off-screen would measure the canvas edge, not the model.
+       */
+      var best = null;
+      [[1, 0, 0], [0, 0, 1], [0, 1, 0]].forEach(function (axis) {
+        [1.6, -1.6, 0.9, -0.9].forEach(function (angle) {
+          spine.quaternion.setFromAxisAngle(new THREE.Vector3(axis[0], axis[1], axis[2]), angle);
+          update();
+          var at = pixelsOf(head);
+          if (at.x < 8 || at.x > width - 8 || at.y < 8 || at.y > height - 8) return;
+          var moved = Math.abs(at.x - restPixels.x) + Math.abs(at.y - restPixels.y);
+          if (!best || moved > best.moved) {
+            best = { axis: axis, angle: angle, at: at, moved: moved, vertex: vertexWorld() };
+          }
+        });
+      });
+      if (!best) {
+        spine.quaternion.copy(restQuat);
+        update();
+        report.posedAnatomy = {
+          stage: 'no-pose-inside-the-canvas', restPixels: restPixels,
+          canvas: { width: width, height: height },
+        };
+        return false;
+      }
+      spine.quaternion.setFromAxisAngle(new THREE.Vector3(best.axis[0], best.axis[1], best.axis[2]), best.angle);
+      update();
+      var posedPixels = best.at;
+      /** What three's own rejection is going to consult, read BEFORE the measurement refreshes anything. */
+      var volumesBefore = [];
+      root.traverse(function (node) {
+        if (!node || !node.isSkinnedMesh) return;
+        volumesBefore.push({
+          sphere: node.boundingSphere ? +node.boundingSphere.radius.toFixed(3) : null,
+          box: node.boundingBox
+            ? [node.boundingBox.min.toArray().map(function (v) { return +v.toFixed(2); }),
+              node.boundingBox.max.toArray().map(function (v) { return +v.toFixed(2); })]
+            : null,
+        });
+      });
+      var posedHit = scene.anatomyAt(posedPixels.x, posedPixels.y);
+      /**
+       * WHICH gate stopped the ray, when one did.
+       *
+       * The two volume tests are three's, in the mesh's LOCAL space, so they are reproduced here exactly (the ray is
+       * pushed through the inverse matrix world first), and `directHits` is the same ray run at the avatar with the
+       * volumes freshly computed. A miss with both gates passed means the ray does not reach the geometry at all —
+       * and then this reproduction would be measuring the wrong thing, which is worth KNOWING rather than guessing.
+       */
+      var rc = new THREE.Raycaster();
+      rc.setFromCamera(
+        new THREE.Vector2((posedPixels.x / width) * 2 - 1, -((posedPixels.y / height) * 2 - 1)),
+        scene.camera,
+      );
+      var inverse = new THREE.Matrix4();
+      var localRay = new THREE.Ray();
+      var gates = [];
+      root.traverse(function (node) {
+        if (!node || !node.isSkinnedMesh) return;
+        inverse.copy(node.matrixWorld).invert();
+        localRay.copy(rc.ray).applyMatrix4(inverse);
+        gates.push({
+          sphere: node.boundingSphere ? localRay.intersectsSphere(node.boundingSphere) : 'no-sphere',
+          box: node.boundingBox ? localRay.intersectsBox(node.boundingBox) : 'no-box',
+        });
+      });
+      var direct = rc.intersectObject(root, true);
+      /** And the volume three would consult if the pose were honoured: what the fix produces. */
+      root.traverse(function (node) {
+        if (!node || !node.isSkinnedMesh) return;
+        if (node.boundingBox !== null && typeof node.computeBoundingBox === 'function') node.computeBoundingBox();
+        if (typeof node.computeBoundingSphere === 'function') node.computeBoundingSphere();
+      });
+      var refreshedHit = scene.anatomyAt(posedPixels.x, posedPixels.y);
+      var volumesAfter = [];
+      root.traverse(function (node) {
+        if (!node || !node.isSkinnedMesh) return;
+        volumesAfter.push({
+          sphere: node.boundingSphere ? +node.boundingSphere.radius.toFixed(3) : null,
+          box: node.boundingBox
+            ? [node.boundingBox.min.toArray().map(function (v) { return +v.toFixed(2); }),
+              node.boundingBox.max.toArray().map(function (v) { return +v.toFixed(2); })]
+            : null,
+        });
+      });
+      // 3. And back, so the rest of the harness sees the model it expects.
+      spine.quaternion.copy(restQuat);
+      update();
+      report.posedAnatomy = {
+        stage: 'measured',
+        restPixels: { x: Math.round(restPixels.x), y: Math.round(restPixels.y) },
+        restRegion: restHit ? restHit.region : null,
+        posedPixels: { x: Math.round(posedPixels.x), y: Math.round(posedPixels.y) },
+        posedRegion: posedHit ? posedHit.region : null,
+        refreshedRegion: refreshedHit ? refreshedHit.region : null,
+        movedPx: Math.round(best.moved),
+        vertexMoved: restVertex && best.vertex
+          ? restVertex.some(function (value, index) { return Math.abs(value - best.vertex[index]) > 0.001; })
+          : null,
+        directHits: direct.length,
+        gates: gates,
+        volumesBefore: volumesBefore,
+        volumesAfter: volumesAfter,
+      };
+      return Boolean(restHit) && Boolean(posedHit)
+        && (CORE.STRUCTURE_REGIONS || []).indexOf(posedHit.region) !== -1;
+    }).then(function (ok) { return restoreAll().then(function () { return ok; }); },
+      function (error) { return restoreAll().then(function () { throw error; }); });
+  });
+
+  /**
    * A press on a SPRING JOINT knows which CHAIN it grabbed.
    *
    * The operator asked whether the chain behind a clicked part could be named, and this is that mapping driven for
