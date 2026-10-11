@@ -26,6 +26,7 @@ retired MMD chapters.
 | **Two surfaces** | the pet inside DSH's overlay, and a floating always-on-top, click-through window |
 | **One menu** | right-click either pet: 重置视角 / 重置大小 / 通用设置 / 当前模型参数设置 / 切换表面 / 重力 / 隐藏宠物 |
 | **Two settings pages** | 模型参数 (per model) and 通用设置, over `/vrmpet3d/config` and `/vrmpet3d/global` |
+| **First-run guide** | 欢迎 / 偏好模型 / 桌宠界面 / AI 碎碎念 / 模型动作 / 完成, over `/vrmpet3d/setup` — it appears once per start until it is finished |
 | **Voice** | the status prompt above the head, plus 碎碎念 from built-in tables, your own lines, or a model (a DSH provider or any OpenAI-compatible endpoint) |
 | **Parts** | your own 部位 rows — a label, the structures it owns, an emotion and a 碎碎念 — matched against the model's real bone/mesh names |
 | **Privacy** | turn boundaries and session counts only. Never session text, tool arguments or attachments |
@@ -37,7 +38,8 @@ retired MMD chapters.
 * For the floating window: an **Electron runtime**, which the launcher borrows from the DSH installation by hard
   links. Without one the pet still works inside DSH.
 * For the scripts: **Node 22+**. A Chromium-based browser (Edge or Chrome) for the browser suites.
-* A model file. The bundled SampleModel is the default; your own VRMs go in any folder you import (see below).
+* A model file. The bundled SampleModel is the default; your own VRMs are imported as files, copied into the
+  plugin's own storage (see below).
 
 ## Install
 
@@ -73,10 +75,12 @@ through the plugin manager, which reverses the same three changes.
 
 ## Quick start
 
-1. Restart DSH (or use the plugin manager) and the pet appears in the corner of the window.
+1. Restart DSH (or use the plugin manager) and the pet appears in the corner of the window — with the **first-run
+   guide** open in front of it, which walks through the five steps below and then never comes back (重新运行引导 in
+   通用设置 opens it again). 稍后配置 closes it without finishing, and the next start offers it once more.
 2. **Right-click it** → 通用设置 → 碎碎念 to choose whether it speaks, from which source, and how often.
-3. **Right-click it** → 当前模型参数设置 → 模型导入 to add the folder your `.vrm` files live in; pick one from
-   模型 and it loads immediately.
+3. **Right-click it** → 通用设置 → 模型导入 to pick a `.vrm`/`.glb` **file**; it is copied into the plugin and loads
+   immediately, and 模型 on the model page switches between what is imported.
 4. Everything else — per-state motion, expressions, mouth shapes, gaze, the two sizes, hair physics, the nap
    timeout — is on those two pages, and each change applies without a restart.
 
@@ -97,8 +101,14 @@ through the plugin manager, which reverses the same three changes.
 
 A `.pmx`/`.pmd`, or a `.vmd` motion, is **refused by name** rather than half-loaded: the file's magic bytes (or the
 VMD banner) are still recognised, so the message can name the format and point at
-[docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md), where the retired MMD chapters are kept. Models are yours and stay
-yours: nothing is copied into the plugin folder, and the catalog is built from the directories you import.
+[docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md), where the retired MMD chapters are kept.
+
+**An import COPIES, and that is the point.** A model is imported as a FILE (通用设置 → 模型导入, or the first-run
+guide) and a motion pack as a FOLDER; either way the bytes are copied into the plugin's own state directory
+(`<profile>/vrmpet3d-desktop/`) and both catalogues read them from there. So the folder you picked it out of can move,
+be renamed or disappear without the pet losing anything — a recorded path was a live dependency on somebody else's
+folder, which is exactly the bug the file import replaced. Removing an import deletes **only** the plugin's own copy,
+and `assets/motions/` — the shipped pack — is never touched by any of it.
 
 **A motion pack ships with the plugin.** `assets/motions/` holds the operator's own `.vrma` clips, and — unlike
 imported model or motion directories — they are offered from the first scan, with no directory to import: they
