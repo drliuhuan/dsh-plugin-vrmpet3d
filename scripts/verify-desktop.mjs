@@ -993,20 +993,27 @@ if (live.skipped) {
         ok(pick.tickedAfter === pick.offered,
           `and every offered clip ends up in the state's list (${pick.tickedAfter} of ${pick.offered})`);
         /**
-         * AND THE FOLDERS SCOPE THE LISTS.
+         * AND THE FOLDERS SCOPE THE LISTS — both shapes in one run.
          *
          * Operator's request, 2026-10-12: "把对应的动作直接解析到指定目录，这样在选择动作的时候就不会出现很长一串".
-         * The folders under `assets/motions` ARE the mapping, so a state mapped to a folder is offered only that
-         * folder's clips. This stub's catalogue declares NO `stateFolders` and keeps its two clips at the root —
-         * which is the compatible case and the one worth pinning here: with nothing declared, every state must
-         * still be offered everything, exactly as every build before this block did.
+         * The stub declares ONE mapping (`done` → `plain`, where both its clips live) and leaves the other five
+         * states undeclared, so a state with an entry is offered only its own folders' clips and a state
+         * without one is offered the catalogue, exactly as every build before this block did.
+         *
+         * The mapping USED to be missing here, and that empty case is why the suite stayed green while the
+         * shipped pack's six mappings came up with no clips at all: the page compared a state's folder LIST to
+         * a single folder name, which is never true (operator: "明明有26支可选，下面每一条却都是空着的").
+         * `scoped.done.drawn` is the number that catches it — 2 with the mapping read, 0 with it.
          */
         const scoped = pick.rows || {};
+        const folderNames = (value) => (Array.isArray(value) ? value : (value ? [value] : []));
         ok(Object.keys(scoped).length === 6, `all six states are drawn (${Object.keys(scoped).length})`);
-        ok(Object.values(scoped).every((row) => row.folder === null && row.outsideFolder.length === 0),
-          'with no stateFolders declared, no row is scoped and nothing is filtered out of one');
+        ok(Object.values(scoped).every((row) => row.outsideFolder.length === 0)
+          && folderNames(scoped.done && scoped.done.folder).indexOf('plain') !== -1
+          && Object.entries(scoped).filter(([state]) => state !== 'done').every(([, row]) => row.folder === null),
+          `the mapping is read per state and nothing is drawn from outside it (${JSON.stringify(scoped.done)})`);
         ok(Object.values(scoped).every((row) => row.drawn === pick.offered),
-          `and every state still offers the whole catalogue (${Object.values(scoped).map((row) => row.drawn).join(',')})`);
+          `and every state's list is populated, mapped or not (${Object.values(scoped).map((row) => row.drawn).join(',')})`);
         /**
          * The mouse-interaction controls (2026-10-10: "把鼠标互动的参数加入设置面板"), and the folding rule for a
          * model with many chains ("如果弹簧骨选项超过5个，就折叠起来").
@@ -1235,14 +1242,22 @@ async function startPageServer() {
     }
     // The motion catalog, as the host serves it: one looping clip and one that declares itself a
     // one-shot, which is what the 动作 section lists and counts.
+    //
+    // AND ONE DECLARED FOLDER MAPPING, because the shipped pack has six of them and this stub used to declare
+    // none. That omission is why the suite stayed green while 通用设置 → 状态与动作 came up empty on every
+    // mapped state: the page compared a state's folder LIST against a single folder name (`'idle' === ['idle']`,
+    // never true), and the only scoping assertions here covered the unmapped case. Both clips live in `plain/`,
+    // and only `done` is mapped to it — a state nothing pre-ticks, so its row is measured on what the mapping
+    // alone puts there.
     if (url.pathname === '/vrmpet3d/motions') {
       send(200, 'application/json', JSON.stringify({
         motions: [
-          { id: 'a1', name: 'vrmpet3d-rest.vrma', format: 'vrma', bytes: 24796, source: 'user', loop: true },
-          { id: 'a2', name: 'vrmpet3d-wave.vrma', format: 'vrma', bytes: 9348, source: 'user', loop: false },
+          { id: 'a1', name: 'plain/vrmpet3d-rest.vrma', format: 'vrma', bytes: 24796, source: 'user', loop: true },
+          { id: 'a2', name: 'plain/vrmpet3d-wave.vrma', format: 'vrma', bytes: 9348, source: 'user', loop: false },
         ],
         motionDirs: [],
         importedDirs: [],
+        stateFolders: { done: ['plain'] },
       }));
       return;
     }
