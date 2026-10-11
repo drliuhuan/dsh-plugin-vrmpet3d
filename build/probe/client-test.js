@@ -6605,6 +6605,72 @@
   });
 
   /**
+   * THE TRIGGER: offered once per activation, never again once it is finished.
+   *
+   * The guide's own walk is asserted below; this is the rule that decides whether it is OFFERED, and both halves of
+   * that answer live on the host (`GET /vrmpet3d/setup-state`): `completed` on disk, so a finished guide never
+   * returns, and `prompted` in the host's memory, so one activation asks once and a page reload is quiet while a
+   * restart asks again. The stub is STATEFUL for exactly that reason — a stateless double would let a second call
+   * look identical to the first and the whole check would pass without the guard existing.
+   */
+  asyncCheck('the first-run guide is offered once per activation, and never again once it is finished', function () {
+    var state = { completed: false, prompted: false };
+    var calls = [];
+    var restore = stubFetch({
+      '/vrmpet3d/setup-state': function (url, options) {
+        var body = options && options.body ? JSON.parse(options.body) : null;
+        calls.push({ path: '/vrmpet3d/setup-state', body: body });
+        if (body && body.prompted === true) state.prompted = true;
+        if (body && body.completed === true) state.completed = true;
+        return { ok: true, status: 200, json: function () { return Promise.resolve({ completed: state.completed, prompted: state.prompted }); } };
+      },
+      '/vrmpet3d/desktop': function (url, options) {
+        calls.push({ path: '/vrmpet3d/desktop', body: JSON.parse((options && options.body) || '{}') });
+        return { ok: true, status: 200, json: function () { return Promise.resolve({ state: 'setup-open' }); } };
+      },
+    });
+    var count = function (path, test) {
+      return calls.filter(function (entry) { return entry.path === path && test(entry.body || {}); }).length;
+    };
+    var settle = function () { return new Promise(function (resolve) { setTimeout(resolve, 60); }); };
+
+    return widget.maybeOfferSetup().then(settle).then(function () {
+      var askedFirst = count('/vrmpet3d/setup-state', function () { return true; });
+      var promptedOnce = count('/vrmpet3d/setup-state', function (body) { return body.prompted === true; });
+      var openedOnce = count('/vrmpet3d/desktop', function (body) { return body.action === 'setup'; });
+      // The host now says "this activation has already offered it": the same page asking again must be quiet.
+      return widget.maybeOfferSetup().then(settle).then(function () {
+        var openedAfterReload = count('/vrmpet3d/desktop', function (body) { return body.action === 'setup'; });
+        // And a later ACTIVATION of a machine that finished it: nothing is asked FOR and nothing opens. The GET is
+        // the ask itself (`maybeOfferSetup` always reads the state first), so what must be absent is the mark and
+        // the window — counted by what they mean rather than by the request tally.
+        state.completed = true;
+        state.prompted = false;
+        calls.length = 0;
+        return widget.maybeOfferSetup().then(settle).then(function () {
+          var askedAfterFinished = count('/vrmpet3d/setup-state', function (body) { return body.prompted === true; });
+          var openedAfterFinished = count('/vrmpet3d/desktop', function (body) { return body.action === 'setup'; });
+          restore();
+          report.setupTrigger = {
+            askedFirst: askedFirst,
+            promptedOnce: promptedOnce,
+            openedOnce: openedOnce,
+            openedAfterReload: openedAfterReload,
+            askedAfterFinished: askedAfterFinished,
+            openedAfterFinished: openedAfterFinished,
+          };
+          return askedFirst >= 1 && promptedOnce === 1 && openedOnce === 1
+            && openedAfterReload === 1
+            && askedAfterFinished === 0 && openedAfterFinished === 0;
+        });
+      });
+    }, function (error) {
+      restore();
+      throw error;
+    });
+  });
+
+  /**
    * The FIRST-RUN GUIDE, driven the way a user drives it: six screens, a finish, and the write each screen owes.
    *
    * The guide is a page script that boots against its own document, and this harness carries that document — the

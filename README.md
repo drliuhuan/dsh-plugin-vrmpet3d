@@ -8,7 +8,7 @@ It ships **one redistributable model** ([assets/models/SampleModel.vrm](assets/m
 default, so a fresh install shows a real pet with nothing to configure.
 
 ```
-no runtime dependencies · 9 verification suites · 2130 checks · works offline
+no runtime dependencies · 9 verification suites · 2131 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -127,7 +127,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2130 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
+**9 verification suites, 2131 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
 
 ```bash
@@ -140,7 +140,7 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 | `node scripts/verify-model.mjs` | 693 — model catalog, the import stores and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
-| `node scripts/verify-browser.mjs --page client-test` | 91 — the widget, the menu, the desktop page and the first-run guide end to end |
+| `node scripts/verify-browser.mjs --page client-test` | 92 — the widget, the menu, the desktop page, the guide and its trigger |
 | `node scripts/verify-desktop.mjs` | 256 — the pet's own window, borrowed Electron and all, plus the three pages' scripts |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
