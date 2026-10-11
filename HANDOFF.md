@@ -13,11 +13,21 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
-**The tree is green: 9 suites, 2129 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2130 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
 narrow suite covers which change, and a partial run has to be reported as a partial run.
+
+**An import COPIES, and a first-run guide ships with it.** A model is imported as a FILE and a motion pack as a
+FOLDER; the host copies the bytes into the profile's own state directory
+(`<profile>/vrmpet3d-desktop/models|motions`) and both catalogues read them from there, so the folder they came from
+may move, be renamed or vanish. The panels still LIST a directory an older build imported, and still remove it, but
+no new one can be added — a recorded path was a live dependency on somebody else's folder, which is the defect the
+file import replaced. The guide itself (`/vrmpet3d/setup`, `lib/setup-page.*`) is 欢迎 / 偏好模型 / 桌宠界面 /
+AI 碎碎念 / 模型动作 / 完成: the in-app pet offers it once per plugin ACTIVATION until 完成 writes `completed` in
+`<profile>/vrmpet3d-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
+asks again, exactly as the operator specified.
 
 ## 1. What this is
 

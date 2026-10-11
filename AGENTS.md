@@ -66,6 +66,7 @@ in the docs look wrong.
 | `lib/index.js`, `lib/settings.js`, `lib/desktop.js` — routes, catalogs, the settings store | `node scripts/verify-model.mjs` |
 | the manifest, activation, `apply`/dispose, the route TABLE | `node scripts/check-plugin-load.mjs` |
 | `lib/config-page.html`, `lib/global-page.html`, `lib/config-page.js`, `desktop/` — the two settings pages and the launcher | `node scripts/verify-desktop.mjs` |
+| `lib/setup-page.html`, `lib/setup-page.js`, or anything that triggers the first-run guide | `node scripts/verify-desktop.mjs` (the page parses, and its screens match the markup) **and** `node scripts/verify-browser.mjs --page client-test` (the guide walked end to end) |
 | `lib/client.js`, `lib/menu.js`, `lib/desktop-page.js`, `lib/scene.js`, `build/probe/client-test.js` — the widget, the shared right-click menu and the renderer | `node scripts/verify-browser.mjs --page client-test` |
 | a delivered chunk's name, or the loader registration | `node scripts/verify-browser.mjs --page chunk-delivery` |
 | `vendor/`, the pinned 3D stack | `node scripts/vendor-build.mjs --check` |

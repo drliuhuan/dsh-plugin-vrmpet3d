@@ -97,6 +97,22 @@ function inlineScript(path) {
   return source.replace(/<\/script>/gi, '<\\/script>');
 }
 
+/**
+ * The first-run guide's own markup, for the probe page.
+ *
+ * `lib/setup-page.js` is a page script that boots against ITS document the moment it loads, so a harness that wants
+ * to drive the real page has to carry that document: this returns the wizard's `<body>` content with its `<script>`
+ * blocks stripped (the real page's watchdog has nothing to do here), injected before the script is evaluated.
+ *
+ * The alternative — a boot hook exported for the harness — would be a product carrying a hook for a test, which is
+ * the shape this project refuses everywhere else; injecting the markup keeps the probe on the real boot path.
+ */
+function setupMarkup() {
+  const html = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
+  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+  return (body ? body[1] : '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
+}
+
 function buildPage() {
   mkdirSync(BUILD, { recursive: true });
   // The client-half test needs lib/scene.js AND the plugin half itself, plus a
@@ -184,6 +200,72 @@ function buildPage() {
 })();
 </script>`,
       `<script>${inlineScript(join(ROOT, 'lib', 'client.js'))}</script>`,
+      /**
+       * THE FIRST-RUN GUIDE, in three parts, and every part is deliberate.
+       *
+       * 1. A DORMANT HOST SPY. The guide reads its settings through `core.watchHostSettings` as it boots, and the
+       *    probe page has no server — but the PET's own client half polls the SAME route, and answering it here
+       *    would flip the widget from "this host has no store" (its state in every other check) to "this host has
+       *    one", at which point it adopts a snapshot and wipes the preferences the other checks set. Measured:
+       *    three motion checks failed exactly that way. So the spy answers NOTHING until the guide's own check
+       *    flips `enabled`, and delegates every request to the real fetch until then — which is byte-for-byte the
+       *    behaviour the rest of this page already had;
+       * 2. the guide's MARKUP as a string, and 3. its SCRIPT as a string, both injected and evaluated from the
+       *    check. Inlining them as live tags would boot the guide at page load, which is the whole problem above.
+       */
+      `<script>
+(function () {
+  var spy = globalThis.__VRMPET3D_SETUP_SPY__ = { enabled: false, posts: [], requests: [], version: 1, preferences: {} };
+  var real = window.fetch;
+  var answer = function (payload) {
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(payload); } });
+  };
+  var spyFetch = function (url, options) {
+    // Dormant: the page behaves exactly as it did before this spy existed.
+    if (!spy.enabled) return real.apply(window, arguments);
+    var path = String(url).split('?')[0];
+    var method = (options && options.method) || 'GET';
+    var body = options && options.body ? JSON.parse(options.body) : null;
+    var record = function () { spy.requests.push(method + ' ' + path); if (body) spy.posts.push({ path: path, body: body }); };
+    if (path === '/vrmpet3d/settings') {
+      record();
+      if (method === 'POST' && body) {
+        Object.keys(body.preferences || {}).forEach(function (key) { spy.preferences[key] = body.preferences[key]; });
+        spy.version += 1;
+      }
+      return answer({ version: spy.version, preferences: spy.preferences, live: null });
+    }
+    if (path === '/vrmpet3d/setup-state') { record(); return answer({ completed: false, prompted: false, file: '(probe)' }); }
+    if (path === '/vrmpet3d/llm') {
+      return answer({ dsh: { available: true, provider: 'deepseek-account',
+        providers: [{ id: 'other', name: '别的' }, { id: 'deepseek-account', name: 'DeepSeek Account' }],
+        models: [{ id: 'deepseek-flash', name: 'deepseek-flash' }] } });
+    }
+    if (path === '/vrmpet3d/models') {
+      if (method === 'POST') {
+        record();
+        return answer({ importedModels: [{ file: 'C:/plugin-copy/hero.vrm', name: 'hero.vrm', source: (body && body.addFile) || '' }],
+          models: [{ id: 'm9', name: 'hero.vrm', source: 'user' }], modelCount: 2, persisted: true });
+      }
+      return answer({ importedModels: [], importedDirs: [], modelCount: 1 });
+    }
+    if (path === '/vrmpet3d/motions') {
+      if (method === 'POST') {
+        record();
+        return answer({ motions: [], motionDefaults: {}, importedDirs: [],
+          importedMotions: [{ dir: 'C:/plugin-copy/pack', name: 'pack', clips: 3, source: (body && body.importDir) || '' }] });
+      }
+      return answer({ motions: [], motionDefaults: {}, importedMotions: [], importedDirs: [] });
+    }
+    if (path === '/vrmpet3d/desktop') { record(); return answer({ state: 'setup-open', pid: 1 }); }
+    return real.apply(window, arguments);
+  };
+  window.fetch = spyFetch;
+  globalThis.__VRMPET3D_SETUP_FETCH__ = spyFetch;
+})();
+</script>`,
+      `<script>globalThis.__VRMPET3D_SETUP_MARKUP__ = ${JSON.stringify(setupMarkup())};</script>`,
+      `<script>globalThis.__VRMPET3D_SETUP_SOURCE__ = ${JSON.stringify(inlineScript(join(ROOT, 'lib', 'setup-page.js')))};</script>`,
     ].join('\n');
   }
   // The delivery page is the one page that must NOT inline the sources: inlining

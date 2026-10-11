@@ -6604,6 +6604,138 @@
       .then(function (ok) { teardown(); return ok; }, function (error) { teardown(); throw error; });
   });
 
+  /**
+   * The FIRST-RUN GUIDE, driven the way a user drives it: six screens, a finish, and the write each screen owes.
+   *
+   * The guide is a page script that boots against its own document, and this harness carries that document — the
+   * runner injects the wizard's markup and its boot-time spy before loading `lib/setup-page.js`, which is why the
+   * writes below are read from `__VRMPET3D_SETUP_SPY__` rather than from a stub installed here: the page captured
+   * its `fetch` at boot, exactly as it does in the app.
+   *
+   * What is asserted is the operator's own spec: the guide must WALK; 完成 must be the one write that ends it; the
+   * model step must hand the host a FILE (`addFile`) and the motion step a FOLDER (`importDir`); the surface choice
+   * must write `petSurface`; and the AI source must default to DeepSeek Account when the live provider list has it
+   * (「默认是 DeepSeek Account（如已经接入 Account 的话）」) with that provider's own model.
+   */
+  asyncCheck('the first-run guide walks its six screens and writes what each one promises', function () {
+    var spy = globalThis.__VRMPET3D_SETUP_SPY__;
+    var markup = globalThis.__VRMPET3D_SETUP_MARKUP__;
+    var source = globalThis.__VRMPET3D_SETUP_SOURCE__;
+    if (!spy || !markup || !source) return false;
+
+    /**
+     * The guide is booted HERE, not at page load.
+     *
+     * It reads its settings through `core.watchHostSettings` the moment its script runs, and the pet's own client
+     * half polls the SAME route — so answering it at page load turned the widget from "this host has no store"
+     * (its state in every other check) into "this host has one", and it adopted a snapshot that wiped the
+     * preferences those checks set: three motion checks failed exactly that way, measured. So the host spy starts
+     * DORMANT and is enabled here, the guide's markup goes in, its script is evaluated, and both are put back
+     * afterwards.
+     */
+    var outerFetch = window.fetch;
+    var outerBridge = globalThis.vrmpet3dDesktop;
+    window.fetch = globalThis.__VRMPET3D_SETUP_FETCH__ || outerFetch;
+    spy.enabled = true;
+    globalThis.vrmpet3dDesktop = {
+      pickModelFile: function () { return Promise.resolve('C:/models/hero.vrm'); },
+      pickMotionDir: function () { return Promise.resolve('C:/motions/pack'); },
+    };
+    document.body.insertAdjacentHTML('beforeend', markup);
+    (0, eval)(source);
+
+    var guide = globalThis.__VRMPET3D_SETUP_STATE__;
+    if (!guide) return false;
+
+    var screens = ['setup-0', 'setup-1', 'setup-2', 'setup-3', 'setup-4', 'setup-5'];
+    var visible = function () {
+      return screens.filter(function (id) {
+        var node = document.getElementById(id);
+        return node && !node.hidden;
+      });
+    };
+    var after = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
+    var posted = function (path, test) {
+      return spy.posts.some(function (entry) { return entry.path === path && test(entry.body); });
+    };
+    var settingsWith = function (test) {
+      return spy.posts.filter(function (entry) {
+        return entry.path === '/vrmpet3d/settings' && entry.body && entry.body.preferences && test(entry.body.preferences);
+      });
+    };
+
+    return waitFor(function () { return guide().hasSnapshot === true; }, 4000)
+      .then(function (ready) {
+        if (!ready) return false;
+        var atStart = visible();
+
+        // ② 偏好模型: the picker asks the LAUNCHER, and the path goes to the host as a FILE to copy.
+        document.getElementById('setup-model-pick').click();
+        return after(120).then(function () {
+          var uploaded = posted('/vrmpet3d/models', function (body) { return body.addFile === 'C:/models/hero.vrm'; });
+          var preferred = spy.posts.some(function (entry) {
+            return entry.path === '/vrmpet3d/settings' && entry.body.preferences && entry.body.preferences.modelId === 'm9';
+          });
+          // ③ 桌宠界面 and ④ AI 碎碎念: two choices, and the AI default comes from the live provider list.
+          document.querySelector('#setup-surface input[value="app"]').click();
+          document.querySelector('#setup-speech-source input[value="ai"]').click();
+          return waitFor(function () {
+            return settingsWith(function (p) { return p.petSurface === 'app'; }).length > 0
+              && settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; }).length > 0;
+          }, 4000).then(function (written) {
+            var ai = settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; })[0];
+            var speech = ai ? ai.body.preferences.speech : null;
+            // ⑤ 模型动作: a FOLDER, copied by the host.
+            document.getElementById('setup-motion-pick').click();
+            return after(120).then(function () {
+              var imported = posted('/vrmpet3d/motions', function (body) { return body.importDir === 'C:/motions/pack'; });
+              // 完成 last: five steps forward, then the ONE write that ends the guide.
+              var next = document.getElementById('setup-next');
+              for (var i = 0; i < 5; i += 1) next.click();
+              var lastScreen = visible();
+              var stepper = document.getElementById('setup-steps');
+              var marked = stepper ? Array.prototype.filter.call(stepper.children, function (node) {
+                return node.getAttribute('data-active') === '1';
+              }).length : 0;
+              document.getElementById('setup-finish').click();
+              return after(120).then(function () {
+                var finished = posted('/vrmpet3d/setup-state', function (body) { return body.completed === true; });
+                // Put the page back the way the rest of the harness expects it: no host, no launcher bridge.
+                spy.enabled = false;
+                window.fetch = outerFetch;
+                globalThis.vrmpet3dDesktop = outerBridge;
+                report.firstRunGuide = {
+                  atStart: atStart,
+                  screens: screens.length,
+                  ready: ready,
+                  uploaded: uploaded,
+                  preferredModel: preferred,
+                  surface: (settingsWith(function (p) { return p.petSurface === 'app'; })[0] || {}).body ? 'app' : null,
+                  aiProvider: speech && speech.ai ? speech.ai.dshProvider : null,
+                  aiModel: speech && speech.ai ? speech.ai.dshModel : null,
+                  motionImported: imported,
+                  importedModels: guide().importedModels,
+                  importedMotions: guide().importedMotions,
+                  lastScreen: lastScreen,
+                  activeStepMarkers: marked,
+                  finished: finished,
+                };
+                return atStart.length === 1 && atStart[0] === 'setup-0'
+                  && lastScreen.length === 1 && lastScreen[0] === 'setup-5'
+                  && marked === 1
+                  && uploaded && preferred && imported && finished
+                  && speech && speech.ai && speech.ai.dshProvider === 'deepseek-account'
+                  && speech.ai.dshModel === 'deepseek-flash';
+              });
+            });
+          });
+        });
+      }, function (error) {
+        report.firstRunGuideError = String(error && error.message);
+        throw error;
+      });
+  });
+
   // Dispose comes last and after the async checks settle: they drive the live
   // widget, and the earlier promise-returning model check needs a turn of its
   // own before the report is written.
