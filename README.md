@@ -8,7 +8,7 @@ It ships **one redistributable model** ([assets/models/SampleModel.vrm](assets/m
 default, so a fresh install shows a real pet with nothing to configure.
 
 ```
-no runtime dependencies · 9 verification suites · 1945 checks · works offline
+no runtime dependencies · 9 verification suites · 2091 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -20,7 +20,7 @@ retired MMD chapters.
 | | |
 |---|---|
 | **Models** | VRM 1.0 / 0.x, glTF/GLB — MToon materials, expressions, SpringBone and node constraints intact |
-| **Motions** | `.vrma`, assignable per state, looping or one-shot |
+| **Motions** | `.vrma`, assignable per state, looping or one-shot — a bundled pack ships in `assets/motions/` |
 | **Behaviour** | idle breathing, tail / ear / hair follow-through, pointer gaze, the cursor's draught across the pet, drag, throw, wall and ceiling bounce, landing |
 | **States** | `resting` `working` `waiting` `celebrate` `sleeping` `error` `greeting` `offline` `held` `falling` `landing`, all driven by DSH's own turn boundaries |
 | **Two surfaces** | the pet inside DSH's overlay, and a floating always-on-top, click-through window |
@@ -100,9 +100,24 @@ VMD banner) are still recognised, so the message can name the format and point a
 [docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md), where the retired MMD chapters are kept. Models are yours and stay
 yours: nothing is copied into the plugin folder, and the catalog is built from the directories you import.
 
+**A motion pack ships with the plugin.** `assets/motions/` holds the operator's own `.vrma` clips, and — unlike
+imported model or motion directories — they are offered from the first scan, with no directory to import: they
+are read from the plugin's own folder, the way the bundled `SampleModel.vrm` is. The pack is filed **one folder per
+state** (`idle/`, `working/`, `attention/`, `success/`, `fail/`, `offline/`), and that filing IS the mapping: each
+state's picker offers only its own folder, so one list is never every clip the operator has authored. Their
+`循环`/`单次` mode comes from the folder's own `vrmpet3d-motions.json` beside them, and that file's `defaults` block is
+where a state→clip mapping for a fresh install belongs. It ships **empty**, so nothing plays until you tick a clip in
+通用设置 → 状态与动作; each clip still loops or plays once exactly as declared.
+
+**A large clip may be stored compressed, as `<name>.vrma.br`.** Dance clips are megabytes, so the pack keeps them
+brotli-compressed and the plugin unpacks one into memory when it plays; nothing else changes, and the clip is
+listed as the VRMA it is (marked 已压缩). `npm run pack:motions <dir>` is how a clip is packed. Brotli rather than
+LZMA2 because Node cannot decode LZMA without a dependency this plugin does not have — the measurements are in
+[assets/motions/README.md](assets/motions/README.md).
+
 ## Verification
 
-**9 verification suites, 1945 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
+**9 verification suites, 2091 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
 
 ```bash
@@ -111,12 +126,12 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1018 — state machine |
-| `node scripts/verify-model.mjs` | 541 — model catalog |
+| `node scripts/verify.mjs` | 1036 — state machine |
+| `node scripts/verify-model.mjs` | 660 — model catalog |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 90 — the widget, the menu and the desktop page end to end |
-| `node scripts/verify-desktop.mjs` | 242 — the pet's own window, borrowed Electron and all |
+| `node scripts/verify-desktop.mjs` | 251 — the pet's own window, borrowed Electron and all |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
 | `node scripts/check-docs.mjs` | documented paths, commands and counts match reality |
@@ -125,7 +140,7 @@ The suites that need a browser skip (not fail) without one, and `verify-desktop.
 installation to borrow an Electron from. Two habits this project cares about: after editing
 [lib/core.js](lib/core.js), [lib/scene.js](lib/scene.js) or [lib/menu.js](lib/menu.js) run
 `node scripts/client-chunks.mjs` (the delivered chunks are committed copies, and a stale one is a silent failure —
-`--check` is the one-second assertion), and report a partial run as a partial run ("core: 1018 passed"), never as
+`--check` is the one-second assertion), and report a partial run as a partial run ("core: 1036 passed"), never as
 "all green".
 
 ## Project layout

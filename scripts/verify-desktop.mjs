@@ -81,6 +81,7 @@ console.log('\n0a. the launcher and the two pages PARSE, before anything is spaw
   const targets = [
     'desktop/main.js',
     'desktop/probe-parts-editor.js',
+    'desktop/probe-motion-picker.js',
     'lib/config-page.js',
   ];
   for (const target of targets) {
@@ -960,6 +961,43 @@ if (live.skipped) {
         // dropdowns.
         ok(motions.gazeRows === 2, `and a gaze switch on each row too (${motions.gazeRows})`);
         ok(motions.everyRows === 6, `and one interval line per state (${motions.everyRows})`);
+        /**
+         * AND THE TICK BOX COLLECTS ONLY CLIPS.
+         *
+         * Operator report, 2026-10-12: "最后一项 idle/touch hair2.vrma 无法选中". The cause was inside the page —
+         * `onMotionToggle` gathered every checked checkbox in the state's row, so each ticked clip's 凝视 switch
+         * (a checkbox written without a `value`, whose DOM default is `'on'`) was stored as a clip id, and the
+         * junk entries then took slots in the per-state list until the clip the user had just ticked was the one
+         * dropped. The clip ids are clean when they reach the host, so no server-side check can see it: the probe
+         * ticks the last clip in 空闲 and reports what the page thinks is selected against what the core keeps.
+         */
+        const pick = settings.report.motionPick || {};
+        ok(!pick.error, `the clip picker is driven (${pick.error || 'ok'})`);
+        ok(pick.offered > 0 && pick.gazeRows > 0,
+          `with ${pick.offered} clip tick boxes beside ${pick.gazeRows} 凝视 switches in the same row`);
+        ok(Array.isArray(pick.junkBefore) && pick.junkBefore.length === 0
+          && Array.isArray(pick.junkAfter) && pick.junkAfter.length === 0,
+          `and every stored id is a clip the catalogue offers, before and after a tick `
+            + `(${JSON.stringify(pick.junkBefore)} -> ${JSON.stringify(pick.junkAfter)})`);
+        ok(pick.lastStillTicked === true,
+          `the last clip's tick sticks, which is the report itself (${pick.lastId} ${pick.lastStillTicked})`);
+        ok(pick.tickedAfter === pick.offered,
+          `and every offered clip ends up in the state's list (${pick.tickedAfter} of ${pick.offered})`);
+        /**
+         * AND THE FOLDERS SCOPE THE LISTS.
+         *
+         * Operator's request, 2026-10-12: "把对应的动作直接解析到指定目录，这样在选择动作的时候就不会出现很长一串".
+         * The folders under `assets/motions` ARE the mapping, so a state mapped to a folder is offered only that
+         * folder's clips. This stub's catalogue declares NO `stateFolders` and keeps its two clips at the root —
+         * which is the compatible case and the one worth pinning here: with nothing declared, every state must
+         * still be offered everything, exactly as every build before this block did.
+         */
+        const scoped = pick.rows || {};
+        ok(Object.keys(scoped).length === 6, `all six states are drawn (${Object.keys(scoped).length})`);
+        ok(Object.values(scoped).every((row) => row.folder === null && row.outsideFolder.length === 0),
+          'with no stateFolders declared, no row is scoped and nothing is filtered out of one');
+        ok(Object.values(scoped).every((row) => row.drawn === pick.offered),
+          `and every state still offers the whole catalogue (${Object.values(scoped).map((row) => row.drawn).join(',')})`);
         /**
          * The mouse-interaction controls (2026-10-10: "把鼠标互动的参数加入设置面板"), and the folding rule for a
          * model with many chains ("如果弹簧骨选项超过5个，就折叠起来").

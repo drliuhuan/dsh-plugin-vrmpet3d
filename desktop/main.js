@@ -925,8 +925,10 @@ async function finishSelfTest(win) {
       await probeWheel(win);
     } else {
       /**
-       * The 部位 probe runs FIRST, on the page this window was opened with (the model's), because 部位 is one of the
+       * The 部位 probe runs on the page this window was opened with (the model's), because 部位 is one of the
        * sections that lives there — the navigation below would leave it looking at a page without a part table.
+       * The 状态与动作 clip picker lives on the OTHER page, so its probe is injected by `probeOtherPage` after
+       * the route swap (see `extraScripts` there).
        */
       await probePartsEditor(win);
       await probeOtherPage(win, report);
@@ -956,44 +958,69 @@ async function finishSelfTest(win) {
  * `wind.rows === 0` — the same "0 for a section I do not carry" shape as above. The model page's own reading of
  * them is kept in `modelPage`, so nothing is thrown away by preferring the page that draws them.
  */
+/**
+ * Navigate the settings window to its SIBLING page and hand back the state it publishes.
+ *
+ * Split out of `probeOtherPage` because two things need the other page: reading its published state (the merge
+ * below) and driving the 状态与动作 clip picker, whose box sets live only there. Reading it requires the page to
+ * have published, so this also waits the moment the page needs.
+ */
+async function readOtherPageState(win, report) {
+  const first = report.pageState;
+  if (!first || first.page !== 'model') return { state: null, error: null };
+  const current = win.webContents.getURL();
+  /**
+   * SWAP THE ROUTE rather than rewriting a string that may not be there.
+   *
+   * The launcher's own URLs name the page they open (`/vrmpet3d/config`, `/vrmpet3d/global`), but a self-test
+   * (and the desktop suite) may open the page directly — so this reads the URL's own path and changes only that.
+   * The first version of this replaced a `?panel=` query parameter that a URL without it never had, which
+   * silently skipped the second reading and proved nothing; a route swap cannot go missing while the first page
+   * is the one it was read from.
+   */
+  const target = (function () {
+    try {
+      const url = new URL(current);
+      url.pathname = first.page === 'model' ? '/vrmpet3d/global' : '/vrmpet3d/config';
+      // The model is a 模型参数 parameter: it must not ride along to the page that has no model picker.
+      if (url.pathname === '/vrmpet3d/global') url.searchParams.delete('model');
+      return url.toString();
+    } catch (_error) {
+      return current;
+    }
+  })();
+  if (target === current) return { state: null, error: null };
+  await win.loadURL(target);
+  // The page publishes on its first settings snapshot; a moment here beats reading a half-built DOM.
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const raw = await win.webContents.executeJavaScript(
+    'JSON.stringify(globalThis.__VRMPET3D_CONFIG_STATE__ || null)',
+  );
+  const state = raw ? JSON.parse(raw) : null;
+  if (!state) {
+    report.errors.push('the 通用设置 page could not be read after navigating to it');
+    return { state: null, error: 'not readable' };
+  }
+  return { state, error: null };
+}
+
 async function probeOtherPage(win, report) {
   const GLOBAL_KEYS = ['speech', 'import', 'motionImport', 'gaze', 'motions', 'sizes', 'wind'];
   try {
     const first = report.pageState;
     if (!first || first.page !== 'model') return;
-    const current = win.webContents.getURL();
+    const globalState = (await readOtherPageState(win, report)).state;
+    if (!globalState) return;
     /**
-     * SWAP THE ROUTE rather than rewriting a string that may not be there.
+     * AND THE CLIP PICKER IS DRIVEN HERE, on this page, which is the whole reason it exists.
      *
-     * The launcher's own URLs name the page they open (`/vrmpet3d/config`, `/vrmpet3d/global`), but a self-test (and the
-     * desktop suite) may open the page directly — so this reads the URL's own path and changes only that. The
-     * The first version of this replaced a `?panel=` query parameter that a URL without it never had, which silently
-     * skipped the second reading and proved nothing; a route swap cannot go missing while the first page is the
-     * one it was read from.
+     * Operator report, 2026-10-12: "最后一项 idle/touch hair2.vrma 无法选中". `onMotionToggle` collected every
+     * checked checkbox in the state's row, including each ticked clip's 凝视 switch — and a checkbox written
+     * without a `value` attribute has the DOM default `'on'`, so a tick stored `on` as a clip id. Those junk
+     * entries took slots in the per-state list and the clip the operator had just ticked was the one dropped.
+     * The ids reach the host as a perfectly valid POST, so only the page itself can be asked.
      */
-    const target = (function () {
-      try {
-        const url = new URL(current);
-        url.pathname = first.page === 'model' ? '/vrmpet3d/global' : '/vrmpet3d/config';
-        // The model is a 模型参数 parameter: it must not ride along to the page that has no model picker.
-        if (url.pathname === '/vrmpet3d/global') url.searchParams.delete('model');
-        return url.toString();
-      } catch (_error) {
-        return current;
-      }
-    })();
-    if (target === current) return;
-    await win.loadURL(target);
-    // The page publishes on its first settings snapshot; a moment here beats reading a half-built DOM.
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    const raw = await win.webContents.executeJavaScript(
-      'JSON.stringify(globalThis.__VRMPET3D_CONFIG_STATE__ || null)',
-    );
-    const globalState = raw ? JSON.parse(raw) : null;
-    if (!globalState) {
-      report.errors.push('the 通用设置 page could not be read after navigating to it');
-      return;
-    }
+    await probeMotionPicker(win);
     const merged = Object.assign({}, first);
     for (const key of GLOBAL_KEYS) {
       if (globalState[key] !== undefined) merged[key] = globalState[key];
@@ -1035,6 +1062,23 @@ async function probePartsEditor(win) {
     report.partsEdit = raw ? JSON.parse(raw) : null;
   } catch (error) {
     report.errors.push('the 部位 editor could not be driven: ' + (error && error.message));
+  }
+}
+
+/**
+ * Drive the 状态与动作 clip picker, and report what it collected.
+ *
+ * Same file-not-literal rule as `probePartsEditor` above, and the same reason: a broken template literal in
+ * `main.js` breaks the launcher rather than a test. The probe ticks the last clip in 空闲 and reports what the
+ * page thinks is selected against what the core will keep, which is the pair that exposes a junk clip id.
+ */
+async function probeMotionPicker(win) {
+  try {
+    const script = fs.readFileSync(path.join(__dirname, 'probe-motion-picker.js'), 'utf8');
+    const raw = await win.webContents.executeJavaScript(script);
+    report.motionPick = raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    report.errors.push('the clip picker could not be driven: ' + (error && error.message));
   }
 }
 

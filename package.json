@@ -33,6 +33,7 @@
     "verify:vendor": "node scripts/vendor-build.mjs --check",
     "verify:browser": "node scripts/verify-browser.mjs",
     "verify:whale": "node scripts/whale-asset.mjs --check",
+    "pack:motions": "node scripts/compress-motions.mjs",
     "fetch:fixtures": "node scripts/verify-model.mjs --fetch",
     "fetch:whale": "node scripts/whale-asset.mjs",
     "vendor:build": "node scripts/vendor-build.mjs",

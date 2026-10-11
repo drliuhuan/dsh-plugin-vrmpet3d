@@ -23,6 +23,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, rmSync, truncateSync, symlinkSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:http';
+import { brotliCompressSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 // The loopback helper exists because `listen(0)` can be handed a port `fetch`
 // refuses, which kills the whole suite instead of one check. See its own header.
@@ -47,6 +48,13 @@ const generator = await import(new URL('./make-vrma-fixtures.mjs', import.meta.u
 // fixtures can be checked against the CLIENT's own detector. A fixture the page
 // would reject proves nothing about the route that served it.
 await import(new URL('../lib/core.js', import.meta.url).href);
+/**
+ * The unpacker, read directly rather than through `lib/index.js`'s re-export surface.
+ *
+ * It is the same module the host's motion route calls, and reading it here proves the DECODING on its own —
+ * a route test would only prove that whatever the route did produced bytes that matched whatever it did.
+ */
+const brotli = await import(new URL('../lib/brotli.js', import.meta.url).href);
 const core = globalThis.__VRMPET3D_CORE__;
 
 /**
@@ -110,6 +118,19 @@ function eq(actual, expected, label) {
 
 function group(title) {
   console.log(`\n${title}`);
+}
+
+/**
+ * The clips from directories THE USER named, without the plugin's own bundled pack.
+ *
+ * `assets/motions` has been scanned first, with `source: 'bundled'`, since the pack started shipping
+ * (2026-10-12), so it is in every catalog `buildMotionCatalog` returns and in every `/vrmpet3d/motions`
+ * payload — exactly as `assets/models` is in every model catalog, and for the same reason. Assertions about
+ * the SCAN have user-supplied directories as their subject, so they filter the bundled entries out; the
+ * bundled ones are asserted on their own, so neither subject can hide the other's failure.
+ */
+function userMotions(motions) {
+  return (motions || []).filter(motion => motion.source !== 'bundled');
 }
 
 /**
@@ -552,8 +573,8 @@ group('5. motion catalog');
   writeFileSync(join(sandbox, 'node_modules', 'dep.vrma'), Buffer.alloc(8));
 
   const catalog = plugin.buildMotionCatalog({ motionDirs: [sandbox] });
-  const names = catalog.motions.map(motion => motion.name).sort();
-  eq(catalog.motions.length, 3, `only real motion files are listed (got: ${names.join(', ')})`);
+  const names = userMotions(catalog.motions).map(motion => motion.name).sort();
+  eq(userMotions(catalog.motions).length, 3, `only real motion files are listed (got: ${names.join(', ')})`);
   ok(names.includes('wave.vrma'), 'a top-level motion is listed');
   ok(names.includes('nested/dance.vrma'), 'a nested motion is listed with a relative name');
   ok(names.includes('nested/deep/idle.vrma'), 'a deeply nested motion is listed');
@@ -565,15 +586,15 @@ group('5. motion catalog');
   ok(!names.some(name => name.includes('node_modules')), 'node_modules is skipped');
 
   // Sizes and formats are what a settings list renders.
-  const wave = catalog.motions.find(motion => motion.name === 'wave.vrma');
-  const dance = catalog.motions.find(motion => motion.name === 'nested/dance.vrma');
+  const wave = userMotions(catalog.motions).find(motion => motion.name === 'wave.vrma');
+  const dance = userMotions(catalog.motions).find(motion => motion.name === 'nested/dance.vrma');
   eq(wave.bytes, waveBytes.length, 'the motion size is reported');
   eq(wave.format, 'vrma', 'the format is derived from the extension, and .vrma is the only one left');
   eq(dance.format, 'vrma', 'a VRMA reports its own format');
   eq(wave.source, 'user', 'a motion is always user-supplied');
 
   // Ids are opaque, unique, and cannot be confused with a model id.
-  const ids = catalog.motions.map(motion => motion.id);
+  const ids = userMotions(catalog.motions).map(motion => motion.id);
   eq(new Set(ids).size, ids.length, 'motion ids are unique');
   ok(!ids.some(id => id.includes('/') || id.includes('\\') || id.includes(sep)),
     'motion ids do not contain path separators');
@@ -581,7 +602,7 @@ group('5. motion catalog');
   ok(ids.every(id => id.startsWith('a')), 'motion ids carry their own namespace prefix');
 
   // Every id maps to a file inside the configured root.
-  for (const motion of catalog.motions) {
+  for (const motion of userMotions(catalog.motions)) {
     const entry = catalog.files.get(motion.id);
     ok(Boolean(entry), `motion id ${motion.id} resolves to a file entry`);
     if (entry) ok(plugin.isInside(sandbox, entry.absolute), `motion id ${motion.id} maps inside the configured root`);
@@ -591,15 +612,15 @@ group('5. motion catalog');
   // persists `{ state: motionId }`. An id that moved would silently point at
   // another clip, or at nothing.
   const again = plugin.buildMotionCatalog({ motionDirs: [sandbox] });
-  const idsByName = built => built.motions.map(motion => motion.name + '=' + motion.id).sort().join(',');
+  const idsByName = built => userMotions(built.motions).map(motion => motion.name + '=' + motion.id).sort().join(',');
   eq(idsByName(again), idsByName(catalog), 'motion ids are stable across a rescan');
 
   // A missing directory and junk entries are tolerated, exactly as for models.
   const withMissing = plugin.buildMotionCatalog({ motionDirs: [join(sandbox, 'nope')] });
-  ok(Array.isArray(withMissing.motions) && withMissing.motions.length === 0,
+  ok(Array.isArray(withMissing.motions) && userMotions(withMissing.motions).length === 0,
     'a missing motion directory yields an empty catalog, not a crash');
   const withJunk = plugin.buildMotionCatalog({ motionDirs: [null, 42, '', sandbox] });
-  eq(withJunk.motions.length, 3, 'junk motion directory entries are ignored');
+  eq(userMotions(withJunk.motions).length, 3, 'junk motion directory entries are ignored');
 
   // The scan bounds are the only thing between a user-supplied directory and a
   // frozen host, so they are exercised rather than assumed. `limits` exists on
@@ -609,7 +630,7 @@ group('5. motion catalog');
   ok(capped.motions.length < catalog.motions.length,
     `the entry bound truncates the walk (${capped.motions.length} of ${catalog.motions.length})`);
   const generous = plugin.buildMotionCatalog({ motionDirs: [sandbox] }, { maxEntries: 100 });
-  eq(generous.motions.length, 3, 'a generous entry bound does not truncate');
+  eq(userMotions(generous.motions).length, 3, 'a generous entry bound does not truncate');
 
   // Depth: a file 8 directories down is reachable, one 9 down is past the bound.
   const depthRoot = join(ROOT, 'build', 'fixtures', 'motion-depth-sandbox');
@@ -624,9 +645,10 @@ group('5. motion catalog');
   writeFileSync(join(chain[7], 'reachable.vrma'), vrmaFixture('reachable'));
   writeFileSync(join(chain[8], 'too-deep.vrma'), vrmaFixture('too-deep'));
   const depthCatalog = plugin.buildMotionCatalog({ motionDirs: [depthRoot] });
-  eq(depthCatalog.motions.length, 1,
-    `the depth bound stops at 8 levels (listed: ${depthCatalog.motions.map(motion => motion.name).join(', ')})`);
-  ok((depthCatalog.motions[0]?.name ?? '').endsWith('reachable.vrma'),
+  const depthUser = userMotions(depthCatalog.motions);
+  eq(depthUser.length, 1,
+    `the depth bound stops at 8 levels (listed: ${depthUser.map(motion => motion.name).join(', ')})`);
+  ok((depthUser[0]?.name ?? '').endsWith('reachable.vrma'),
     'the file inside the depth bound is the one listed');
 
   // A directory link planted inside the root must not pull an outside directory
@@ -672,7 +694,7 @@ group('5. motion catalog');
   // No manifest at all is the normal case, and it has to mean LOOP: that is what
   // every clip did before the flag existed.
   const bare = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
-  eq(bare.motions.length, 3, 'the manifest sandbox lists its three clips');
+  eq(userMotions(bare.motions).length, 3, 'the manifest sandbox lists its three clips');
   ok(bare.motions.every(motion => motion.loop === true),
     'with no manifest every clip loops, which is the behaviour that shipped before the flag');
   eq(generator.MOTION_MANIFEST_FILE, plugin.MOTION_MANIFEST_FILE,
@@ -691,14 +713,14 @@ group('5. motion catalog');
     },
   }, null, 2));
   const declared = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
-  const byName = name => declared.motions.find(motion => motion.name === name);
+  const byName = name => userMotions(declared.motions).find(motion => motion.name === name);
   eq(byName('wave.vrma').loop, false, 'a declared one-shot clip reports loop:false');
   eq(byName('nested/stretch.vrma').loop, false,
     'a backslash-separated key still matches, and an unknown field beside `loop` is ignored');
   eq(byName('rest.vrma').loop, true, 'an explicit loop:true is carried through');
-  eq(declared.motions.length, 3,
+  eq(userMotions(declared.motions).length, 3,
     'the manifest itself is not a motion, and an entry naming a file that does not exist adds nothing');
-  ok(declared.motions.every(motion => motion.id.startsWith('a')),
+  ok(userMotions(declared.motions).every(motion => motion.id.startsWith('a')),
     'declaring a clip never changes the ids, so a persisted map still points at the same files');
 
   // Every failure is non-fatal: a corrupt manifest must not cost the user their clips.
@@ -709,11 +731,12 @@ group('5. motion catalog');
   ]) {
     writeFileSync(join(manifestRoot, plugin.MOTION_MANIFEST_FILE), body);
     const broken = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
-    eq(broken.motions.length, 3, `a manifest that is ${label} still lists every clip`);
-    ok(broken.motions.every(motion => motion.loop === true),
+    eq(userMotions(broken.motions).length, 3, `a manifest that is ${label} still lists every clip`);
+    ok(userMotions(broken.motions).every(motion => motion.loop === true),
       `a manifest that is ${label} means "no declarations", so everything loops`);
   }
-  eq(JSON.stringify(plugin.readMotionManifest(join(manifestRoot, 'does-not-exist.json'))), '{}',
+  eq(JSON.stringify(plugin.readMotionManifest(join(manifestRoot, 'does-not-exist.json'))),
+    '{"clips":{},"stateFolders":{},"defaults":{}}',
     'reading a missing manifest answers an empty declaration rather than throwing');
 
   // The bound exists for the same reason every other one does: this file is inside a
@@ -722,9 +745,213 @@ group('5. motion catalog');
   for (let i = 0; i < 600; i += 1) many.clips[`c${i}.vrma`] = { loop: false };
   writeFileSync(join(manifestRoot, plugin.MOTION_MANIFEST_FILE), JSON.stringify(many));
   const bounded = plugin.readMotionManifest(join(manifestRoot, plugin.MOTION_MANIFEST_FILE));
-  eq(Object.keys(bounded).length, 512, 'the manifest entry bound truncates a 600-entry declaration');
+  eq(Object.keys(bounded.clips).length, 512, 'the manifest entry bound truncates a 600-entry declaration');
 
   rmSync(manifestRoot, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------
+group('5b. the bundled motion pack');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * `assets/motions` ships with the plugin and is scanned FIRST, the way `assets/models` is. What is asserted
+   * here is the part a user cannot see from the panel: the pack is in the catalog without anything being
+   * imported, each entry says where it came from, and the pack's own manifest is what declares its clips'
+   * 循环/单次 and its defaults for a user who has configured nothing.
+   */
+  const bundled = plugin.buildMotionCatalog({});
+  const pack = bundled.motions.filter(motion => motion.source === 'bundled');
+  /**
+   * The pack is the OPERATOR'S OWN clip library, so its size and names are not this suite's business — they
+   * change every time they author a clip. What is asserted is the SHAPE: the folder is offered with nothing
+   * imported, every entry says where it came from, and the ids resolve inside the folder.
+   */
+  ok(pack.length > 0, `the shipped pack is listed out of the box, with no directory imported (${pack.length} clips)`);
+  ok(bundled.motions.every(motion => motion.source === 'bundled' || motion.source === 'user'),
+    'every entry names its source, so the page can label the pack apart from the user\'s own clips');
+  for (const motion of pack) {
+    const entry = bundled.files.get(motion.id);
+    ok(Boolean(entry) && plugin.isInside(plugin.bundledMotionDir(), entry.absolute),
+      `${motion.name} resolves to a file inside the bundled motion directory`);
+    eq(motion.loop, true, `${motion.name} loops, which is what a 待机 clip is for`);
+  }
+  eq(new Set(pack.map(motion => motion.id)).size, pack.length,
+    'and the pack is not listed twice');
+  // Naming the bundled directory as a user directory must not duplicate it under a second id.
+  const explicit = plugin.buildMotionCatalog({ motionDirs: [plugin.bundledMotionDir()] });
+  eq(explicit.motions.length, pack.length,
+    'importing the bundled directory does not list its clips a second time');
+  /**
+   * A user directory may hold a clip with the same RELATIVE name as a bundled one: their file is never hidden,
+   * and the two are told apart by `source`. The name used is the pack's own first clip, so this does not depend
+   * on what the pack happens to contain — including whether its clips sit in a subfolder.
+   */
+  const sharedName = pack[0].name;
+  const shadow = join(ROOT, 'build', 'fixtures', 'motion-shadow');
+  rmSync(shadow, { recursive: true, force: true });
+  mkdirSync(join(shadow, dirname(sharedName)), { recursive: true });
+  writeFileSync(join(shadow, sharedName), vrmaFixture('shadow-twin'));
+  const shadowed = plugin.buildMotionCatalog({ motionDirs: [shadow] });
+  eq(shadowed.motions.filter(motion => motion.name === sharedName).length, 2,
+    `a user clip sharing the pack's name (${sharedName}) is listed beside it, never merged away`);
+  eq(shadowed.motions.filter(motion => motion.name === sharedName && motion.source === 'user').length, 1,
+    'and the user\'s copy is the one marked as theirs');
+  rmSync(shadow, { recursive: true, force: true });
+
+  /**
+   * COMPRESSED clips (`<name>.vrma.br`), which is how the operator's dance pack ships.
+   *
+   * A dance clip is megabytes, so it is stored compressed and the HOST unpacks it on the way out. Three rules
+   * are asserted here: a compressed file is still a `vrma` to every reader, the compressed file REPLACES the
+   * uncompressed one beside it rather than listing the same animation twice, and a `.br` that is not a clip at
+   * all stays uncatalogued.
+   */
+  eq(core.motionFormatOfName('dance/极乐净土.vrma.br'), 'vrma',
+    'a compressed clip reports the FORMAT it is, not the extension that contains it');
+  eq(core.motionFormatOfName('idle/idle.vrma'), 'vrma', 'a plain clip is unaffected by the compression rule');
+  eq(core.motionFormatOfName('dance/极乐净土.vrma.7z'), null,
+    'another archive extension is not a compression this build can unpack, so it is not a clip');
+  eq(core.motionFormatOfName('idle/idle.vrm'), null, 'a model is still not a motion');
+  ok(core.isMotionFile('dance/极乐净土.vrma.br') && core.isMotionFile('idle/idle.vrma'),
+    'both a compressed and a plain clip are clips');
+  ok(!core.isMotionFile('dance/极乐净土.7z'), 'the operator\'s .7z is not offered as a clip');
+
+  const packed = join(ROOT, 'build', 'fixtures', 'motion-packed');
+  rmSync(packed, { recursive: true, force: true });
+  mkdirSync(join(packed, 'dance'), { recursive: true });
+  const packedPlain = vrmaFixture('packed-twin');
+  writeFileSync(join(packed, 'dance', 'both.vrma'), packedPlain);
+  writeFileSync(join(packed, 'dance', 'both.vrma.br'), brotliCompressSync(packedPlain));
+  writeFileSync(join(packed, 'dance', 'only-compressed.vrma.br'), brotliCompressSync(vrmaFixture('only')));
+  writeFileSync(join(packed, 'dance', 'notes.txt.br'), brotliCompressSync(Buffer.from('not a clip')));
+  const packedCatalog = plugin.buildMotionCatalog({ motionDirs: [packed] });
+  const packedNames = packedCatalog.motions.map(motion => motion.name);
+  ok(packedNames.indexOf('dance/both.vrma.br') !== -1, 'the compressed twin is catalogued');
+  ok(packedNames.indexOf('dance/both.vrma') === -1,
+    'and the uncompressed file it replaces is NOT, so one animation is never offered under two names');
+  ok(packedNames.indexOf('dance/only-compressed.vrma.br') !== -1,
+    'a clip that exists only compressed is catalogued too');
+  ok(packedNames.indexOf('dance/notes.txt.br') === -1,
+    'a compressed file that is not a clip gets no id, so the byte route has nothing to serve');
+  const packedEntry = packedCatalog.motions.find(motion => motion.name === 'dance/both.vrma.br');
+  eq(packedEntry.format, 'vrma', 'and it is reported to the page as the VRMA it unpacks to');
+  eq(packedEntry.compressed, true, 'with the compressed flag, so the page can say so');
+  eq(packedEntry.bytes, statSync(join(packed, 'dance', 'both.vrma.br')).size,
+    'the size reported is the FILE\'s, which is the smaller one the user sees on disk');
+
+  /**
+   * The unpacker itself. A corrupt archive, an empty file and a bomb are each a REFUSAL with a reason — never a
+   * short or empty clip, because a half-decoded VRMA would be reported by the renderer as malformed content.
+   */
+  eq(brotli.decompressBrotli(brotliCompressSync(packedPlain)).equals(packedPlain), true,
+    'a compressed clip unpacks to the exact bytes that went in');
+  eq(brotli.decompressBrotli(brotliCompressSync(Buffer.alloc(0))).length, 0, 'an empty clip unpacks to nothing');
+  const refuses = (fn) => { try { fn(); return null; } catch (error) { return error.message; } };
+  ok(/could not be unpacked/.test(refuses(() => brotli.decompressBrotli(Buffer.from('not brotli at all'))) || ''),
+    'bytes that are not brotli are refused with a reason rather than decoded as garbage');
+  ok(/empty/.test(refuses(() => brotli.decompressBrotli(Buffer.alloc(0))) || ''),
+    'an empty file is refused: there is nothing to unpack');
+  ok(/more than/.test(refuses(() => brotli.decompressBrotli(brotliCompressSync(Buffer.alloc(4096)), { limit: 128 })) || ''),
+    'a clip that unpacks past the limit is refused, so a bomb cannot exhaust the host');
+  ok(brotli.isCompressedMotionName('a.vrma.br') && !brotli.isCompressedMotionName('a.vrma'),
+    'the compression suffix is read from the name, and a plain clip is not compressed');
+  rmSync(packed, { recursive: true, force: true });
+
+  /**
+   * The manifest the pack ships: its clips are declared (so the flag is the PACK's, not the fallback), and
+   * its `defaults` block is validated rather than trusted — it is a file a person hand-edits.
+   */
+  const packManifest = plugin.readMotionManifest(join(plugin.bundledMotionDir(), plugin.MOTION_MANIFEST_FILE));
+  ok(Object.keys(packManifest.clips).length > 0, 'the shipped pack carries its own manifest');
+  ok(core.MOTION_STATES.indexOf('sleeping') === -1 && core.MOTION_STATES.indexOf('resting') !== -1,
+    'the states a default may name are the six configurable ones: `sleeping` folds into `resting` and is refused');
+  eq(JSON.stringify(plugin.readMotionDefaults(null)), '{}', 'a missing defaults block declares nothing');
+  eq(JSON.stringify(plugin.readMotionDefaults({ resting: ['idle.vrma'], held: ['idle.vrma'] })),
+    '{"resting":["idle.vrma"]}',
+    'a default for a state the session machine cannot reach is dropped, so the panel never shows a tick nobody can clear');
+  eq(JSON.stringify(plugin.readMotionDefaults({ resting: ['idle.vrma', 'idle.vrma', 7, ''] })),
+    '{"resting":["idle.vrma"]}',
+    'duplicates and non-names are dropped from a declared default');
+  eq(JSON.stringify(plugin.readMotionDefaults({ resting: 'idle.vrma' })), '{"resting":["idle.vrma"]}',
+    'one clip may be declared as a bare string, so a hand-written manifest needs no array');
+  eq(JSON.stringify(plugin.readMotionDefaults({ resting: ['nested\\idle.vrma'] })),
+    '{"resting":["nested/idle.vrma"]}',
+    'a backslash-separated default is normalised, the way the catalog reports relative names');
+
+  /**
+   * stateFolders: which folder each state's picker is offered.
+   *
+   * This is what keeps one state's list short instead of listing every clip the operator owns, so it is
+   * validated like the other blocks — a state the session machine cannot reach, an empty value, or a value that
+   * is a PATH rather than a folder name is dropped, because a path could never equal a folder segment and the
+   * page would compare two strings that cannot match while reporting the block as accepted.
+   *
+   * Every value comes back as an ARRAY, including a single folder: one state may be offered several folders
+   * (the dance pack is the case this was widened for), so the reader normalises the bare-string form the
+   * operator is likely to hand-write into the same shape the multi-folder form uses. That keeps the page's
+   * lookup one operation instead of a string-or-array branch at every use.
+   */
+  eq(JSON.stringify(plugin.readMotionStateFolders(null)), '{}', 'a missing stateFolders block declares nothing');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ resting: 'idle', working: 'working' })),
+    '{"resting":["idle"],"working":["working"]}', 'a folder per state is carried through, normalised to a list');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ resting: ['idle', 'dance'] })),
+    '{"resting":["idle","dance"]}', 'a state may be offered SEVERAL folders, which is why one is a list');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ resting: ['idle', 'idle', 'nested/dance', ''] })),
+    '{"resting":["idle"]}', 'a repeated folder collapses and a path or empty entry is dropped from the list');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ sleeping: 'idle', resting: 'idle' })),
+    '{"resting":["idle"]}',
+    'a state the session machine cannot reach is dropped, so no picker waits on a state that never arrives');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ resting: 'nested/idle' })), '{}',
+    'a path is not a folder name: it is dropped rather than accepted as something that can never match');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ resting: '  idle/  ' })), '{"resting":["idle"]}',
+    'a trailing slash and padding are normalised away');
+  eq(JSON.stringify(plugin.readMotionStateFolders({ resting: '', working: 7 })), '{}',
+    'an empty value and a non-string are dropped');
+
+  /**
+   * And the SHIPPED pack declares the mapping, because that is what the operator asked for: their folders
+   * ARE the states. Asserted against the real manifest so a folder that stops matching a clip is visible.
+   */
+  const packFolders = plugin.bundledMotionStateFolders();
+  eq(JSON.stringify(packFolders),
+    JSON.stringify({
+      resting: ['idle'],
+      working: ['working'],
+      waiting: ['attention'],
+      done: ['success'],
+      error: ['fail'],
+      offline: ['offline'],
+    }),
+    'the shipped pack maps every configurable state to its own folder');
+  const packNames = new Set(plugin.buildMotionCatalog({}).motions.map(motion => motion.name));
+  const isEmptyFolder = new Set();
+  for (const [state, folders] of Object.entries(packFolders)) {
+    for (const folder of folders) {
+      const inside = [...packNames].filter(name => name.indexOf(folder + '/') === 0);
+      // A folder the operator has created but not filled yet is a STATE, not a broken mapping — the picker says
+      // so in words (see `renderMotions`), and `working/` is in exactly that state as this is written. What must
+      // never happen is a folder that holds clips being reported as empty, so the two are counted apart.
+      if (inside.length === 0) { isEmptyFolder.add(folder); continue; }
+      ok(true, `the folder '${folder}' for ${state} holds ${inside.length} clips`);
+    }
+  }
+  ok(isEmptyFolder.size <= 1,
+    `at most one declared folder is empty rather than a mapping that has gone stale (${[...isEmptyFolder].join(', ') || 'none'})`);
+
+  /**
+   * The resolution itself: names to the ids the catalog just minted. An empty result is the honest answer
+   * while the operator has not chosen a mapping, and the stored map is untouched either way.
+   */
+  const firstClip = pack[0];
+  const resolved = core.motionMapWithDefaults({}, { resting: [firstClip.name] }, bundled.motions);
+  eq(JSON.stringify(resolved), JSON.stringify({ resting: [firstClip.id] }),
+    'a declared default resolves a shipped clip NAME to the id this profile minted');
+  eq(JSON.stringify(core.motionMapWithDefaults({ resting: ['aX'] }, { resting: [firstClip.name] }, bundled.motions)),
+    JSON.stringify({ resting: ['aX'] }),
+    'and it never overrides a state the user has configured');
+  eq(JSON.stringify(plugin.bundledMotionDefaults()), JSON.stringify(packManifest.defaults),
+    'the shipped defaults come from the pack\'s own manifest, so a mapping is data and not code');
 }
 
 // ---------------------------------------------------------------------------
@@ -756,7 +983,7 @@ group('6. the two catalogs are disjoint');
   // The bundled model is listed in every model catalog now, so both of these count the MIXED directory's own
   // entries — the extension rules are what is under test, not the built-in.
   const modelNames = asModels.models.filter(model => model.source !== 'bundled').map(model => model.name).sort();
-  const motionNames = asMotions.motions.map(motion => motion.name).sort();
+  const motionNames = userMotions(asMotions.motions).map(motion => motion.name).sort();
   eq(modelNames.join(','), 'a.vrm,f.vrma.vrm,g.glb',
     `the model catalog takes exactly the model extensions (got: ${modelNames.join(', ')})`);
   eq(motionNames.join(','), 'c.vrma,d.vrma,e.vrm.vrma',
@@ -766,7 +993,7 @@ group('6. the two catalogs are disjoint');
     'and an MMD model or an MMD motion is offered by neither catalog, which is all "MMD is removed" means');
 
   const modelIds = new Set(asModels.models.map(model => model.id));
-  const motionIds = new Set(asMotions.motions.map(motion => motion.id));
+  const motionIds = new Set(userMotions(asMotions.motions).map(motion => motion.id));
   ok([...motionIds].every(id => !modelIds.has(id)), 'no motion id collides with a model id');
   ok([...modelIds].every(id => id.startsWith('m')), 'model ids keep their own namespace prefix');
 
@@ -909,6 +1136,85 @@ group('7. motion route (real HTTP)');
   rmSync(sandbox, { recursive: true, force: true });
 }
 
+/**
+ * The compressed-clip route: what a `.vrma.br` sends over HTTP.
+ *
+ * The whole point of unpacking on the HOST is this response — the renderer must receive a plain VRMA, with the
+ * GLB media type, whether or not the file on disk was compressed. A separate group because the fixture has to
+ * have a `.br` suffix to reach the branch at all, and a failure here is about the ROUTE, not the decoder (which
+ * the catalogue group tests directly).
+ */
+group('5d. a compressed clip over HTTP (the dance pack)');
+{
+  const packedRoot = join(ROOT, 'build', 'fixtures', 'motion-route-packed');
+  rmSync(packedRoot, { recursive: true, force: true });
+  mkdirSync(packedRoot, { recursive: true });
+  const packedPlain = vrmaFixture('route-packed');
+  const archive = join(packedRoot, 'packed.vrma.br');
+  writeFileSync(archive, brotliCompressSync(packedPlain));
+
+  const packedCatalog = plugin.buildMotionCatalog({ motionDirs: [packedRoot] });
+  const packedId = packedCatalog.motions.find(motion => motion.name === 'packed.vrma.br').id;
+
+  /**
+   * A poisoned entry: the id map says `.br`, the bytes are not brotli. This is the failure an operator actually
+   * creates — an interrupted download, or a clip compressed with something else and renamed. It must be a 500
+   * WITH THE REASON, because a truncated 200 would reach `scene.loadMotion`, which would report the clip's
+   * contents as malformed and send the user looking in the wrong file.
+   *
+   * It goes into the SAME store as the good clip: two routes on one prefix would not both be reached (the
+   * webserver's table takes the first), and the poisoned id would quietly 404 — testing the miss path instead of
+   * the unpack failure this is here for.
+   */
+  const poisonedRoot = join(ROOT, 'build', 'fixtures', 'motion-route-poisoned');
+  rmSync(poisonedRoot, { recursive: true, force: true });
+  mkdirSync(poisonedRoot, { recursive: true });
+  writeFileSync(join(poisonedRoot, 'broken.vrma.br'), Buffer.from('garbage, not an archive'));
+  const packedFiles = new Map(packedCatalog.files);
+  packedFiles.set('a1', { absolute: join(poisonedRoot, 'broken.vrma.br'), root: poisonedRoot });
+  const packedStore = { motions: packedCatalog.motions, files: packedFiles };
+
+  const packedServer = await serveRoutes([
+    { kind: 'prefix', path: plugin.ROUTES.motion, handler: plugin.createMotionHandler(packedStore) },
+  ]);
+
+  let packedResponse = await packedServer.call(`/vrmpet3d/motion?m=${encodeURIComponent(packedId)}`);
+  eq(packedResponse.status, 200, 'a compressed clip is served');
+  eq(packedResponse.body.length, packedPlain.length,
+    'and the bytes sent are the UNPACKED ones, not the archive the id points at');
+  ok(packedResponse.body.equals(packedPlain), 'byte for byte the animation that was compressed');
+  eq(packedResponse.headers['content-type'], 'model/gltf-binary',
+    'the media type follows the clip the bytes ARE, not the `.br` the file is named');
+  eq(packedResponse.headers['content-length'], String(packedPlain.length),
+    'and the length is the unpacked length, so the browser is not left waiting for a body that never comes');
+  ok(/no-store/.test(packedResponse.headers['cache-control']), 'the unpacked response is not cached by the browser');
+  eq(packedResponse.headers['x-content-type-options'], 'nosniff',
+    'the response carries the same hardening headers as every other file route');
+
+  packedResponse = await packedServer.call(`/vrmpet3d/motion?m=${encodeURIComponent(packedId)}`);
+  eq(packedResponse.status, 200, 'the second request is served too (the one-clip cache does not corrupt it)');
+  ok(packedResponse.body.equals(packedPlain), 'and it is still the same clip, length and all');
+
+  packedResponse = await packedServer.call(`/vrmpet3d/motion?m=${encodeURIComponent(packedId)}`, 'HEAD');
+  eq(packedResponse.status, 200, 'HEAD is allowed on a compressed clip');
+  eq(packedResponse.headers['content-length'], String(packedPlain.length),
+    'and reports the unpacked size, which is the size the GET will send');
+
+  packedResponse = await packedServer.call('/vrmpet3d/motion?m=a1');
+  eq(packedResponse.status, 500, 'a clip that cannot be unpacked is a 500 rather than a truncated 200');
+  ok(/could not be unpacked/.test(packedResponse.body.toString('utf8')),
+    'and the body names the failure, so the user knows the archive is the problem and not the animation');
+  eq(JSON.parse(packedResponse.body.toString('utf8')).error !== undefined, true,
+    'the refusal is the same JSON shape as the other routes\' errors');
+
+  packedResponse = await packedServer.call('/vrmpet3d/motion?m=nope');
+  eq(packedResponse.status, 404, 'an unknown id is still a 404, compressed or not');
+
+  await packedServer.close();
+  rmSync(packedRoot, { recursive: true, force: true });
+  rmSync(poisonedRoot, { recursive: true, force: true });
+}
+
 // ---------------------------------------------------------------------------
 group('8. registered routes and both catalogs over HTTP');
 // ---------------------------------------------------------------------------
@@ -997,11 +1303,18 @@ group('8. registered routes and both catalogs over HTTP');
   eq(motionCatalog.status, 200, '/vrmpet3d/motions answers');
   ok(Array.isArray(motionCatalog.payload?.motions),
     '/vrmpet3d/motions reaches the catalog, not the /vrmpet3d/motion byte route');
-  const listed = motionCatalog.payload.motions.map(motion => motion.name).sort();
+  // The payload carries the bundled pack AND the imported fixture. The route's own subject is the imported
+  // directory, so it is asserted on its own and the bundled half is asserted just below.
+  const listed = userMotions(motionCatalog.payload.motions).map(motion => motion.name).sort();
   eq(listed.join(','), 'wave.vrma', `the motion catalog lists the fixture (got: ${listed.join(', ')})`);
   eq(motionCatalog.payload.motionDirs.length, 1, 'the motion catalog reports its directories');
   eq(motionCatalog.payload.motionDirs[0], resolve(motionSandbox), 'the motion directory is resolved');
   eq(motionCatalog.headers['access-control-allow-origin'], '*', 'the motion catalog is readable by the page');
+  // The parallel of the model catalogue's `bundledDir`: the pack rides along with every motion catalog.
+  ok(String(motionCatalog.payload.bundledDir).endsWith(join('assets', 'motions')),
+    'the motion catalog reports the bundled motion directory');
+  ok(motionCatalog.payload.motions.some(motion => motion.source === 'bundled'),
+    'and the shipped pack is listed out of the box, without the user importing anything');
 
   // The two catalogs are disjoint at the payload level and at the route level. The bundled model is a MODEL and
   // must never appear among the motions; the fixture directory here holds one model and one motion.
@@ -1010,7 +1323,7 @@ group('8. registered routes and both catalogs over HTTP');
   eq(modelNames.join(','), 'body.vrm',
     `the model catalog lists its own directory only, never the motion one (got: ${modelNames.join(', ')})`);
   const modelId = modelCatalog.payload.models[0].id;
-  const motionId = motionCatalog.payload.motions[0].id;
+  const motionId = userMotions(motionCatalog.payload.motions)[0].id;
   ok(!motionCatalog.payload.motions.some(motion => motion.id === modelId),
     'no model id appears in the motion catalog');
   ok(!modelCatalog.payload.models.some(model => model.id === motionId),
@@ -1037,7 +1350,11 @@ group('8. registered routes and both catalogs over HTTP');
   eq(response.status, 200, 'the id captured before a rebuild still streams its model');
 
   // describe() and the frozen route map the Loader reads.
-  eq(service.describe().motionCount, 1, 'describe() counts the motions');
+  // The fixture directory contributes one clip and the bundled pack contributes however many it holds, which is
+  // the operator's own library — so the count is compared against what the route just LISTED, not a number.
+  const packSize = motionCatalog.payload.motions.filter(motion => motion.source === 'bundled').length;
+  eq(service.describe().motionCount, packSize + 1,
+    `describe() counts the motions (the fixture plus the ${packSize}-clip bundled pack)`);
   // +1 for the bundled SampleModel, which is in every catalog since 2026-10-10.
   eq(service.describe().modelCount, 2, 'describe() still counts the models (the fixture plus the built-in)');
   eq(service.assetRoutes.motions, '/vrmpet3d/motions', 'assetRoutes names the motion catalog route');
@@ -1508,8 +1825,8 @@ group('10b. imported motion directories over HTTP');
   eq(state.status, 200, 'GET /vrmpet3d/motions answers with the imported list');
   eq(state.payload.importedDirs.length, 0, 'a first run imports no motion directory');
   eq(state.payload.catalogFile, resolve(scratch), 'the route names the file it persists to');
-  eq(state.payload.motions.length, 1, 'the configured directory is scanned');
-  eq(state.payload.motions[0].name, 'base.vrma', 'and lists the motion in it');
+  eq(userMotions(state.payload.motions).length, 1, 'the configured directory is scanned');
+  eq(userMotions(state.payload.motions)[0].name, 'base.vrma', 'and lists the motion in it');
 
   // The import is live on the next read — no restart, which is the whole point of this list.
   const added = await post({ add: importMotions });
@@ -1521,7 +1838,7 @@ group('10b. imported motion directories over HTTP');
   const again = await get();
   ok(again.payload.motions.some((motion) => motion.name === 'vrmpet3d-wave.vrma'),
     'and in the next read too, so the import is live rather than reported');
-  eq(again.payload.motions.length, 2, 'both directories are scanned, and neither is duplicated');
+  eq(userMotions(again.payload.motions).length, 2, 'both directories are scanned, and neither is duplicated');
   ok(again.payload.motionDirs.includes(resolve(baseMotions))
     && again.payload.motionDirs.includes(resolve(importMotions)),
   'the dirs in force are the configured ones plus the imported ones');

@@ -253,6 +253,29 @@ const PROBE = `
   function round(value) { return Math.round(value * 10000) / 10000; }
   function quatArray(q) { return [round(q.x), round(q.y), round(q.z), round(q.w)]; }
 
+  /**
+   * The angle between two quaternions, measured on the ROTATIONS they describe
+   * rather than on the numbers stored in them.
+   *
+   * THREE.Quaternion.angleTo does NOT normalise its operands: it takes the raw dot
+   * product, so two quaternions describing the SAME rotation but carrying a length
+   * of 0.9996 read as 4.59 degrees apart. That is not hypothetical here:
+   * core.aimDownQuaternion returned a non-unit axis until 2026-10-12, which made
+   * the dropped-arm stance non-unit, and this probe reported the length difference
+   * as a pose residual and failed its two rest-pose checks on every clip that
+   * drives an arm. The checks are named after the rotation, so the length is
+   * divided out: a pose regression cannot hide behind a scale factor again.
+   */
+  function rotationBetween(a, b) {
+    var dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    var lenA = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w);
+    var lenB = Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z + b.w * b.w);
+    if (!(lenA > 0) || !(lenB > 0)) return 0;
+    var cosine = Math.abs(dot / (lenA * lenB));
+    if (cosine > 1) cosine = 1;
+    return 2 * Math.acos(cosine);
+  }
+
   var V = globalThis.__VRMPET3D_VENDOR__;
   var C = globalThis.__VRMPET3D_CORE__;
   // lib/scene.js publishes a BAG of exports, not the constructor itself, so the
@@ -371,10 +394,13 @@ const PROBE = `
           return { entry: { name: node.name, node: node }, q: node.quaternion.clone(), p: node.position.clone() };
         });
       }
+      // Every angle here goes through rotationBetween (see its comment at the top
+      // of the probe): THREE's angleTo would fold a quaternion's LENGTH into the
+      // answer and invent a residual that is not in the pose.
       function margins(before, after) {
         var worst = { name: null, angle: 0, position: 0, before: null, after: null };
         for (var i = 0; i < before.length; i++) {
-          var angle = before[i].q.angleTo(after[i].q);
+          var angle = rotationBetween(before[i].q, after[i].q);
           var position = before[i].p.distanceTo(after[i].p);
           if (angle > worst.angle || (angle === worst.angle && position > worst.position)) {
             worst = {
@@ -922,7 +948,7 @@ const PROBE = `
               var headTurn = function () {
                 if (!head || !rest) return 0;
                 // How far the head is from its rest pose, in radians: 0 means "not following anything".
-                return rest.angleTo(head.quaternion);
+                return rotationBetween(rest, head.quaternion);
               };
               scene.motion.setGaze({ yaw: 0.6, pitch: 0.2 });
               scene.tick(0.1);
@@ -1285,6 +1311,76 @@ const PROBE = `
               check('and a clip can refuse the gaze in one state without refusing it in another', function () {
                 return clipRefused === true && refusedInResting === true && allowedInCelebrate === true
                   && allowedAgain === true;
+              });
+
+              /**
+               * ---- Phase D6b: a face that is showing something does not blink ----
+               *
+               * The operator's request (2026-10-09 late, restated 2026-10-12): "当模型脸上有表情（专门设置或者
+               * 动作自带表情时），暂停眨眼". The blink and the expression shapes drive the SAME eyelid morphs, so a
+               * blink during an expression is not a blink — it is the expression dropping and coming back for a
+               * tenth of a second.
+               *
+               * The two clip-borne sources (a per-clip expression, and the 表情 table's emotion reactions) were
+               * already gated. The HAND-SET one — preferences.expressions.weights, which the settings window's
+               * 表情 preview writes and which a stored configuration carries — was not, and that is what this
+               * measures. The blink is forced DUE before each half so the test cannot pass by the timer simply
+               * not having come round yet.
+               */
+              var pinnedBlink = function () {
+                var originalRandom = scene.random;
+                scene.random = function () { return 0.5; };
+                scene.preferences.expressions.blink = { enabled: true, minSeconds: 0.5, maxSeconds: 0.5 };
+                scene.expressionState.nextBlinkAt = 0;
+                scene.preferences.expressions.weights = { happy: 1 };
+                runFrames(0.6);
+                var whilePinned = {
+                  paused: scene.blinkState().paused,
+                  blinking: scene.expressionState.blinking === true,
+                  happy: scene.expressionTargets().happy,
+                  pinned: scene.faceIsPinned(),
+                };
+                // Cleared: the same due blink must now happen, so this cannot pass by blinking having stopped.
+                // A blink is over in ~0.14 s and blinking is a latch that clears when it ends, so what is
+                // watched is whether a blink WEIGHT ever appeared inside the window.
+                delete scene.preferences.expressions.weights.happy;
+                scene.expressionState.nextBlinkAt = 0;
+                var sawBlinkAfterClear = false;
+                for (var watchFrame = 0; watchFrame < 30; watchFrame += 1) {
+                  scene.tick(0.1);
+                  if (scene.blinkState().weight > 0) sawBlinkAfterClear = true;
+                }
+                var afterClear = {
+                  paused: scene.blinkState().paused,
+                  sawBlink: sawBlinkAfterClear,
+                  happy: scene.expressionTargets().happy,
+                  nextAt: scene.expressionState.nextBlinkAt,
+                };
+                scene.expressionState.blinking = false;
+                scene.expressionBehaviour.blink = 0;
+                scene.preferences.expressions.blink = { enabled: true, minSeconds: 2, maxSeconds: 6 };
+                scene.expressionState.nextBlinkAt = null;
+                scene.random = originalRandom;
+                return { whilePinned: whilePinned, afterClear: afterClear };
+              };
+              var pinned = pinnedBlink();
+              report.info.phaseD.pinnedExpression = pinned;
+              check('a hand-set expression pauses the blink', function () {
+                return pinned.whilePinned.paused === true
+                  && pinned.whilePinned.blinking === false
+                  && pinned.whilePinned.happy === 1;
+              });
+              check('and clearing it lets the due blink happen', function () {
+                return pinned.afterClear.paused === false && pinned.afterClear.sawBlink === true
+                  && pinned.afterClear.happy === undefined;
+              });
+              check('the blink expression itself is not treated as an expression', function () {
+                // A pinned blink owns the eyelids (a wink); it must not suppress the timer that also owns them.
+                var before = scene.faceIsPinned();
+                scene.preferences.expressions.weights = { blink: 0.5 };
+                var whileBlinkPinned = scene.faceIsPinned();
+                delete scene.preferences.expressions.weights.blink;
+                return before === false && whileBlinkPinned === false;
               });
               return null;
             });

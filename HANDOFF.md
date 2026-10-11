@@ -7,10 +7,13 @@ anything.
 **▶ NEXT SESSION, in the operator's own order (§3):** finish today's install and run the first LIVE pass (one reload
 of the DSH page is the operator's click, §2) → 「继续修复状态显示」, which still needs a reproduction → 碎碎念 to the
 model with the TIME plus the greeting feature (早/中/晚, 吃饭了没有, 睡觉了没有, 辛苦了) → the VRMA motion pack: it is
-committed and shipping, and what is left is more clips, the rest-pose defect that stops them driving default states
-today, and the bundled-motions wiring behind it.
+committed and shipping, and the rest-pose defect that was going to stop it driving default states is FIXED (§3 item 4;
+it was in this plugin's maths, not in the clips), and the folder is now a BUNDLED motion source that needs no import —
+what is left there is more clips, and the operator's own state→clip mapping, which is one manifest block.
+**`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
+and it needs committing with the others.
 
-**The tree is green: 9 suites, 1945 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2091 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -161,46 +164,130 @@ greeting feature, then another batch of VRMA.
    else. Tests: `verify.mjs` (the time formatting, the greeting table, the source rule), `verify-model.mjs` (the
    instruction on the wire carries the time), `build/probe/client-test.js` (the local line still stands while the
    model thinks).
-4. **THE VRMA MOTION PACK — committed, and one measured defect to fix before it drives default states.** Operator,
+4. **THE VRMA MOTION PACK — committed, shipping, and the rest-pose defect is FIXED.** Operator,
    2026-10-12, verbatim: 「这是我自己设计的要随插件分发的动作包，没有版权问题，我只是构造的很慢，所有动作都配置好后，
    我还要把这些都配置到默认状态里，所以都要上传，要随插件分发。」
 
    So this is settled: the pack is the operator's own work, it belongs in the repository, and it SHIPS with the plugin.
-   It lives in `assets/motions/` (committed 2026-10-12 together with its own README, which records the provenance, the
-   licence position and the caveat below), and `assets` is already listed in `package.json`'s `files[]`, so a packed
-   install carries it. What is still to come, in the operator's own order: **more clips** (they generate them slowly),
-   and then **wiring the folder up as a bundled motion source and mapping clips to default states**.
+   It lives in `assets/motions/` (committed 2026-10-12 together with its own README, which records the provenance and
+   the licence position), and `assets` is already listed in `package.json`'s `files[]`, so a packed install carries it.
+   What is still to come, in the operator's own order: **more clips** (they generate them slowly), and then **wiring
+   the folder up as a bundled motion source and mapping clips to default states**.
 
-   | file | bytes | channels | drives |
+   **The pack is filed BY STATE as of 2026-10-12 (second pass), and it is no longer three loose files.** Operator,
+   verbatim: 「把对应的动作直接解析到指定目录，这样在选择动作的时候就不会出现很长一串，另外加一个working的文件夹，对应工作中的状态。」
+   and 「你把对应的文件夹名字改成你先前的英语，我的英语不是那么标准。」 So the folder names ARE the state keys:
+   `idle/` `working/` `attention/` `success/` `fail/` `offline/`, declared in the manifest's `stateFolders`, and a
+   state's picker offers **only its own folder's clips**. `dance/` is deliberately mapped to NO state — it is the
+   holding folder for the dance clips below, and giving it to a state is a one-line manifest edit
+   (`"resting": ["idle", "dance"]`). A `stateFolders` value may be a folder name **or a list of them**.
+
+   **COMPRESSED CLIPS (`.vrma.br`) — brotli, and the LZMA2 decoder is NOT in the path.** Operator: 「因为舞蹈的VRMA特别大，
+   我需要你引入LZMA2解压缩的能力，我会把舞蹈VRMA压缩，用的时候直接解压缩到内存使用，而不是直接调用文件。」 Measured first,
+   because it decided the answer: **Node's `zlib` cannot decode LZMA** (`unzipSync` / `inflateSync` / `gunzipSync` all
+   return `Z_DATA_ERROR` on a file the reference liblzma wrote), and this plugin has NO npm dependencies — so LZMA2
+   would mean maintaining a hand-written decoder. A pure-JS LZMA2 decoder (one module in `lib/`, driving itself
+   against the reference liblzma from one script in `scripts/`) was written in that pass and **did not decode real
+   binary content correctly**: the XZ container, the LZMA2 chunk framing, raw chunks and simple streams all
+   round-tripped, and
+   CRC/corruption/bomb cases refused properly, but any realistic payload — a real VRMA, or anything with float32
+   or JSON structure — diverged after a few symbols on the matched-literal path and raised a bad-distance error.
+   It was therefore never wired in: a decompressor that returns plausible garbage hands the renderer a malformed
+   model, which is worse than not supporting the format. **The operator chose to DELETE both files (2026-10-12)
+   rather than carry unfinished code**, so LZMA2 is not supported by this build at all. Brotli is in Node and in
+   every Chromium the pet runs in, so the operator chose brotli, and the cost is about 10%: on their first dance
+   clip **LZMA2 2,401,262 against brotli 2,836,574** out of 8,080,556 raw — 46% against 35.1%, both
+   byte-identical. Whoever wants that 10% back is writing the decoder again, and the two traps are worth keeping:
+   the LZMA2 chunk size fields are encoded as `N - 1` (both of them, and the unpacked size's high five bits ride in
+   the control byte RAW rather than as a count), and the `posDecoders` tree is reverse-indexed rather than indexed
+   by the growing node.
+
+   How compression works end to end: `<name>.vrma.br` is accepted by `core.motionFormatOfName`, so a compressed clip
+   is a **`vrma`** to every reader (the format sets stay disjoint, nothing is sniffed) and the catalogue adds
+   `compressed: true` with the FILE's size; if `x.vrma` and `x.vrma.br` sit in one folder, the archive REPLACES the
+   plain file so one animation is never offered twice. The **host** unpacks in `createMotionHandler`
+   ([lib/index.js](lib/index.js)) with [lib/brotli.js](lib/brotli.js), so `/vrmpet3d/motion?m=` always answers with
+   plain VRMA bytes, `model/gltf-binary` and the UNPACKED length, and the renderer keeps its one load path. One
+   unpacked clip is kept per handler (bounded, so the pack cannot sit in the host's heap), and a clip that cannot be
+   unpacked is a **500 with the reason**, never a truncated 200 that would be reported as malformed clip content. A
+   bomb refuses on `maxOutputLength`. [scripts/compress-motions.mjs](scripts/compress-motions.mjs) is the operator's
+   tool (`npm run pack:motions`); it refuses to write an archive that does not decompress back to the same bytes. The
+   panel says 已压缩 and the note counts them, because a 2.7 MB entry that plays as an 8 MB animation otherwise reads
+   as a broken number.
+
+   | folder | clips | state | git |
    |---|---|---|---|
-   | `coolIdleGlance.vrma` | 20,644 | 37 | the humanoid rig, plus `J_hips.translation` and the off-rig `E_neutral` / `E_blink` |
-   | `innocentStandIdle.vrma` | 18,984 | 35 | the humanoid rig, plus `J_hips.translation` and the off-rig `E_relaxed` / `E_blink` |
+   | `idle/` | 16 (the three originals moved in here) | `resting` | committed, moves pending |
+   | `working/` | 0 — created for the 工作中 clips, and it declares the state | `working` | empty dir (git ignores it) |
+   | `attention/` | 3 | `waiting` | committed |
+   | `success/` | 3 | `done` | committed |
+   | `fail/` | 2 | `error` | committed |
+   | `offline/` | 1 | `offline` | committed |
+   | `dance/` | 1 clip, stored compressed only (`.vrma.br`) | **NONE — deliberately unmapped** | the archive is the only copy |
 
-   Both are valid VRM animations (GLB magic, a parseable JSON chunk, `VRMC_vrm_animation` 1.0 over 44 humanoid bones),
-   and both really drive a real model: the rig moves, the rotations stay finite, and the RAW skinned bone follows the
-   clip — measured with `scripts/verify-motion.mjs` against the bundled VRM.
+   `assets/motions/coolIdleGlance.vrma` and `innocentStandIdle.vrma` show as `D` in git status because they MOVED into
+   `idle/`; they are not lost. On the operator's instruction (2026-10-12) the `.7z` and the uncompressed `.vrma` were DELETED, so `dance/` holds
+   one 2.71 MB archive and the folder ships at that size instead of 12.9 MB.
 
-   **THE DEFECT, and it has to be fixed before these drive default states: stopping a clip does not fully restore the
-   rest pose.** Both files drive channels that are NOT on the humanoid rig (`E_*`), and the reset
-   (`resetAvatarPose` → `humanoid.resetNormalizedPose()` in [lib/scene.js](lib/scene.js)) covers only the humanoid rig —
-   so the model keeps a leftover offset. That is the "frozen in the clip's last frame" family of bug this project has
-   already fixed once, and it is the difference between a clip pack that is a feature and one that makes the pet's pose
-   wrong after every drag. The measurement: `scripts/verify-motion.mjs` fails exactly its two rest-pose checks on these
-   two files ("a drag state drops the clip and returns to the procedural pose", "clearMotions() returns the model to
-   its rest pose") and passes all 61 on a humanoid-only clip; **the same failure reproduces on the pre-rename commit**,
-   so it is a property of the clips and not of the rename. Two fixes, not exclusive:
-   * **export the clips without the `E_*` tracks** — they address nodes a VRM humanoid retarget has no use for;
-   * **snapshot and restore the WHOLE skeleton on stop** — what the removed MMD path used to do for its own rigs, which
-     is the general fix and makes any future clip behave.
-   Whichever is chosen, the four drag/fall assertions in `verify-browser.mjs --page client-test` must stay green, and
-   each new clip has to be re-checked by hand: `scripts/verify-motion.mjs --model assets/models/SampleModel.vrm
-   --motion assets/motions/<clip>.vrma` (that script is NOT wired into any suite, so nothing else will run it).
+   All the original clips are valid VRM animations (GLB magic, a parseable JSON chunk, `VRMC_vrm_animation` 1.0 over
+   humanoid bones), and they really drive a real model: the rig moves, the rotations stay finite, and the RAW skinned
+   bone follows the clip — measured with `scripts/verify-motion.mjs` against the bundled VRM. **The dance clip passes
+   all 64 checks of that script after being unpacked from its archive** (2026-10-12), which is what proves the archive
+   holds a real animation and not merely bytes that decompress.
 
-   **And the wiring, which is a real feature and not just files.** The motion catalogue scans only
-   `config.motionDirs` plus the imported directories, so NOTHING under `assets/` is offered out of the box today — a
-   bundled motions source is new code, the way `assets/models` already works for models. Each clip also needs 循环/单次
-   (a `vrmpet3d-motions.json` manifest beside the files, or the per-clip row in 状态与动作), and then the default
-   mapping the operator wants: which states get which clips when a user has configured nothing.
+   **THE DEFECT IS FIXED, AND IT WAS NEVER IN THE CLIPS.** The previous state of this file recorded a measured
+   "stopping a clip does not fully restore the rest pose", attributed to the `E_*` channels being off the humanoid rig
+   that `resetAvatarPose` → `humanoid.resetNormalizedPose()` covers. **That attribution was wrong**, and the way it was
+   disproven is worth keeping: the probe failed the same two checks on the repository's OWN all-humanoid test clips
+   (`build/fixtures/vrma/vrmpet3d-wave.vrma`, `-rest.vrma`, `-stretch.vrma`, `-happy-hop.vrma`, `-look-around.vrma`,
+   `-weight-shift.vrma`), **none of which contains an `E_*` track at all**, while `vrmpet3d-test.vrma` — which drives
+   only hips and head and **no upper arm** — passed all 61. The shared property that mattered was *driving an upper
+   arm*, not the `E_*` channels.
+
+   The real cause was in this plugin. `core.aimDownQuaternion` built its axis as the cross product of the limb
+   direction and the target, whose LENGTH is `sin(angle)`, and then called `normalize3` **only as a truthiness test**,
+   returning the raw cross product. Unit only when the limb is exactly perpendicular to down; measured on
+   `SampleModel.vrm` the axis came back **0.9989177966483648** long (arm 87.3342° from perpendicular). The caller turns
+   that straight into a quaternion and three.js's `setFromAxisAngle` does **not** normalise, so the pet's arm stance
+   was **|q| = 0.999599**. Nothing the eye could see broke — three.js normalises on the way to the matrix — but the
+   probe read it as a pose: `Quaternion.angleTo` does not normalise either, so it measured `acos(1 − 0.0008)` and
+   reported **4.59°**, with `dot = |q|² = 0.9991972774074883` being the giveaway that the two "differing" quaternions
+   were byte-identical. The arms were always in the correct pose; the pose *measurement* was wrong.
+
+   Fixed on both sides, and both halves matter:
+   * [lib/core.js](lib/core.js) `aimDownQuaternion` now **returns the normalised cross product** (`unitCross`), so the
+     axis is unit by contract — the `@returns` says so. A new assertion in group 12 of `verify.mjs` pins it with the
+     exact 0.998918-length geometry this model produced.
+   * [scripts/verify-motion.mjs](scripts/verify-motion.mjs) now measures with `rotationBetween()`, which divides the
+     quaternion lengths out, instead of `Quaternion.angleTo`; so a scale factor can never masquerade as a pose
+     regression again. This did NOT need the `E_*` tracks exported, and it did NOT need a whole-skeleton snapshot —
+     both former "ways out" are withdrawn as unnecessary for this bug.
+
+   Re-check any new clip by hand, because that script is NOT wired into any suite and nothing else will run it:
+   `scripts/verify-motion.mjs --model assets/models/SampleModel.vrm --motion assets/motions/<clip>.vrma`.
+
+   **And the wiring — DONE 2026-10-12, and it was new code as predicted.** `assets/motions` is now a BUNDLED
+   motion source: `buildMotionCatalog` scans it FIRST with `source: 'bundled'`, exactly as `buildCatalog` scans
+   `assets/models`, so the pack is offered out of the box with nothing imported. `/vrmpet3d/motions` reports
+   `bundledDir` (the parallel of the model catalogue's key) and `motionDefaults`; a user directory naming the
+   bundle is not scanned twice, and a user clip sharing a bundled file name is still listed, told apart by
+   `source`. Per-clip 循环/单次 comes from this folder's own `vrmpet3d-motions.json`, which now exists and
+   declares all three clips as loops.
+
+   **What is left for the operator, and only this:** the pack's manifest carries an EMPTY `defaults` block —
+   `{ "resting": ["idle.vrma"], ... }`, keyed by state name, valued by file name relative to `assets/motions`.
+   It ships empty on purpose: nothing plays without a mapping, so the pack cannot change a user's pet behind
+   their back. Filling it in needs **no code change**; the resolution rule is
+   `core.motionMapWithDefaults`, which reads at render time and never persists (an explicit choice wins,
+   including an explicitly cleared state, and a name that is not in the catalogue maps nothing).
+   Suite coverage: `verify.mjs` (the motion-map group), `verify-model.mjs` group 5b (the bundled pack), and the
+   two surfaces' `effectiveMotions`.
+
+   **The 状态与动作 note now names the pack** (`lib/config-page.js`, `renderMotions`): "其中 N 支随插件分发
+   （assets/motions），不需要导入。" Without it, a tick list that already holds three clips reads as "somebody
+   imported these", and a user trying to remove them through 动作导入 finds nothing to remove — that list only
+   knows the directories THEY imported. Nothing is asserted about that sentence; `verify-desktop.mjs` covers the
+   section's controls, which is why it stayed green either way.
 
 ## 4. Frozen zones — do not touch these on the way past
 
@@ -240,7 +327,7 @@ Two habits that are not optional:
   [lib/menu.js](lib/menu.js): `node scripts/client-chunks.mjs`. They are committed copies, and a stale one is a
   SILENT failure — the browser half then disagrees with the host half. The cheap check is
   `node scripts/client-chunks.mjs --check` (under a second).
-* **Report what actually ran**, e.g. "core: 1018 passed". Never "all green" from a partial run.
+* **Report what actually ran**, e.g. "core: 1036 passed". Never "all green" from a partial run.
 
 ## 6. Where things are
 
@@ -261,6 +348,7 @@ Two habits that are not optional:
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the design in depth: why the split is where it is, the vendors, the traps |
 | [docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md) | what a model/motion file must be, and the RETIRED MMD chapters |
 | [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm) | the ONE bundled model (redistributable; see its README) |
+| [assets/motions/](assets/motions/) | the bundled `.vrma` pack, scanned as a bundled motion source; its `vrmpet3d-motions.json` declares each clip's 循环/单次 and the (currently empty) default state mapping |
 
 ## 7. Environment facts for THIS machine
 
@@ -268,11 +356,10 @@ Two habits that are not optional:
   is at `http://127.0.0.1:19387`, which is also where the floating window's page is served (`/vrmpet3d/window`) — the
   address `check-profile.mjs` and the live probes use;
 * the operator's own VRMs live in `F:\SynologyDrive\FatFish-pet\Models` and are already imported (four models in the
-  picker, §2). No motion directory is imported yet — the two clips in `assets/motions/` are committed but not imported,
+  picker, §2). No motion directory is imported yet — the clips in `assets/motions/` are committed but not imported,
   so the picker does not offer them yet (§3 item 4);
-* **the operator's motion pack lives in `assets/motions/` and is COMMITTED** (`coolIdleGlance.vrma`,
-  `innocentStandIdle.vrma`, plus the folder's README) — it ships with the plugin; see §3 item 4 for the defect to fix
-  before it drives default states;
+* **the operator's motion pack lives in `assets/motions/`** (`coolIdleGlance.vrma`, `innocentStandIdle.vrma`,
+  `idle.vrma` — the last one still UNTRACKED, plus the folder's README) — it ships with the plugin; see §3 item 4.
 * the installed DSH archive is `F:\DeepSeek\Harness\resources\app.asar`; the chunk-delivery suite finds it by
   itself, and `VRMPET3D_DSH_ASAR` is only needed for an unusual install path;
 * the floating window borrows the Electron runtime from that installation by HARD LINKS into
@@ -317,6 +404,42 @@ Two habits that are not optional:
     folder; renaming the folder or the package without §2 breaks the install.
 12. **Two pets cannot both own `shell.overlay`.** `dsh-plugin-whale-pet` must stay disabled while this one is
     active — an install was silently dropped exactly this way once.
+13. **A pose comparison must divide the quaternion lengths out.** THREE's `Quaternion.angleTo` does NOT normalise its
+    operands, so two quaternions describing the SAME rotation but carrying a length of 0.9996 read as **4.59°** apart.
+    That is how a real maths bug in `core.aimDownQuaternion` (it returned a raw cross product, whose length is
+    `sin(angle)`, instead of the normalised axis) presented itself as a clip defect, and how a wrong diagnosis survived
+    into three documents: the probe failed its two rest-pose checks on every clip that drove an **upper arm** — all the
+    pack clips AND four all-humanoid test fixtures, none of which contains the `E_*` channel that was blamed.
+    `scripts/verify-motion.mjs` now measures with `rotationBetween()`. Two habits follow: when a measurement says a pose
+    is wrong, print the **dot product** next to the angle (byte-identical quaternions with `dot ≈ |q|²` are the tell),
+    and before believing a defect is in the DATA, reproduce it with a fixture that lacks the suspect property — here
+    `build/fixtures/vrma/vrmpet3d-test.vrma` (no upper-arm track) passed 61/61 the whole time.
+14. **A checkbox with no `value` attribute is worth the string `'on'`.** That is not a curiosity: it is how the
+    状态与动作 picker stored a clip id the operator saw as 「on（不在动作目录中）」, and how one more junk id per ticked
+    clip pushed the last tick out of the per-state list until the last clip 「无法选中」. `onMotionToggle` in
+    `lib/config-page.js` collected EVERY checked checkbox in the state's row — the 凝视 switch beside each tick box
+    is one, and the discarded stale-id rows are two. It now collects `.picks label.pick input[type=checkbox]` only.
+    Two habits follow: **when a collect step is shared with controls that are not the thing being collected, scope
+    it by the label it owns**, and **never let a cap drop input silently** — `maxPerState` (16) was hit exactly by a
+    16-clip library, and the drop was invisible, so it is 64 now and the panel SAYS so when it bites.
+    `core.MOTION_LIMITS`, the stale-id rows, and the published `motions.stateIds` are the pieces. Regression
+    coverage: `desktop/probe-motion-picker.js` (driven by `desktop/main.js`, asserted in `verify-desktop.mjs`, which
+    ticks the last clip in the REAL page and checks no stored id is a non-clip).
+15. **`assets/motions/` is the OPERATOR'S library, and `files: ["assets"]` means it SHIPS.** Its contents are data,
+    not fixtures: this repository's suites must not assert a clip count or a clip name from it (group 5b asserts the
+    shape — source, resolvable ids, and the pack's own manifest — and compares `describe().motionCount` against what
+    the route just listed). As of 2026-10-12 it is **25 clips / ~2.5 MB in six per-state folders** (`idle/ working/
+    attention/ success/ fail/ offline/`), and the folders ARE the state mapping: the manifest's `stateFolders` decides
+    which clips each state's picker offers, so **moving a clip into another folder is how it is given to another
+    state**. `verify-motion.mjs` is the tool that re-checks a clip; nothing runs it automatically. `idle/idle2.vrma`
+    and `idle/idle3.vrma` are byte-identical, so one state lists two names for one animation.
+16. **A manifest key is a PATH RELATIVE TO ITS OWN FOLDER, and a wrong key is silent.** `clips` and `defaults` in
+    `assets/motions/vrmpet3d-motions.json` are keyed by the same relative name the catalogue reports — `idle/x.vrma`,
+    not `x.vrma`. When the pack was reorganised into per-state folders, the three committed keys stopped matching
+    anything, and because every clip's `loop` was `true` (the default) nothing LOOKED broken: a `loop: false` there
+    would simply have been ignored — the "declared one-shot that loops anyway" defect the flag exists to prevent.
+    **Re-check the keys after any reshuffle** (`git status` showing a `.vrma` as `D` beside an untracked folder is the
+    tell), and note `verify-motion.mjs` never reads the manifest, so it cannot catch this.
 
 ## 9. What is NOT proven
 

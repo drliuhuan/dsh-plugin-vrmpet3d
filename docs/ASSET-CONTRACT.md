@@ -24,6 +24,20 @@ author's intent. So:
 The same rule covers **motion files** (`.vrma`, the only format this build plays — see §5), which are
 licensed separately from models.
 
+### A clip may be stored compressed: `<name>.vrma.br` (2026-10-12)
+
+A motion file may also arrive as **`<name>.vrma.br`** — the same VRMA, brotli-compressed. The operator's dance
+clips are megabytes (their first is 8.0 MB), so the pack stores them compressed and the **host unpacks them into
+memory** on the way to the renderer (`createMotionHandler` in `lib/index.js`, `lib/brotli.js`). Three consequences
+worth knowing:
+
+* the clip is still a **`vrma`** to every reader (`core.motionFormatOfName` looks through the suffix), so the format
+  sets quoted below are unchanged and the model/motion split is still decided by extension, never by sniffing;
+* if both `x.vrma` and `x.vrma.br` sit in one folder, **only the archive is catalogued** — one animation, one entry;
+* the compression is **brotli, not LZMA2**, because Node's `zlib` cannot decode LZMA and this plugin has no npm
+  dependencies. See `assets/motions/README.md` for the measurements and for
+  `scripts/compress-motions.mjs`, which is how a clip is packed.
+
 ### MMD is not supported (2026-10-12), and the MMD chapter below is kept as history
 
 This plugin used to load PMX/PMD models and play VMD motions. It does not any more: the operator's
@@ -143,8 +157,10 @@ after one 8-second period, so the loop has no seam. That is the default for ever
 model, and it needs no asset at all.
 
 **Authored motion is opt-in, VRMA-only, and per state.** You may point the plugin at `.vrma` files and
-assign one to each session state; any state you leave alone keeps the procedural idle. Nothing is played
-until you choose something — see "Authored motion" below.
+assign one to each session state; any state you leave alone keeps the procedural idle. The plugin SHIPS one
+pack of them in `assets/motions/` (see its own README), and those are catalogued from the first scan — but
+they still play only where a state is mapped to them, and the pack's manifest ships that mapping empty. Nothing
+is played until you choose something — see "Authored motion" below.
 
 | Model kind | Driven by the plugin | Left alone |
 |---|---|---|
@@ -285,6 +301,14 @@ extension sets are kept disjoint on purpose (`['.vrm', '.glb', '.gltf']` against
 must never be offered as a model, and a model must never be offered as a motion, so that a mix-up fails at
 the catalogue rather than deep inside a loader. A `.pmx`/`.pmd`/`.vmd` in either directory is simply not
 catalogued — no loader is built that could be handed one.
+
+**Two directories are always scanned, and they belong to the plugin, not to you:** `assets/models` and
+`assets/motions` inside the installed plugin. The first is where the one redistributable sample model comes
+from; the second is the operator's own `.vrma` pack, which is why those clips appear in 状态与动作 with nothing
+imported. Entries from them are tagged `source: 'bundled'`, and a directory you import is never merged into or
+hidden by one — a clip of yours with the same file name is listed beside the bundled one. A clip in the pack may be
+stored compressed, as `<name>.vrma.br` (see the compression note above); the same suffix is accepted in a directory
+you import.
 
 Scanning is bounded — 4000 entries and 8 directory levels — and skips dotfiles,
 `node_modules`, `.git`, `.svn` and `__pycache__`. Names appear on 通用设置's import rows

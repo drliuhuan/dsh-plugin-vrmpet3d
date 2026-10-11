@@ -9,7 +9,9 @@ How the pieces fit, and why each boundary sits where it does.
   |  session events --> VrmPet3DBoundaryHub --> vrmpet3d service ----------+--+
   |                                                                  |  |
   |  profile config --> buildCatalog(modelDirs)  --> /vrmpet3d/asset ---+--+--+
-  |                 \-> buildCatalog(motionDirs) --> /vrmpet3d/motion --+--+--+
+  |   assets/models ---/  (bundled, always scanned)                       |  |
+  |                 \-> buildMotionCatalog(motionDirs) --> /vrmpet3d/motion --+--+
+  |   assets/motions --/  (bundled, always scanned)                       |  |
   +------------------------------------------------------------------+  |  |
                                                                         |  |
   +---------------------- DSH browser page --------------------------+   |  |
@@ -163,7 +165,7 @@ plugin's own script is served through a combo URL whose path is `/plugins/`.
 `lib/core.js` contains the state machine, fall physics, framing maths, idle motion,
 motion-format detection and preference cleaning, and imports neither DOM nor
 three.js. That is not tidiness for its own sake: those are the parts most likely to
-be subtly wrong, and keeping them pure lets the core suite's 1018 checks run in well
+be subtly wrong, and keeping them pure lets the core suite's 1036 checks run in well
 under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
@@ -544,6 +546,26 @@ waiting for a one-in-five to come round. The blink also ramps IN from open: the 
 to 1 on the starting frame, which snapped the eyes shut for one frame — invisible on a single blink at
 60 fps, and a stutter in the middle of a double.
 
+**A face that is showing something does NOT blink, and "showing something" has THREE sources.** The blink and the
+expression shapes drive the same eyelid morphs, so a blink during an expression is not a blink — it is the
+expression dropping and coming back for a tenth of a second (operator's own words, 2026-10-09 late and again
+2026-10-12: 「当模型脸上有表情（专门设置或者动作自带表情时），暂停眨眼」). `advanceExpressions` therefore gates the START
+of a blink only, on any of:
+
+* a **clip-borne** face — the per-clip 表情/口型 configured in 状态与动作 (`currentFace`);
+* the **表情 table's** emotion, while a reaction or a held mood has a weight (`expressionBehaviour.emotionWeight`);
+* a **hand-set** weight in `preferences.expressions.weights` (`Scene.faceIsPinned`, added 2026-10-12).
+
+That third one was the gap: it is the most persistent of the three (a stored configuration and the settings
+window's 表情 preview both write it), and `expressionTargets` writes it into the morphs every frame, so blinking
+over it is the same defect. The blink preset names (`blink`, `blinkLeft`, `blinkRight`) are deliberately NOT
+counted by `faceIsPinned`: a pinned `blink` is a deliberate wink that owns the eyelids itself, and the behaviour
+writes its own weight only where the user has not pinned one. A pinned weight of **0** does count, because leaving
+it out would let a deliberate "eyes shut" be blinked open. Only the start is gated: a blink already running
+finishes (cutting it would snap the eyes open), and the schedule is left alone, so a blink that came due while the
+face was busy happens on the first clear frame. `blinkState().paused` reports all three sources, because it is the
+readout a person uses to answer "why is it not blinking".
+
 **Both surfaces play authored motion, and that was not always true.** The app overlay loads a clip for each
 state the user assigned (`/vrmpet3d/motions` for the catalog, `/vrmpet3d/motion?m=<id>` for the bytes, `loadMotion`
 into the scene), and the floating window now runs the same path: filter the catalog by avatar family
@@ -560,6 +582,66 @@ is the imported one, and the two are unioned when the catalog is rebuilt — whi
 so an import is live on the next fetch instead of on the next DSH start. This exists because the alternative
 was "edit the profile config and restart the whole application to try one file", which is indistinguishable
 from the feature not working.
+
+**...and the plugin ships a motion pack, scanned first.** `assets/motions` is a bundled root, exactly as
+`assets/models` is for models, so the operator's own clips are offered from the first scan with
+`source: 'bundled'` instead of waiting for anyone to import a directory. `buildMotionCatalog` therefore builds
+`{ root, source }` pairs rather than bare paths, and `/vrmpet3d/motions` reports `bundledDir` beside
+`motionDirs` — the parallel of the model catalogue's own key. A user directory that names the bundled one is not
+scanned twice; a user directory holding a clip with the same relative name is still listed, and the two are told
+apart by `source`, because a user's file is never hidden.
+
+**...and the folder a clip sits in decides which state's picker offers it.** The pack's manifest carries
+`stateFolders` (`{ "resting": ["idle"], "working": ["working"], … }` — a state may name SEVERAL folders, and a
+bare string is normalised to a one-item list), `/vrmpet3d/motions` reports it, and the page
+offers each state only the clips under its folder. The operator's reasoning is the whole design: 「把对应的动作直接
+解析到指定目录，这样在选择动作的时候就不会出现很长一串」 — one picker listing every clip they have ever authored is
+unusable, and the folders were already the mapping they were keeping in their head. Consequences worth naming:
+
+* it is **strict** — a state's box set offers only its own folder, and a clip at the pack's ROOT belongs to no state
+  (it stays catalogued, so nothing is destroyed, but no state offers it);
+* a **ticked** clip from another folder is still DRAWN, because hiding a stored mapping reads as losing it;
+* a state with **no** `stateFolders` entry is offered the whole catalogue, so a host or pack that says nothing
+  behaves exactly as every build before this did — which is what makes the block safe to omit;
+* the folder comes from the catalogue's own relative name (`idle/x.vrma` → `idle`), so "which folder is this clip
+  in" has ONE answer rather than a slice the page and the scan each compute;
+* a declared folder that is empty is a STATE, not a broken mapping: the panel says so in words for that state.
+* `dance/` is the case the list form exists for: it holds the operator's dance clips and is mapped to NO state until
+  they say which one, so nothing plays a dance behind their back.
+
+**A clip may also arrive compressed, as `<name>.vrma.br`, and the HOST unpacks it.** Dance clips are megabytes (the
+operator's first is 8.0 MB), so the pack stores them brotli-compressed and `createMotionHandler` decompresses on the
+way out: the response to `/vrmpet3d/motion?m=` is always a plain VRMA with the GLB media type and the UNPACKED
+length, so the renderer keeps one load path and never learns a clip was packed. `core.motionFormatOfName` looks
+through the suffix, which is why a compressed clip is a `vrma` everywhere the format is asked about (nothing is
+sniffed, and the model/motion extension sets stay disjoint); the catalogue adds `compressed: true` and reports the
+FILE's size. **A compressed file replaces the uncompressed one beside it**, so one animation is never offered twice.
+Three refusals are deliberate rather than incidental: a clip that cannot be unpacked is a 500 NAMING the failure
+(a truncated 200 would be reported by `scene.loadMotion` as malformed clip content), a decompression bomb is cut off
+by `maxOutputLength`, and only ONE unpacked clip is retained per handler so the pack cannot sit in the host's heap.
+Brotli rather than LZMA2 is a measured decision — Node's `zlib` cannot decode LZMA and this plugin has no
+dependencies, and the hand-written LZMA2 decoder that was tried did not decode real binary content correctly, so it
+was DELETED rather than shipped unwired — and it is recorded in
+[assets/motions/README.md](../assets/motions/README.md), together with [scripts/compress-motions.mjs](../scripts/compress-motions.mjs),
+which is how a clip is packed.
+
+**A bundled clip's NAME is what a default refers to, never its id.** `mintMotionId` derives an id from the
+absolute path, so ids differ per profile and per machine, while the pack's own manifest travels with the clips.
+`core.motionMapWithDefaults(stored, defaults, catalog)` is the single implementation of that rule, and it is
+deliberately a READ-time merge: the resolved map is what the renderer and the panel act on, and the store keeps
+the user's own map. Three rules, each one the fix for a defect in its alternative:
+
+* **an explicit choice wins, including an explicit EMPTY one** — a state the user's map mentions is never
+  overridden, so unticking the last box in 状态与动作 is not undone on the next poll;
+* **a default resolves by name against the catalog just built** — a clip that is missing or renamed degrades to
+  "nothing mapped" rather than to a dangling id;
+* **nothing is persisted** — a default written back to the store would be indistinguishable from a choice on the
+  next load, which is what makes a default impossible to turn off.
+
+The pack ships its `defaults` block in `assets/motions/vrmpet3d-motions.json`; while it is empty (the state it
+ships in until the operator chooses a mapping) nothing plays without a mapping, and filling it in needs no code
+change. `readMotionDefaults` validates that block rather than trusting it: a state the session machine cannot
+reach, a duplicate, a non-name, or a backslash path is dropped, because this is a file a person hand-edits.
 
 **A state draws ONE clip from a LIST, at the moment it is entered.** The persisted map is
 `{ state: [id, ...] }`, and the canonical shape is a list even for one clip. Two things follow, and both are
@@ -578,7 +660,8 @@ contracts rather than conveniences:
   `setMotionIds` (the pure write both surfaces share) all read the old shape too.
 
 **`loop` is a property of the CLIP, carried by the catalog.** A motion directory may hold a
-`vrmpet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }`; `buildMotionCatalog`
+`vrmpet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }` (and, beside it, the
+`defaults` block described above); `buildMotionCatalog`
 reads it once per directory and every entry gains `loop` (absent means `true`, which is what every clip did
 before the flag existed). The page passes it to `scene.loadMotion(id, bytes, { loop })`, which is the only
 place that can turn it into `LoopRepeat, Infinity` or `LoopOnce`. A one-shot ends by **handing the pose
@@ -742,7 +825,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 1945 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
+Nine suites, 2091 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
 figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs` recomputes them. The
 design rule is that **each defect found during
 development got a test that would have caught it**, and several tests carry a
@@ -785,7 +868,7 @@ since 2026-10-12 it is kept on disk rather than wired in — together with
 fixture): both feed only a format `Scene.loadMotion` now refuses, so only the VRMA half of this paragraph
 still describes this build.
 
-The **1945** the docs quote is the sum of the suites that print an assertion count,
+The **2091** the docs quote is the sum of the suites that print an assertion count,
 plus one for each suite that reports a verdict or a hash instead (`load`, `vendor`).
 `docs` deliberately excludes its own assertion count: including it is circular,
 because that count depends on whether the documented total matched, so a single run
@@ -831,6 +914,20 @@ document is parsed and does not wait for external `file://` scripts, so a
   goes from **0** (horizontal, the model's rest) to **−.9662** on the normalized rig
   and the *skinned* bones follow. An authored clip overrides the stand while it plays,
   which is why the stand is re-applied on reset rather than baked in once.
+  * **`aimDownQuaternion` must return a UNIT axis, and it did not until 2026-10-12.**
+    The axis is the cross product of the limb direction and the target, whose length is
+    `sin(angle)` — unit only when the limb happens to be exactly perpendicular to down.
+    The old code called `normalize3` purely as a truthiness test and returned the raw
+    cross product, so the caller handed `setFromAxisAngle` (which does **not** normalise)
+    an axis scaled by `sin(angle)`, and the arm quaternion came out `|q| = 0.999599` on
+    `SampleModel.vrm` (arm 87.3342° from perpendicular). Nothing visible broke — three.js
+    normalises on the way to the matrix — but any consumer that treats a pose quaternion
+    as unit reads the length as a rotation. `verify-motion.mjs` did exactly that: its two
+    rest-pose checks compared two byte-identical quaternions with `Quaternion.angleTo`
+    and reported a **4.59° residual**, failing on every clip that drives an upper arm —
+    including all-humanoid test fixtures. Both halves are fixed: the maths returns a unit
+    axis, and the probe divides the lengths out (`rotationBetween`) so a scale factor can
+    never masquerade as a pose regression again.
 * **VRM bone writes must go through `humanoid.update()` — the procedural path now
   does, every frame.** three-vrm keeps the normalized humanoid nodes in a separate tree
   from the bones the mesh is skinned to. Without the sync, the idle writes land on a

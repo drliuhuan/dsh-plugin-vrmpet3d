@@ -2644,8 +2644,14 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     'duplicates and non-ids are dropped: the same clip twice would double its chance of being drawn');
   eq(core.cleanMotions({ resting: 'z'.repeat(900) }).resting[0].length, core.MOTION_LIMITS.idLength,
     'cleanMotions caps an id length');
-  eq(core.cleanMotions({ resting: Array.from({ length: 40 }, (_, i) => 'a' + i) }).resting.length,
+  eq(core.cleanMotions({ resting: Array.from({ length: 400 }, (_, i) => 'a' + i) }).resting.length,
     core.MOTION_LIMITS.maxPerState, 'cleanMotions caps how many clips one state may draw from');
+  // The cap has to be big enough for a real library: a state holding sixteen clips is an ordinary state, and
+  // when the cap was sixteen one more clip could not be ticked at all (operator report, 2026-10-12).
+  ok(core.MOTION_LIMITS.maxPerState >= 64,
+    `the per-state cap leaves room for a real clip library (${core.MOTION_LIMITS.maxPerState})`);
+  eq(core.cleanMotions({ resting: Array.from({ length: 16 }, (_, i) => 'a' + i) }).resting.length, 16,
+    'and sixteen clips in one state are kept in full');
 
   const withMotion = core.cleanPreferences({ motions: { resting: 'm1', held: 'no' } });
   same(withMotion.motions, { resting: ['m1'] },
@@ -2678,6 +2684,46 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     'a state the session machine cannot reach cannot be written');
   eq(core.setMotionIds({ resting: ['a1'] }, 'resting', ['a2']) === core.setMotionIds({ resting: ['a1'] }, 'resting', ['a2']),
     false, 'every call answers a fresh map, so a caller can never half-update a shared one');
+
+  /**
+   * The bundled pack's defaults: what a user who has configured NOTHING gets.
+   *
+   * The pack names clips by FILE NAME because that is what travels with it, while an id is minted per profile
+   * from the absolute path. Three rules are pinned here, and each of them is a defect in its alternative:
+   * an explicit choice (including a deliberate "nothing") must win, a default must resolve by name, and a
+   * name that is not in the catalog must degrade to "nothing mapped" rather than to a dangling id.
+   */
+  const catalog = [
+    { id: 'a1', name: 'idle.vrma' },
+    { id: 'a2', name: 'coolIdleGlance.vrma' },
+    { id: 'a9', name: 'nested/deep/other.vrma' },
+  ];
+  const defaults = { offline: ['idle.vrma'], resting: ['coolIdleGlance.vrma'] };
+  same(core.motionMapWithDefaults({}, defaults, catalog), { resting: ['a2'], offline: ['a1'] },
+    'an empty map takes the shipped defaults, resolved from clip names to catalog ids');
+  same(core.motionMapWithDefaults({ working: ['a9'] }, defaults, catalog),
+    { resting: ['a2'], working: ['a9'], offline: ['a1'] },
+    'a state the user configured keeps their clips, and the untouched states take the defaults');
+  same(core.motionMapWithDefaults({ offline: [] }, defaults, catalog), { resting: ['a2'] },
+    'an explicit EMPTY choice is an answer: a default never re-adds itself to a state the user cleared');
+  same(core.motionMapWithDefaults({ offline: 'a7' }, { offline: ['idle.vrma'] }, catalog), { offline: ['a7'] },
+    'a legacy bare-string choice counts as explicit too, so it is not replaced by the default');
+  same(core.motionMapWithDefaults({}, {}, catalog), {}, 'no defaults means the stored map is the answer');
+  same(core.motionMapWithDefaults({}, { held: ['idle.vrma'] }, catalog), {},
+    'a default naming a state the session machine cannot reach is dropped, exactly as a stored one is');
+  same(core.motionMapWithDefaults({}, { resting: ['not-in-the-catalog.vrma'] }, catalog), {},
+    'a default whose clip is not in the catalog maps nothing rather than pointing at a dangling id');
+  same(core.motionMapWithDefaults({}, { resting: ['nested\\deep\\other.vrma'] }, catalog), { resting: ['a9'] },
+    'a default written with backslashes resolves against the catalog name, which is always forward-slashed');
+  same(core.motionMapWithDefaults({}, defaults, []), {},
+    'with no catalog nothing resolves, so the pet idles procedurally instead of guessing');
+  same(core.motionMapWithDefaults({}, { resting: 'coolIdleGlance.vrma' }, catalog), { resting: ['a2'] },
+    'a bare-string default is accepted, so a hand-written manifest needs no array for one clip');
+  same(core.motionMapWithDefaults({ resting: ['a1'] }, defaults, catalog).resting, ['a1'],
+    'the default for a state is not APPENDED to the user\'s list');
+  const once = core.motionMapWithDefaults({}, defaults, catalog);
+  ok(once !== core.motionMapWithDefaults({}, defaults, catalog),
+    'every call answers a fresh map, so a caller cannot half-update a shared one');
 
   // Per-clip play mode: the directory's manifest declares it, the preference overrides it, and an absent
   // override means "ask the catalog" rather than "loop".
@@ -2950,6 +2996,26 @@ group('12. the VRM relaxed stand (aimDownQuaternion)');
   core.aimDownQuaternion(limb, down, 1.31);
   eq(limb.join(','), '3,4,0', 'the limb axis is not modified in place');
   eq(core.aimDownQuaternion([0, 2, 0], [0, -4, 0], 1.31).angle, 1.31, 'non-unit inputs are normalised, not rescaled');
+  // The returned axis is ALWAYS a unit vector, whatever the limb's angle.
+  //
+  // The cross product's length is sin(angle), so it is unit only when the limb is
+  // exactly perpendicular to `down`; returning it raw handed the caller an axis
+  // scaled by sin(angle). The caller builds a quaternion from it and three.js's
+  // `setFromAxisAngle` does not normalise, so the pet's arm stance came out
+  // |q| = 0.999599 -- measured on SampleModel.vrm (arm 87.3342 degrees from
+  // perpendicular, sin = 0.9989177966483648) on 2026-10-12. Nothing visible broke,
+  // but every test that compared two of those quaternions with THREE's `angleTo`
+  // read the length difference as a 4.59 degree pose residual.
+  const tilt = Math.asin(0.9989177966483648);
+  const oblique = core.aimDownQuaternion([Math.cos(tilt), 0, Math.sin(tilt)], down, 1.31);
+  ok(oblique !== null, 'a nearly-perpendicular arm still has a rotation');
+  const obliqueLength = Math.hypot(oblique.axis[0], oblique.axis[1], oblique.axis[2]);
+  near(obliqueLength, 1, 1e-12, 'the axis is unit even though the cross product is not (|axis| was 0.998918)');
+  near(Math.abs(oblique.axis[0]), 0.9989177966483648, 1e-12, 'the axis still points the same way, only scaled');
+  const shelf = core.aimDownQuaternion([0.6, 0.3, 0.74], down, 1.31);
+  near(Math.hypot(shelf.axis[0], shelf.axis[1], shelf.axis[2]), 1, 1e-12,
+    'an arbitrary limb angle also gets a unit axis');
+
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+{
+  "clips": {
+    "idle/coolIdleGlance.vrma": { "loop": true },
+    "idle/idle.vrma": { "loop": true },
+    "idle/innocentStandIdle.vrma": { "loop": true }
+  },
+  "stateFolders": {
+    "resting": ["idle"],
+    "working": ["working"],
+    "waiting": ["attention"],
+    "done": ["success"],
+    "error": ["fail"],
+    "offline": ["offline"]
+  },
+  "defaults": {}
+}

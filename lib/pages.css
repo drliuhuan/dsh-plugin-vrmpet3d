@@ -118,6 +118,10 @@ label.pick input { accent-color: #5b8cff; }
 #motion-list details > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
 #motion-list summary .state { flex: 0 0 132px; opacity: .8; }
 #motion-list summary .count { font-size: 11.5px; opacity: .6; }
+/* The folder a state's clips come from, and how many are in it: that folder is what the operator edits to
+   change the list, so it is named rather than implied. */
+#motion-list summary .folder { font-size: 11px; opacity: .55; margin-right: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 #motion-list .picks { margin: 4px 0 6px 140px; display: flex; flex-wrap: wrap; gap: 3px 14px; }
 #motion-list .picks label.pick { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 #motion-list .picks .mode { font-size: 10.5px; opacity: .55; }
