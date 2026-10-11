@@ -15,6 +15,7 @@
   },
   "files": [
     "lib",
+    "desktop",
     "assets",
     "!assets/whale-tail.apng",
     "scripts",
