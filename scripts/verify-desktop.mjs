@@ -72,7 +72,7 @@ function eq(actual, expected, label) {
 }
 
 // ---------------------------------------------------------------------------
-console.log('\n0a. the launcher and the two pages PARSE, before anything is spawned');
+console.log('\n0a. the launcher and the pages PARSE, before anything is spawned');
 // ---------------------------------------------------------------------------
 {
   /**
@@ -92,6 +92,9 @@ console.log('\n0a. the launcher and the two pages PARSE, before anything is spaw
     'desktop/probe-parts-editor.js',
     'desktop/probe-motion-picker.js',
     'lib/config-page.js',
+    // The first-run guide's script, on the same footing as the settings page's: it is what a user sees FIRST, and
+    // a syntax error in it renders a blank window that the live check would blame on the window.
+    'lib/setup-page.js',
   ];
   for (const target of targets) {
     let verdict = null;
@@ -104,6 +107,24 @@ console.log('\n0a. the launcher and the two pages PARSE, before anything is spaw
     }
     ok(verdict === '', `${target} parses (${verdict.trim().slice(0, 120) || 'ok'})`);
   }
+
+  /**
+   * AND THE GUIDE'S MARKUP AND SCRIPT HAVE TO AGREE ABOUT THE SCREENS.
+   *
+   * The wizard drives its own visibility by id, so a screen that exists in one file and not the other is a step
+   * that renders as an empty document — the guide would still "open", which is exactly how that failure would
+   * survive a live check. Both files are read here (no browser needed) and the six ids are compared.
+   */
+  const setupHtml = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
+  const setupScript = readFileSync(join(ROOT, 'lib', 'setup-page.js'), 'utf8');
+  const screens = [...setupHtml.matchAll(/id="(setup-[0-9])"/g)].map((match) => match[1]);
+  eq(screens.length, 6, `the first-run guide carries all six screens (${screens.join(', ')})`);
+  ok(['setup-back', 'setup-next', 'setup-finish', 'setup-later'].every((id) => setupHtml.includes(`id="${id}"`)),
+    'with the navigation the script drives (back, next, finish, later)');
+  ok(screens.every((id) => setupScript.includes(`'${id}'`)),
+    "and the script's own screen list names every one of them");
+  ok(setupScript.includes("post('/vrmpet3d/setup-state', { completed: true })"),
+    'the finish button is the one write that ends the guide');
 }
 
 // ---------------------------------------------------------------------------

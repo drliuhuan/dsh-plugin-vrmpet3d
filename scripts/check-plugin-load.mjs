@@ -188,14 +188,15 @@ report(service?.assetRoutes === null,
   };
   lateCtx.pending[0].callback(scope);
 
-  // Eighteen routes: the five asset/motion ones, the desktop window's page and sources and its on/off
+  // Nineteen routes: the five asset/motion ones, the desktop window's page and sources and its on/off
   // control, what a model file contains, the TWO settings pages (模型参数 and 通用设置, separate documents since
-  // 2026-10-11), the settings store, the transient preview the settings window drives, the live state the in-app
-  // pet publishes for the floating window, the AI 碎碎念 pair (one generated line, and the provider catalog the
-  // settings offer), DSH's own animated whale mark for the status prompt's mask, and the one route that ends the
-  // application it is served from (重启 / 退出 DeepSeek Harness for the pet's right-click menu).
-  report(lateRegistrations.length === 18,
-    `a late webServer receives all eighteen routes (${lateRegistrations.join(', ') || 'none'})`);
+  // 2026-10-11) plus the FIRST-RUN GUIDE (its page and its own state), the settings store, the transient preview
+  // the settings window drives, the live state the in-app pet publishes for the floating window, the AI 碎碎念
+  // pair (one generated line, and the provider catalog the settings offer), DSH's own animated whale mark for the
+  // status prompt's mask, and the one route that ends the application it is served from (重启 / 退出 DeepSeek
+  // Harness for the pet's right-click menu).
+  report(lateRegistrations.length === 19,
+    `a late webServer receives all nineteen routes (${lateRegistrations.join(', ') || 'none'})`);
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/catalog'),
     'the catalog route is among them');
   report(lateRegistrations.some((entry) => entry === 'prefix /vrmpet3d/asset'),
@@ -515,19 +516,22 @@ report(service?.assetRoutes === null,
     const preloadSource = readFileSync(join(ROOT, 'desktop', 'preload.js'), 'utf8');
     const launcherSource = readFileSync(join(ROOT, 'desktop', 'main.js'), 'utf8');
     const configSource = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
-    report(/pickModelDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-dir', \{ kind: 'model' \}\)/.test(preloadSource),
-      'the preload bridge exposes the native folder picker');
-    report(/pickMotionDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-dir', \{ kind: 'motion' \}\)/.test(preloadSource),
-      'and a second one for motion directories, on the same channel');
-    report(/ipcMain\.handle\('vrmpet3d:pick-dir'[\s\S]{0,900}?kind === 'motion' \? '导入动作目录' : '导入模型目录'/
-      .test(launcherSource),
-      'the launcher titles the dialog after what is being imported, rather than calling every folder a model');
-    report(/ipcMain\.handle\('vrmpet3d:pick-dir'[\s\S]{0,700}?defaultPath/.test(launcherSource),
+    report(/pickModelFile: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{ kind: 'model' \}\)/.test(preloadSource),
+      'the preload bridge exposes the native FILE picker for a model import');
+    report(/pickMotionDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{ kind: 'motion' \}\)/.test(preloadSource),
+      'and a folder picker for motion directories, on the same channel');
+    report(/kind === 'motion' \? \{/.test(launcherSource)
+      && /title: '导入动作目录'/.test(launcherSource) && /title: '导入模型文件'/.test(launcherSource),
+      'the launcher titles the dialog after what is being imported, and a MODEL is a file dialog while a MOTION is a folder one');
+    report(/ipcMain\.handle\('vrmpet3d:pick-path'[\s\S]{0,700}?defaultPath/.test(launcherSource),
       'which opens at the home directory rather than guessing where models live');
+    report(/properties: \['openFile'\][\s\S]{0,200}?extensions: \['vrm', 'glb', 'gltf'\]/.test(launcherSource),
+      'and the model dialog is filtered to the three formats the asset route can serve');
     report(/fetch\('\/vrmpet3d\/models'[\s\S]{0,260}?method: 'POST'/.test(configSource),
       'the page hands the chosen path to the host over /vrmpet3d/models');
-    report(configSource.includes('{ add: path }') && configSource.includes('{ remove: dir }'),
-      "with the route's two verbs and nothing else");
+    report(configSource.includes('{ addFile: path }') && configSource.includes('{ removeFile: file }')
+      && configSource.includes('{ remove: dir }'),
+      "with the route's FILE verbs, plus the legacy directory removal, and nothing else");
     report(!/require\('node:fs'\)|writeFileSync/.test(configSource),
       'and never writes the list itself: the host is the only writer, which is what the file override needs');
     /**
@@ -540,10 +544,10 @@ report(service?.assetRoutes === null,
      */
     report(/fetch\('\/vrmpet3d\/motions'[\s\S]{0,260}?method: 'POST'/.test(configSource),
       'and hands a motion directory to the host over /vrmpet3d/motions');
-    report(configSource.includes('{ add: path }') && configSource.includes('{ remove: dir }')
-      && /writeImportedMotion\(\{ add: path \}\)/.test(configSource)
+    report(/writeImportedMotion\(\{ importDir: path \}\)/.test(configSource)
+      && /writeImportedMotion\(\{ unimportDir: dir \}\)/.test(configSource)
       && /writeImportedMotion\(\{ remove: dir \}\)/.test(configSource),
-      'with the motion route\'s two verbs, through their own writer');
+      'with the motion route\'s IMPORT verbs, through their own writer, the legacy removal kept');
     report(/var motions = Array\.isArray\(payload\.motions\) \? payload\.motions : null;[\s\S]{0,400}?renderMotions\(\)/
       .test(configSource),
       'a successful motion write re-renders the 状态 rows from the catalog in the reply');
@@ -721,7 +725,7 @@ report(service?.assetRoutes === null,
 
   // Registering twice must not happen: the server throws on a duplicate (kind, path).
   lateCtx.pending[0].callback(scope);
-  report(lateRegistrations.length === 18,
+  report(lateRegistrations.length === 19,
     `a second arrival does not re-register (${lateRegistrations.length} total)`);
 
   // Read the service THIS activation provided, not a Map entry: a second apply

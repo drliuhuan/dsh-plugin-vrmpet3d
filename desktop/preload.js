@@ -31,22 +31,23 @@ contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
   ready: (info) => ipcRenderer.send('vrmpet3d:ready', info),
 
   /**
-   * Ask for a model directory, with a NATIVE folder picker.
+   * Ask for a MODEL FILE, with a NATIVE file picker.
    *
-   * The settings page needs this and cannot do it itself: a web page cannot open a native dialog, and the
-   * page has no filesystem access by design (`contextIsolation`, no Node). The launcher shows the dialog and
-   * answers with the chosen path — or null when the user cancelled — and the PAGE then tells the HOST about
-   * it over `/vrmpet3d/models`, so there is still exactly one writer of the imported-directory list.
+   * A FILE, not a folder, and the operator's reason is the design: 「选择VRM模型所在的文件，并导入到插件的本地配置
+   * 中去，不再是选中一个文件夹了，万一文件夹移位了，也会出bug」. The launcher answers with the chosen path — or null
+   * when the user cancelled — and the PAGE hands it to the HOST over `/vrmpet3d/models`, which COPIES it into the
+   * plugin's own storage. The host stays the only writer of that list, and the `VRMPET3D_MODEL_FILES_FILE` /
+   * `VRMPET3D_IMPORT_DIR` overrides the suites rely on are not bypassed.
    */
-  pickModelDir: () => ipcRenderer.invoke('vrmpet3d:pick-dir', { kind: 'model' }),
+  pickModelFile: () => ipcRenderer.invoke('vrmpet3d:pick-path', { kind: 'model' }),
 
   /**
-   * The same dialog for an imported MOTION directory (`/vrmpet3d/motions`).
+   * The same dialog for an imported MOTION folder (`/vrmpet3d/motions`), which stays a DIRECTORY: a motion pack is
+   * a folder of clips filed by state, and the host copies the folder rather than a single file out of it.
    *
-   * A separate name rather than one `pickDirectory(kind)` because the two call sites read differently and the
-   * launcher uses `kind` only for the dialog's own title; the HOST still does the writing, exactly as for models.
+   * One channel for both, with `kind` deciding a FILE dialog from a folder one and the title each shows.
    */
-  pickMotionDir: () => ipcRenderer.invoke('vrmpet3d:pick-dir', { kind: 'motion' }),
+  pickMotionDir: () => ipcRenderer.invoke('vrmpet3d:pick-path', { kind: 'motion' }),
 
   /**
    * Tell the launcher that a VIEW ORBIT is starting or ending — and let IT take the pointer lock.

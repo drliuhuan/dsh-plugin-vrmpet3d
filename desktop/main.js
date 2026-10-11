@@ -289,7 +289,7 @@ app.whenReady().then(async () => {
       webPreferences: {
         /**
          * The settings page gets the SAME bridge the pet page has, and it needs it for one thing: the
-         * model-import section asks for a native folder picker (`vrmpet3d:pick-dir`), which no web page can open
+         * model-import section asks for a native FILE picker (`vrmpet3d:pick-path`), which no web page can open
          * for itself. Everything else the page reads over the host's HTTP routes, exactly as before.
          */
         preload: path.join(__dirname, 'preload.js'),
@@ -570,24 +570,30 @@ app.whenReady().then(async () => {
     /**
      * The import picker: a native folder dialog, answered with a path or null.
      *
-     * This is the one thing the settings page cannot do for itself — a web page cannot open a native dialog, and
+     * This is the one thing a settings page cannot do for itself — a web page cannot open a native dialog, and
      * this process is the only one with an Electron to open it in. The path goes back to the PAGE, which hands it
      * to the HOST (`/vrmpet3d/models` or `/vrmpet3d/motions` depending on which section asked); the host stays the only
-     * writer of both lists, and the `VRMPET3D_MODEL_DIRS_FILE` / `VRMPET3D_MOTION_DIRS_FILE` overrides the suites rely
-     * on are not bypassed.
+     * writer of every import store, and the `VRMPET3D_*_FILE` overrides the suites rely on are not bypassed.
      *
-     * `kind` only picks the TITLE, so the dialog says what it is importing — 模型 or 动作 — rather than claiming
-     * every folder is a model directory.
+     * `kind` decides a FILE dialog from a folder one, and the title each shows. A MODEL is a FILE now (the
+     * operator: 「选择VRM模型所在的文件…不再是选中一个文件夹了，万一文件夹移位了，也会出bug」), filtered to the three
+     * formats the asset routes can serve; a MOTION is a FOLDER, because a pack is a folder of clips filed by
+     * state and the host copies the folder.
      *
      * `defaultPath` is the user's home directory rather than a model directory: the launcher does not know where
      * models or motions live, and guessing would open the dialog somewhere surprising.
      */
-    ipcMain.handle('vrmpet3d:pick-dir', async (_event, options) => {
+    ipcMain.handle('vrmpet3d:pick-path', async (_event, options) => {
       const kind = options && typeof options === 'object' && options.kind === 'motion' ? 'motion' : 'model';
       try {
-        const result = await dialog.showOpenDialog(win, {
-          title: kind === 'motion' ? '导入动作目录' : '导入模型目录',
+        const result = await dialog.showOpenDialog(win, kind === 'motion' ? {
+          title: '导入动作目录',
           properties: ['openDirectory'],
+          defaultPath: app.getPath('home'),
+        } : {
+          title: '导入模型文件',
+          properties: ['openFile'],
+          filters: [{ name: 'VRM / glTF 模型', extensions: ['vrm', 'glb', 'gltf'] }],
           defaultPath: app.getPath('home'),
         });
         if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) return null;
@@ -777,7 +783,7 @@ app.whenReady().then(async () => {
      *
      * The pet page drives its own readiness through the preload bridge, which is what the pet self-test
      * waits for. The settings page reads everything it shows over the host's HTTP routes and announces
-     * nothing of its own — the bridge it now has exists for the folder picker (`vrmpet3d:pick-dir`) — so
+     * nothing of its own — the bridge it now has exists for the path picker (`vrmpet3d:pick-path`) — so
      * waiting for a message it will never send is how the first version of this mode produced no report at
      * all. The delay is for the page's own fetches, and any error it throws in the meantime is already
      * captured through the console relay.

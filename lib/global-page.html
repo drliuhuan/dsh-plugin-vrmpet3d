@@ -17,7 +17,7 @@
 </head>
 <body data-page="global">
   <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>通用设置</h1><p class="page-description">调整桌宠显示、互动、动作与说话方式。</p><div id="status" role="status" aria-live="polite">正在读取…</div></header>
-  <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">显示与外观</a><a href="#settings-1">视线</a><a href="#settings-2">鼠标互动与物理</a><a href="#settings-3">状态与动作</a><a href="#settings-4">碎碎念</a><a href="#settings-5">模型导入</a><a href="#settings-6">动作导入</a></nav>
+  <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">显示与外观</a><a href="#settings-1">视线</a><a href="#settings-2">鼠标互动与物理</a><a href="#settings-3">状态与动作</a><a href="#settings-4">碎碎念</a><a href="#settings-5">模型导入</a><a href="#settings-6">动作导入</a><a href="#settings-7">其他</a></nav>
   <main>
 <section class="settings-section" id="settings-0">
   <h2>显示与外观</h2>
@@ -244,17 +244,17 @@
 
 <section class="settings-section" id="settings-5">
   <h2>模型导入</h2>
-  <p class="section-description">添加模型所在的目录；移除目录不会删除文件。</p>
+  <p class="section-description">选择一个 <code>.vrm</code>（或 <code>.glb</code> / <code>.gltf</code>）文件。插件会把它<strong>复制到自己的目录</strong>，所以原文件之后再移动或删除都不影响；移除只删掉复制的那一份。</p>
   <div class="card">
     <div class="row">
-      <span class="k">导入目录</span>
-      <button id="model-import-pick">选择文件夹…</button>
+      <span class="k">导入模型</span>
+      <button id="model-import-pick">选择模型文件…</button>
       <button id="model-import-manual" class="ghost">手动输入路径</button>
     </div>
     <div class="row" id="model-import-manual-row" hidden>
-      <label class="k" for="model-import-path">路径</label>
-      <input type="text" id="model-import-path" class="grow" placeholder="D:\Models">
-      <button id="model-import-add">添加</button>
+      <label class="k" for="model-import-path">文件路径</label>
+      <input type="text" id="model-import-path" class="grow" placeholder="D:\Models\my.vrm">
+      <button id="model-import-add">导入</button>
     </div>
     <div id="model-import-list"></div>
     <p class="hint" id="model-import-note"></p>
@@ -264,7 +264,7 @@
 
 <section class="settings-section" id="settings-6">
   <h2>动作导入</h2>
-  <p class="section-description">添加 VRMA 动作目录，再到状态与动作中分配。</p>
+  <p class="section-description">添加 VRMA 动作目录，再到状态与动作中分配。导入会把文件夹复制到插件自己的目录，原文件夹之后移动也不影响。</p>
   <div class="card">
     <div class="row">
       <span class="k">导入目录</span>
@@ -280,6 +280,18 @@
     <p class="hint" id="motion-import-note"></p>
   </div>
 
+</section>
+
+<section class="settings-section" id="settings-7">
+  <h2>其他</h2>
+  <p class="section-description">初次安装引导走完之后不会再出现；想重新看一遍，或者把配置从头过一遍，从这里打开。</p>
+  <div class="card">
+    <div class="row">
+      <span class="k">初次安装引导</span>
+      <button id="pref-setup-open">重新运行引导</button>
+      <span class="note" id="pref-setup-note"></span>
+    </div>
+  </div>
 </section>
   </main>
   <!--

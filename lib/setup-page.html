@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vrmpet3d · 初次安装引导</title>
+  <meta name="color-scheme" content="dark light">
+  <!--
+    The first-run guide: five screens and a finish, on its own route (`/vrmpet3d/setup`).
+
+    A THIRD page beside 模型参数 and 通用设置, opened the same way — by the launcher on DSH Desktop (a real window,
+    with the preload bridge, so a file picker is native) and as a browser tab anywhere else, which is why a typed
+    path sits under every picker.
+
+    It is deliberately NOT part of 通用设置: the operator asked for a guide that appears on its own
+    (「安装成功后，彻底配置完之前，每次插件运行都会弹配置引导」), and a first-run page that the user has to go looking
+    for is not a guide. The stylesheet is the shared `pages.css`; only the wizard's own layout lives below.
+  -->
+  <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
+  <style>
+    /* One screen at a time, a stepper that says where you are, and a footer that cannot scroll away. */
+    body[data-page="setup"] { display: flex; flex-direction: column; min-height: 100vh; }
+    body[data-page="setup"] main { flex: 1 1 auto; }
+    .setup-steps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0 24px 8px; list-style: none;
+      font-size: 12px; color: var(--muted, #8b93a7); }
+    .setup-steps li { padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
+    .setup-steps li[data-active="1"] { color: var(--fg, #e6e9f2); border-color: var(--line, #333a4d); }
+    .setup-steps li[data-done="1"] { color: var(--ok, #63d2a4); }
+    .setup-screen[hidden] { display: none; }
+    .setup-nav { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 12px 24px; border-top: 1px solid var(--line, #333a4d); background: inherit; backdrop-filter: blur(6px); }
+    .setup-nav-right { display: flex; gap: 8px; }
+    .setup-nav button { min-width: 96px; }
+    .setup-warning { border-left: 3px solid var(--warn, #e0a75e); padding-left: 12px; }
+    .setup-warning li { margin: 4px 0; }
+    .setup-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .setup-choice { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
+    .setup-choice label { display: flex; align-items: flex-start; gap: 8px; }
+    .setup-choice .why { color: var(--muted, #8b93a7); font-size: 12px; }
+    .setup-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .setup-done { font-size: 15px; }
+  </style>
+</head>
+<body data-page="setup">
+  <header class="page-header">
+    <div class="eyebrow">VRMPET3D · SETUP</div>
+    <h1>初次安装引导</h1>
+    <p class="page-description">五步把桌宠配置成你要的样子。走完这一步之后，这个引导就不会再出现了。</p>
+    <div id="status" role="status" aria-live="polite">正在读取…</div>
+  </header>
+
+  <ol class="setup-steps" id="setup-steps" aria-label="引导进度">
+    <li data-step="0">① 欢迎</li>
+    <li data-step="1">② 偏好模型</li>
+    <li data-step="2">③ 桌宠界面</li>
+    <li data-step="3">④ AI 碎碎念</li>
+    <li data-step="4">⑤ 模型动作</li>
+    <li data-step="5">完成</li>
+  </ol>
+
+  <main>
+    <!-- ① 欢迎 -->
+    <section class="settings-section setup-screen" id="setup-0">
+      <h2>欢迎，也先说清楚风险</h2>
+      <div class="card">
+        <p>这是一个<strong>早期版本</strong>的插件，作者也是第一次开发 DSH 插件。它<strong>还没有经过系统性的验证</strong>，
+          可能存在 bug，也可能带来性能下降；设置页面的排版也可能比较混乱。</p>
+        <p class="setup-warning">如果你在使用中遇到任何性能问题，请<strong>第一时间禁用这个插件</strong>，再慢慢排查。</p>
+        <p class="note">这个引导出现的意义就是：把该配的东西一次配完，之后它就安静下来。点「下一步」开始。</p>
+      </div>
+    </section>
+
+    <!-- ② 偏好模型 -->
+    <section class="settings-section setup-screen" id="setup-1" hidden>
+      <h2>偏好模型</h2>
+      <p class="section-description">选一个 <code>.vrm</code>（或 <code>.glb</code> / <code>.gltf</code>）文件作为你的桌宠。
+        导入的是<strong>文件</strong>，插件会把它<strong>复制到自己的目录</strong>里，所以之后你移动、改名或删除原文件夹都不影响它。</p>
+      <div class="card">
+        <div class="setup-actions">
+          <button id="setup-model-pick" class="primary">选择模型文件…</button>
+          <button id="setup-model-manual" class="ghost">手动输入路径</button>
+          <span class="note" id="setup-model-count"></span>
+        </div>
+        <div class="row" id="setup-model-manual-row" hidden>
+          <label class="k" for="setup-model-path">文件路径</label>
+          <input type="text" id="setup-model-path" class="grow" placeholder="D:\models\my.vrm">
+          <button id="setup-model-add" class="ghost">导入</button>
+        </div>
+        <div class="setup-list" id="setup-model-list"></div>
+        <p class="hint" id="setup-model-note"></p>
+        <p class="note">不导入也可以：插件自带一个可再分发的 SampleModel，什么都不选时就用它。</p>
+      </div>
+    </section>
+
+    <!-- ③ 桌宠界面 -->
+    <section class="settings-section setup-screen" id="setup-2" hidden>
+      <h2>桌宠出现在哪里</h2>
+      <p class="section-description">桌宠有两个界面：DSH 窗口内的<strong>内置桌宠</strong>，以及浮在所有窗口之上的<strong>独立桌宠</strong>。</p>
+      <div class="card">
+        <div class="setup-choice" id="setup-surface">
+          <label><input type="radio" name="setup-surface" value="auto">
+            <span><strong>自动</strong><span class="why">（默认）桌面版 DSH 打开独立桌宠；非桌面版只能打开内置桌宠。</span></span></label>
+          <label><input type="radio" name="setup-surface" value="app">
+            <span><strong>只在内置桌宠</strong><span class="why">只要 DSH 窗口里的那一只，不额外开悬浮窗。</span></span></label>
+        </div>
+        <p class="hint" id="setup-surface-note"></p>
+      </div>
+    </section>
+
+    <!-- ④ AI 碎碎念 -->
+    <section class="settings-section setup-screen" id="setup-3" hidden>
+      <h2>AI 碎碎念</h2>
+      <p class="section-description">桌宠会自己说些话：既可以是内置台词，也可以交给模型现编。</p>
+      <div class="card">
+        <div class="row">
+          <label class="k" for="setup-speech-enabled">开启碎碎念</label>
+          <input type="checkbox" id="setup-speech-enabled">
+          <span class="note">关闭后桌宠就不说话了。默认开启。</span>
+        </div>
+        <div class="setup-choice" id="setup-speech-source">
+          <label><input type="radio" name="setup-speech-source" value="builtin">
+            <span><strong>内置台词</strong><span class="why">（默认）随插件分发的台词表，不联网。</span></span></label>
+          <label><input type="radio" name="setup-speech-source" value="ai">
+            <span><strong>AI 生成</strong><span class="why">由 DSH 的模型每次现编一句。</span></span></label>
+        </div>
+        <div class="row" id="setup-ai-row">
+          <label class="k" for="setup-ai-provider">AI 来源</label>
+          <select id="setup-ai-provider"></select>
+          <select id="setup-ai-model"></select>
+        </div>
+        <p class="hint" id="setup-speech-note"></p>
+        <p class="note">详细的提示词、台词表、频率和自定义 API（OpenAI 兼容端点）都在<strong>通用设置 → 碎碎念</strong>里改；
+          这里只是把最常见的组合选好。</p>
+      </div>
+    </section>
+
+    <!-- ⑤ 模型动作 -->
+    <section class="settings-section setup-screen" id="setup-4" hidden>
+      <h2>模型动作</h2>
+      <p class="section-description">插件自带一份按状态分好目录的动作包；你也可以把自己的一套 <code>.vrma</code> 导入进来。
+        导入的是一个<strong>文件夹</strong>，插件会连里面的目录结构和清单一起复制到自己的目录。</p>
+      <div class="card">
+        <div class="setup-actions">
+          <button id="setup-motion-pick" class="primary">选择动作文件夹…</button>
+          <button id="setup-motion-manual" class="ghost">手动输入路径</button>
+          <span class="note" id="setup-motion-count"></span>
+        </div>
+        <div class="row" id="setup-motion-manual-row" hidden>
+          <label class="k" for="setup-motion-path">文件夹路径</label>
+          <input type="text" id="setup-motion-path" class="grow" placeholder="D:\motions\my-pack">
+          <button id="setup-motion-add" class="ghost">导入</button>
+        </div>
+        <div class="setup-list" id="setup-motion-list"></div>
+        <p class="hint" id="setup-motion-note"></p>
+        <p class="hint" id="setup-motion-defaults"></p>
+      </div>
+    </section>
+
+    <!-- 完成 -->
+    <section class="settings-section setup-screen" id="setup-5" hidden>
+      <h2>完成</h2>
+      <div class="card">
+        <p class="setup-done">配置已保存。点击「完成」之后，这个引导<strong>不会再出现</strong>。</p>
+        <p class="note">想改任何设置，右键桌宠 → 通用设置 / 当前模型参数设置；引导本身也能在通用设置里重新打开。</p>
+        <div class="setup-actions">
+          <button id="setup-finish" class="primary">完成</button>
+          <button id="setup-close" class="ghost" hidden>关闭窗口</button>
+        </div>
+        <p class="hint" id="setup-finish-note"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="setup-nav">
+    <button id="setup-later" class="ghost">稍后配置</button>
+    <div class="setup-nav-right">
+      <button id="setup-back" class="ghost">上一步</button>
+      <button id="setup-next" class="primary">下一步</button>
+    </div>
+  </footer>
+
+  <!-- The same watchdog the two settings pages carry: a page that cannot initialise says so rather than sitting blank. -->
+  <script>
+    (function () {
+      function show(text) {
+        var node = document.getElementById('status');
+        if (node) { node.textContent = text; node.className = 'warn'; }
+      }
+      window.setTimeout(function () {
+        var node = document.getElementById('status');
+        if (node && !node.getAttribute('data-ready')) {
+          show('初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/setup-state）。');
+        }
+      }, 3000);
+    })();
+  </script>
+  <script src="/vrmpet3d/window/lib/core.js"></script>
+  <script src="/vrmpet3d/window/lib/setup-page.js"></script>
+</body>
+</html>

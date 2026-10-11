@@ -1271,12 +1271,12 @@ group('8. registered routes and both catalogs over HTTP');
       + ' | exact /vrmpet3d/model-info | exact /vrmpet3d/models | exact /vrmpet3d/motions | exact /vrmpet3d/preview'
       + ' | exact /vrmpet3d/say'
       + ' | exact /vrmpet3d/settings'
-      + ' | exact /vrmpet3d/setup-state'
+      + ' | exact /vrmpet3d/setup | exact /vrmpet3d/setup-state'
       + ' | exact /vrmpet3d/state'
       + ' | exact /vrmpet3d/whale'
       + ' | exact /vrmpet3d/window'
       + ' | prefix /vrmpet3d/asset | prefix /vrmpet3d/motion | prefix /vrmpet3d/window/lib',
-    'apply registers exactly the documented routes, both settings pages, both windows, the first-run wizard\'s own state, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
+    'apply registers exactly the documented routes, THREE pages now (模型参数, 通用设置 and the first-run guide) with the guide\'s own state, both windows, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
   // The window's source prefix must NOT end in a slash: the server matches a prefix with
   // `pathname === prefix || pathname.startsWith(prefix + '/')`, so a trailing slash there makes
   // every real request miss and 404s the whole page. Asserted as a property, not just as the
@@ -1578,8 +1578,9 @@ group('8. registered routes and both catalogs over HTTP');
    */
   const expectedType = name => sourceTypes[extname(name).toLowerCase()]
     ?? (name.endsWith('.js') ? 'text/javascript; charset=utf-8' : null);
-  ok(sourceNames.length === 8 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js'),
-    'the whitelist being checked is the route\'s own (eight names, the stylesheet and the settings script among them)');
+  ok(sourceNames.length === 9 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js')
+    && sourceNames.includes('setup-page.js'),
+    'the whitelist being checked is the route\'s own (nine names, the stylesheet and both page scripts among them)');
   for (const name of sourceNames) {
     const source = await server.call(`/vrmpet3d/window/lib/${name}`);
     eq(source.headers['content-type'], expectedType(name),
@@ -1795,6 +1796,38 @@ group('10. imported model directories over HTTP');
   ok(service.importedModelDirs() !== service.importedModelDirs(),
     'the exposed list is a copy, not the live array');
 
+  /**
+   * AND THE FILE IMPORT: one model file COPIED into the plugin's own storage.
+   *
+   * Operator, 2026-10-12: 「允许用户选择VRM模型所在的文件，并导入到插件的本地配置中去，不再是选中一个文件夹了，万一文件夹
+   * 移位了，也会出bug」. The copy IS the point, so the assertions are about the bytes: the path the user picked is
+   * recorded only as provenance, the copy exists under `modelsDir`, the catalogue lists the copy, removing deletes
+   * the copy (and never the original), and a file this plugin cannot load is refused by name.
+   */
+  const sourceModel = join(importSandbox, 'guest.vrm');
+  const fileImport = await post({ addFile: sourceModel });
+  eq(fileImport.status, 200, 'a model FILE is imported');
+  const fileEntry = (fileImport.payload?.importedModels ?? [])[0];
+  ok(Boolean(fileEntry && fileEntry.file), 'the reply carries the imported file');
+  eq(fileImport.payload?.modelsDir, plugin.importedModelsDir(), "the reply names the plugin's own storage");
+  ok(String(fileEntry?.file).startsWith(plugin.importedModelsDir()),
+    `the model was COPIED into that storage (${fileEntry?.file})`);
+  ok(existsSync(fileEntry?.file) && !String(fileEntry.file).startsWith(resolve(importSandbox)),
+    'and the copy is a file of its own rather than the path the user picked');
+  eq(fileEntry.source, resolve(sourceModel), 'with where it came from kept, for the list to show');
+  ok(fileImport.payload.models.some(model => model.name === 'body.vrm'),
+    'and the catalogue lists the copy, so the pet can load it');
+  const againFile = await post({ addFile: sourceModel });
+  eq(againFile.payload.importedModels.length, 1,
+    'importing the same file twice records the copy once instead of a second copy');
+  const badFile = await post({ addFile: join(ROOT, 'README.md') });
+  eq(badFile.status, 400, 'a file that is not a model is refused');
+  ok(/not a model/.test(badFile.payload?.error ?? ''), 'and the refusal says what it expected');
+  const removedFile = await post({ removeFile: fileEntry.file });
+  eq(removedFile.payload.importedModels.length, 0, 'removing the import clears the record');
+  ok(!existsSync(fileEntry.file), 'and DELETES the copy');
+  ok(existsSync(sourceModel), "while the user's own file is left exactly where it was");
+
   // Disposal takes the route with it, like every other route.
   for (const dispose of effects) dispose();
   eq(routes.length, 0, 'unloading removes the models route too');
@@ -1902,6 +1935,55 @@ group('10b. imported motion directories over HTTP');
   eq(removed.payload.importedDirs.length, 0, 'the reply carries the list after the removal');
   ok(!removed.payload.motions.some((motion) => motion.name === 'vrmpet3d-wave.vrma'),
     'and the catalog no longer lists its file');
+
+  /**
+   * AND THE FOLDER IMPORT THAT COPIES: 「选择文件夹并导入 VRMA 动作到插件的本地配置中」.
+   *
+   * The copy is what makes the import stable — from here the catalogue reads the plugin's own folder, not the one
+   * the user picked — and EACH COPY IS ITS OWN ROOT, so the manifest that travelled with it still decides its
+   * clips' 循环/单次 (a declared one-shot must not come back as a loop).
+   */
+  const copySource = join(ROOT, 'build', 'fixtures', 'motion-copy-sandbox');
+  rmSync(copySource, { recursive: true, force: true });
+  mkdirSync(copySource, { recursive: true });
+  writeFileSync(join(copySource, 'wave.vrma'), waveBytes);
+  writeFileSync(join(copySource, 'vrmpet3d-motions.json'),
+    JSON.stringify({ clips: { 'wave.vrma': { loop: false } } }));
+  const copied = await post({ importDir: copySource });
+  eq(copied.status, 200, 'a motion FOLDER is imported');
+  const copyEntry = (copied.payload?.importedMotions ?? [])[0];
+  ok(Boolean(copyEntry && copyEntry.dir), 'the reply carries the imported folder');
+  eq(copied.payload?.motionsDir, plugin.importedMotionsDir(), "the reply names the plugin's own storage");
+  ok(String(copyEntry?.dir).startsWith(plugin.importedMotionsDir()), 'the folder was COPIED there');
+  eq(copyEntry.clips, 1, 'with the one clip it holds');
+  ok(existsSync(join(copyEntry.dir, 'wave.vrma')), 'the clip is really on disk in the copy');
+  ok(existsSync(join(copyEntry.dir, 'vrmpet3d-motions.json')), "and so is the folder's own manifest");
+  const copiedWave = (copied.payload?.motions ?? []).find((motion) => motion.name === 'wave.vrma');
+  ok(Boolean(copiedWave), 'the catalogue lists the copy');
+  eq(copiedWave?.loop, false, 'and its manifest reached the scan: the declared one-shot is still a one-shot');
+  const removedCopy = await post({ unimportDir: copyEntry.dir });
+  eq(removedCopy.payload.importedMotions.length, 0, 'removing the import clears the record');
+  ok(!existsSync(copyEntry.dir), 'and deletes the copy');
+  ok(existsSync(copySource), "while the user's own folder is untouched");
+
+  /**
+   * The first-run guide's own state, over its route: the ONE thing that stops the guide coming back.
+   *
+   * `prompted` marks this activation as already offered WITHOUT ending it (that is what makes a page reload quiet
+   * while a restart still asks), and only `completed` writes the flag the next activation reads.
+   */
+  const freshSetup = await request('/vrmpet3d/setup-state', 'GET');
+  eq(freshSetup.status, 200, 'the first-run guide reports its state');
+  eq(freshSetup.payload.completed, false, 'a machine that has not been through it says so');
+  eq(freshSetup.payload.prompted, false, 'and this activation has not offered it yet');
+  const promptedSetup = await request('/vrmpet3d/setup-state', 'POST', JSON.stringify({ prompted: true }));
+  eq(promptedSetup.payload.prompted, true, 'marking this activation as offered is recorded');
+  eq(promptedSetup.payload.completed, false, 'without ending the guide');
+  const doneSetup = await request('/vrmpet3d/setup-state', 'POST', JSON.stringify({ completed: true }));
+  eq(doneSetup.payload.completed, true, '完成 marks it finished');
+  const setupFile = join(ROOT, 'build', 'fixtures', 'setup-verify.json');
+  ok(existsSync(setupFile) && JSON.parse(readFileSync(setupFile, 'utf8')).completed === true,
+    "and the flag is persisted in the plugin's own file, which the next activation reads");
 
   for (const dispose of effects) dispose();
   rmSync(scratch, { force: true });
