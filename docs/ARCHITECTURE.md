@@ -165,7 +165,7 @@ plugin's own script is served through a combo URL whose path is `/plugins/`.
 `lib/core.js` contains the state machine, fall physics, framing maths, idle motion,
 motion-format detection and preference cleaning, and imports neither DOM nor
 three.js. That is not tidiness for its own sake: those are the parts most likely to
-be subtly wrong, and keeping them pure lets the core suite's 1036 checks run in well
+be subtly wrong, and keeping them pure lets the core suite's 1042 checks run in well
 under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
@@ -832,7 +832,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2132 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
+Nine suites, 2139 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
 figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs` recomputes them. The
 design rule is that **each defect found during
 development got a test that would have caught it**, and several tests carry a
@@ -875,7 +875,7 @@ since 2026-10-12 it is kept on disk rather than wired in — together with
 fixture): both feed only a format `Scene.loadMotion` now refuses, so only the VRMA half of this paragraph
 still describes this build.
 
-The **2132** the docs quote is the sum of the suites that print an assertion count,
+The **2139** the docs quote is the sum of the suites that print an assertion count,
 plus one for each suite that reports a verdict or a hash instead (`load`, `vendor`).
 `docs` deliberately excludes its own assertion count: including it is circular,
 because that count depends on whether the documented total matched, so a single run
@@ -905,8 +905,9 @@ document is parsed and does not wait for external `file://` scripts, so a
   procedural by default; a `.vrma` file plays only where the user assigns
   one to a state. It drives VRM humanoid bones, so it cannot drive an avatar with no humanoid rig, and it
   is never converted from or to another format — a `.vmd` is recognised and refused rather than converted.
-  `held` / `falling` / `landing` always take the
-  procedural path, because the drag physics owns those poses.
+  NINE states carry a row since 2026-10-13 (「缺少拖动时模型动作的设置」): the six DSH is in, plus `held` / `falling` /
+  `landing`. A clip on one of those three is the POSE; where the pet IS stays the drag physics' business, and the
+  frozen `setDragMotion` lag and the placement integration are untouched by it.
 * **VMD camera, light and self-shadow tracks are moot (RETIRED 2026-10-12).** No VMD is played at all now.
   When one was, only its bone and morph tracks were read, because the pet's camera belongs to the viewport
   framing and this is a desktop pet rather than a video renderer.

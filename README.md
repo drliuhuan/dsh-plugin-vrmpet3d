@@ -8,7 +8,7 @@ It ships **one redistributable model** ([assets/models/SampleModel.vrm](assets/m
 default, so a fresh install shows a real pet with nothing to configure.
 
 ```
-no runtime dependencies · 9 verification suites · 2132 checks · works offline
+no runtime dependencies · 9 verification suites · 2139 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -127,7 +127,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2132 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
+**9 verification suites, 2139 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
 
 ```bash
@@ -136,8 +136,8 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1036 — state machine |
-| `node scripts/verify-model.mjs` | 693 — model catalog, the import stores and the first-run guide's state |
+| `node scripts/verify.mjs` | 1042 — state machine, and the nine motion states |
+| `node scripts/verify-model.mjs` | 694 — model catalog, the import stores and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 93 — the widget, the menu, the desktop page, the guide, its trigger and a posed model's part hit test |
@@ -150,7 +150,7 @@ The suites that need a browser skip (not fail) without one, and `verify-desktop.
 installation to borrow an Electron from. Two habits this project cares about: after editing
 [lib/core.js](lib/core.js), [lib/scene.js](lib/scene.js) or [lib/menu.js](lib/menu.js) run
 `node scripts/client-chunks.mjs` (the delivered chunks are committed copies, and a stale one is a silent failure —
-`--check` is the one-second assertion), and report a partial run as a partial run ("core: 1036 passed"), never as
+`--check` is the one-second assertion), and report a partial run as a partial run ("core: 1042 passed"), never as
 "all green".
 
 **Verification is a developer's instrument, and installing the plugin never runs it.** The packaged artifact

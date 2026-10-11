@@ -937,10 +937,14 @@ if (live.skipped) {
         // motion it plays — listing the catalog the host serves and counting how many of those clips declare
         // themselves as playing once. The page publishes these numbers rather than the DOM's text, so the
         // check does not depend on the language.
+        //
+        // NINE rows since 2026-10-13 (拖动中 / 抛掷中 / 落地中 carry a motion row now, 「缺少拖动时模型动作的设置」)
+        // against SIX status boxes: the prompt above the pet's head is a claim about what DSH is doing, and being
+        // carried is not something DSH is doing, so `buildStatusRow` is skipped for the three pointer poses.
         const motions = shown.motions || {};
         ok(motions.controls === true, 'and the 状态 section exists');
-        ok(motions.rows === 6, `with one box set per state (${motions.rows})`);
-        ok(motions.statusRows === 6, `and a status line in each (${motions.statusRows})`);
+        ok(motions.rows === 9, `with one box set per state (${motions.rows})`);
+        ok(motions.statusRows === 6, `and a status line in each of the six DSH states (${motions.statusRows})`);
         /**
          * The five prompts the operator asked for, checked as the SHIPPED defaults rather than as text on the
          * screen: this stub's preferences carry no `status` map, so what comes back is exactly what a fresh
@@ -990,7 +994,7 @@ if (live.skipped) {
         // The 凝视 switch the operator asked for on 2026-10-09 late: one per ticked clip, beside the three
         // dropdowns.
         ok(motions.gazeRows === 2, `and a gaze switch on each row too (${motions.gazeRows})`);
-        ok(motions.everyRows === 6, `and one interval line per state (${motions.everyRows})`);
+        ok(motions.everyRows === 9, `and one interval line per state (${motions.everyRows})`);
         /**
          * AND THE TICK BOX COLLECTS ONLY CLIPS.
          *
@@ -1017,9 +1021,10 @@ if (live.skipped) {
          * AND THE FOLDERS SCOPE THE LISTS — both shapes in one run.
          *
          * Operator's request, 2026-10-12: "把对应的动作直接解析到指定目录，这样在选择动作的时候就不会出现很长一串".
-         * The stub declares ONE mapping (`done` → `plain`, where both its clips live) and leaves the other five
+         * The stub declares ONE mapping (`done` → `plain`, where both its clips live) and leaves the other EIGHT
          * states undeclared, so a state with an entry is offered only its own folders' clips and a state
-         * without one is offered the catalogue, exactly as every build before this block did.
+         * without one is offered the catalogue, exactly as every build before this block did. (Eight, not five,
+         * since 2026-10-13: 拖动中 / 抛掷中 / 落地中 have rows of their own — 「缺少拖动时模型动作的设置」.)
          *
          * The mapping USED to be missing here, and that empty case is why the suite stayed green while the
          * shipped pack's six mappings came up with no clips at all: the page compared a state's folder LIST to
@@ -1028,7 +1033,7 @@ if (live.skipped) {
          */
         const scoped = pick.rows || {};
         const folderNames = (value) => (Array.isArray(value) ? value : (value ? [value] : []));
-        ok(Object.keys(scoped).length === 6, `all six states are drawn (${Object.keys(scoped).length})`);
+        ok(Object.keys(scoped).length === 9, `all nine states are drawn (${Object.keys(scoped).length})`);
         ok(Object.values(scoped).every((row) => row.outsideFolder.length === 0)
           && folderNames(scoped.done && scoped.done.folder).indexOf('plain') !== -1
           && Object.entries(scoped).filter(([state]) => state !== 'done').every(([, row]) => row.folder === null),

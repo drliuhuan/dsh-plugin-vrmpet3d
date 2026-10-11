@@ -893,11 +893,14 @@ group('5b. the bundled motion pack');
   const packManifest = plugin.readMotionManifest(join(plugin.bundledMotionDir(), plugin.MOTION_MANIFEST_FILE));
   ok(Object.keys(packManifest.clips).length > 0, 'the shipped pack carries its own manifest');
   ok(core.MOTION_STATES.indexOf('sleeping') === -1 && core.MOTION_STATES.indexOf('resting') !== -1,
-    'the states a default may name are the six configurable ones: `sleeping` folds into `resting` and is refused');
+    'the states a default may name are the nine configurable ones: `sleeping` folds into `resting` and is refused');
   eq(JSON.stringify(plugin.readMotionDefaults(null)), '{}', 'a missing defaults block declares nothing');
   eq(JSON.stringify(plugin.readMotionDefaults({ resting: ['idle.vrma'], held: ['idle.vrma'] })),
+    '{"resting":["idle.vrma"],"held":["idle.vrma"]}',
+    'a default for a POINTER POSE is kept, because those states have rows of their own since 2026-10-13');
+  eq(JSON.stringify(plugin.readMotionDefaults({ resting: ['idle.vrma'], sleeping: ['idle.vrma'] })),
     '{"resting":["idle.vrma"]}',
-    'a default for a state the session machine cannot reach is dropped, so the panel never shows a tick nobody can clear');
+    'while a default for a state the session machine cannot reach is dropped, so the panel never shows a tick nobody can clear');
   eq(JSON.stringify(plugin.readMotionDefaults({ resting: ['idle.vrma', 'idle.vrma', 7, ''] })),
     '{"resting":["idle.vrma"]}',
     'duplicates and non-names are dropped from a declared default');

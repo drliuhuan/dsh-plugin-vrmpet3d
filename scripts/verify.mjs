@@ -1261,8 +1261,9 @@ group('6c. the per-state status prompt');
   const blank = core.cleanPreferences({});
   same(core.STATUS_STATES, ['resting', 'working', 'waiting', 'done', 'error', 'offline'],
     'the six states the user configures are the operator’s six, in order');
-  same(core.STATUS_STATES, core.MOTION_STATES,
-    'and the motion map is offered for exactly the same six, so the two halves cannot drift');
+  same(core.MOTION_STATES, core.STATUS_STATES.concat(core.INTERACTION_STATES),
+    'and the motion map is those six plus the three pointer poses, derived rather than written twice');
+  eq(core.MOTION_STATES.length, 9, 'nine states carry a 状态与动作 row');
 
   eq(core.statusLineFor(blank, 'working'), '深度求索中，用时 {duration} ···',
     '工作态 ships DSH’s own running line, clock token and all');
@@ -2587,18 +2588,23 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   eq(core.isMotionFile('c.vrm'), false, 'a VRM model is not a motion file');
   eq(core.isMotionFile('d.pmx'), false, 'an MMD model is not a motion file');
 
-  // The drag poses are pointer-owned; a clip that displaced the body would fight the fall integration that
-  // decides where the pet lands. `sleeping` and `greeting` are excluded for the operator's reason instead:
-  // they are not things DSH is doing, so they are not rows in the 状态 section.
+  /**
+   * The drag and throw poses HAVE rows of their own since 2026-10-13 (「缺少拖动时模型动作的设置」): a clip there is the
+   * POSE, while where the pet IS stays the drag physics' business — the placement and the frozen `setDragMotion` lag
+   * are untouched. `sleeping` and `greeting` are what still has no row, for the operator's own reason: a nap and a
+   * click reaction are not things DSH is doing, so there is nothing for such a clip to be about.
+   */
   for (const state of core.INTERACTION_STATES) {
-    eq(core.MOTION_STATES.includes(state), false, `interaction state "${state}" cannot be overridden by a motion`);
+    eq(core.MOTION_STATES.includes(state), true, `interaction state "${state}" carries a motion row now`);
   }
   for (const state of ['sleeping', 'greeting']) {
     eq(core.MOTION_STATES.includes(state), false,
-      `"${state}" is not one of the six configurable states`);
+      `"${state}" is not one of the nine configurable states`);
   }
-  eq(core.STATES.length - core.MOTION_STATES.length, core.INTERACTION_STATES.length + 2,
-    'the states a motion cannot drive are exactly the three drag poses plus sleeping and greeting');
+  eq(core.STATES.length - core.MOTION_STATES.length, 2,
+    'the only states a motion cannot drive are sleeping and greeting');
+  eq(core.MOTION_STATES.length, core.STATUS_STATES.length + core.INTERACTION_STATES.length,
+    'and the motion states are exactly the two families together, with nothing left out');
   for (const state of ['resting', 'working', 'waiting', 'done', 'error', 'offline']) {
     ok(core.MOTION_STATES.includes(state), `"${state}" can be overridden by a motion`);
   }
@@ -2635,7 +2641,8 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   // courtesy: the map is PERSISTED, so every profile written before this build holds
   // `{ resting: 'a1' }`, and a cleaner that refused it would silently erase the
   // operator's whole motion configuration on the first run of the new build.
-  same(core.cleanMotions({ resting: 'a', held: 'x', bogus: 'y', working: '', sleeping: 7 }), { resting: ['a'] },
+  same(core.cleanMotions({ resting: 'a', held: 'x', bogus: 'y', working: '', sleeping: 7 }),
+    { resting: ['a'], held: ['x'] },
     'a legacy bare-string id is normalised to a one-entry list (and unknown/empty values dropped)');
   same(core.cleanMotions(null), {}, 'cleanMotions tolerates a missing map');
   same(core.cleanMotions({ resting: ['a2', 'a1'] }), { resting: ['a2', 'a1'] },
@@ -2653,9 +2660,9 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   eq(core.cleanMotions({ resting: Array.from({ length: 16 }, (_, i) => 'a' + i) }).resting.length, 16,
     'and sixteen clips in one state are kept in full');
 
-  const withMotion = core.cleanPreferences({ motions: { resting: 'm1', held: 'no' } });
-  same(withMotion.motions, { resting: ['m1'] },
-    'cleanPreferences carries the motion map through its own filter, string form included');
+  const withMotion = core.cleanPreferences({ motions: { resting: 'm1', held: 'no', sleeping: 'x' } });
+  same(withMotion.motions, { resting: ['m1'], held: ['no'] },
+    'cleanPreferences carries the motion map through its own filter, string form and pointer poses included');
   same(core.cleanPreferences({}).motions, {}, 'no motions configured by default');
   eq(core.cleanPreferences({ motions: { resting: 'x' } }).motions === core.cleanPreferences({}).motions, false,
     'each cleaned preference set owns its own motion map');
@@ -2667,8 +2674,10 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   same(core.motionIdsFor({ resting: 'a1' }, 'resting'), ['a1'], 'motionIdsFor reads the legacy string');
   same(core.motionIdsFor({}, 'resting'), [], 'motionIdsFor answers an empty list for an unset state');
   same(core.motionIdsFor(null, 'resting'), [], 'motionIdsFor tolerates a missing map');
-  eq(core.motionIdsFor({ held: ['x'] }, 'held').length, 0,
-    'motionIdsFor refuses a state the session machine cannot reach, like the cleaner does');
+  same(core.motionIdsFor({ held: ['x'] }, 'held'), ['x'],
+    'motionIdsFor reads a pointer pose too, now that it has rows of its own');
+  same(core.motionIdsFor({ sleeping: ['x'] }, 'sleeping'), [],
+    'while a state the session machine cannot reach still answers nothing');
 
   same(core.motionIdList({ resting: ['a3', 'a1'], working: ['a1', 'a2'] }), ['a3', 'a1', 'a2'],
     'motionIdList is every distinct id in first-seen order — the set that has to be preloaded');
@@ -2680,7 +2689,7 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     'setMotionIds replaces one state and leaves the others alone (deduplicating what it is handed)');
   same(core.setMotionIds({ resting: ['a1'] }, 'resting', []), {},
     'clearing the last clip deletes the key, which is what "procedural idle" is stored as');
-  same(core.setMotionIds({ resting: ['a1'] }, 'held', ['a9']).resting, ['a1'],
+  same(core.setMotionIds({ resting: ['a1'] }, 'sleeping', ['a9']).resting, ['a1'],
     'a state the session machine cannot reach cannot be written');
   eq(core.setMotionIds({ resting: ['a1'] }, 'resting', ['a2']) === core.setMotionIds({ resting: ['a1'] }, 'resting', ['a2']),
     false, 'every call answers a fresh map, so a caller can never half-update a shared one');
@@ -2709,8 +2718,10 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   same(core.motionMapWithDefaults({ offline: 'a7' }, { offline: ['idle.vrma'] }, catalog), { offline: ['a7'] },
     'a legacy bare-string choice counts as explicit too, so it is not replaced by the default');
   same(core.motionMapWithDefaults({}, {}, catalog), {}, 'no defaults means the stored map is the answer');
-  same(core.motionMapWithDefaults({}, { held: ['idle.vrma'] }, catalog), {},
-    'a default naming a state the session machine cannot reach is dropped, exactly as a stored one is');
+  same(core.motionMapWithDefaults({}, { held: ['idle.vrma'] }, catalog), { held: ['a1'] },
+    'a default naming a POINTER POSE lands, because those states carry rows since 2026-10-13');
+  same(core.motionMapWithDefaults({}, { sleeping: ['idle.vrma'] }, catalog), {},
+    'while one naming a state the session machine cannot reach is dropped, exactly as a stored one is');
   same(core.motionMapWithDefaults({}, { resting: ['not-in-the-catalog.vrma'] }, catalog), {},
     'a default whose clip is not in the catalog maps nothing rather than pointing at a dangling id');
   same(core.motionMapWithDefaults({}, { resting: ['nested\\deep\\other.vrma'] }, catalog), { resting: ['a9'] },
@@ -2744,7 +2755,8 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
 
   // Per-state one-shot interval: a random window in seconds, and 0 means off.
   same(core.cleanMotionEvery({ resting: { min: 20, max: 80 }, bogus: { min: 1, max: 2 }, held: { min: 1, max: 2 } }),
-    { resting: { min: 20, max: 80 } }, 'cleanMotionEvery keeps the states a session can reach');
+    { resting: { min: 20, max: 80 }, held: { min: 1, max: 2 } },
+    'cleanMotionEvery keeps the states a session can reach — the pointer poses included, since they have rows now');
   same(core.cleanMotionEvery({ resting: { min: 80, max: 20 } }), { resting: { min: 20, max: 80 } },
     'an inverted window is ordered rather than dropped');
   same(core.cleanMotionEvery({ resting: { min: 5, max: 0 }, working: { min: 0, max: 0 } }), {},
@@ -2754,7 +2766,7 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   same(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'resting'),
     { min: 20, max: 80 }, 'motionEveryFor reads one state window through the cleaner');
   eq(core.motionEveryFor(core.cleanPreferences({}), 'resting'), null, 'and answers null when the state has none');
-  eq(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 1, max: 2 } } }), 'held'), null,
+  eq(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 1, max: 2 } } }), 'sleeping'), null,
     'a state the session machine cannot reach has no window, whatever the stored blob says');
   same(core.setMotionEvery(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'working', { min: 5, max: 10 }),
     { resting: { min: 20, max: 80 }, working: { min: 5, max: 10 } }, 'setMotionEvery adds a state and keeps the others');
@@ -2765,15 +2777,16 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   same(core.cleanMotionClips({
     resting: { a1: { loop: false, expression: 'Joy', mouth: 'A' }, a2: { loop: 'yes' } },
     held: { a1: { loop: true } },
+    sleeping: { a1: { loop: true } },
     working: { a3: { expression: '' } },
-  }), { resting: { a1: { loop: false, expression: 'Joy', mouth: 'A' } } },
-  'cleanMotionClips keeps a reachable state, boolean modes and named faces, and drops everything else');
+  }), { resting: { a1: { loop: false, expression: 'Joy', mouth: 'A' } }, held: { a1: { loop: true } } },
+  'cleanMotionClips keeps a reachable state (pointer poses included), boolean modes and named faces, and drops the rest');
   same(core.cleanMotionClips({ resting: { a1: { loop: false, expression: 'Joy' } } }), { resting: { a1: { loop: false, expression: 'Joy' } } },
     'a plain entry survives unchanged');
   same(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { mouth: 'A' } } } }), 'resting', 'a1'),
     { mouth: 'A' }, 'motionClipFor reads one state-and-clip entry');
   eq(core.motionClipFor(core.cleanPreferences({}), 'resting', 'a1'), null, 'and answers null when there is none');
-  eq(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'held', 'a1'), null,
+  eq(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'sleeping', 'a1'), null,
     'a state the session machine cannot reach has no per-clip entry');
 
   // The three layers of the play mode, most specific first. This is the operator's "每个状态下，可以针对每个动作
@@ -2795,8 +2808,11 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     { resting: { a1: { expression: 'Joy', mouth: 'A' } } }, 'and keeps the field that was already decided');
   same(core.setMotionClip(core.cleanPreferences({ motionClips: written }), 'resting', 'a1', 'expression', null), {},
     'clearing the last field drops the entry, so "no decision" and "an empty decision" are the same thing');
-  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'held', 'a1', 'loop', true),
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'sleeping', 'a1', 'loop', true),
     { resting: { a1: { loop: true } } }, 'a state the session machine cannot reach cannot be written');
+  same(core.setMotionClip(core.cleanPreferences({}), 'held', 'a1', 'loop', true),
+    { held: { a1: { loop: true } } },
+    'and a pointer pose IS written now: per-clip 循环/单次 works during a drag, which is the point of the row');
 
   /**
    * The per-clip 凝视 switch, and the idle rule's setting. Both are the operator's 2026-10-09 late requests:
@@ -2913,8 +2929,10 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     { state: 'resting', motionId: 'a1', expression: 'Joy', mouth: 'A' }, 'cleanPreview keeps an instruction');
   eq(core.cleanPreview({}), null, 'an empty instruction is a CLEAR, not an entry');
   eq(core.cleanPreview(null), null, 'and so is nothing at all');
-  same(core.cleanPreview({ state: 'held', motionId: 'a1' }), { motionId: 'a1' },
+  same(core.cleanPreview({ state: 'sleeping', motionId: 'a1' }), { motionId: 'a1' },
     'a state the session machine cannot reach is dropped, and the rest of the instruction survives');
+  same(core.cleanPreview({ state: 'held', motionId: 'a1' }), { state: 'held', motionId: 'a1' },
+    'while a pointer pose is a real preview target now, so a clip can be looked at during a drag');
 }
 
 // ---------------------------------------------------------------------------

@@ -34,7 +34,8 @@
  *      rest, and its quaternion stays finite, and the model still renders a
  *      silhouette — a clip that binds to nothing, or one whose time maths goes
  *      NaN, fails exactly here;
- *   4. a drag state (`held`) drops back to the procedural pose;
+ *   4. a drag state (`held`) draws the clip mapped to it — since 2026-10-13 those poses have rows of their own,
+ *      and before that date this line said the opposite;
  *   5. `clearMotions()` returns the model to its rest pose;
  *   6. a malformed payload is reported as a `reason`, not thrown into the loop.
  *
@@ -511,7 +512,15 @@ const PROBE = `
         });
       }
 
-      // ---- a drag state must not use the authored path -----------------------
+      // ---- a drag state DOES use the authored path, since 2026-10-13 ---------
+      /**
+       * Operator, 2026-10-13: 「缺少拖动时模型动作的设置」. held / falling / landing joined core.MOTION_STATES, so
+       * a clip mapped to 拖动中 is drawn while the pet is carried — the POSE comes from the clip, and WHERE the pet
+       * is stays the drag physics' business (this tool's own concerns are the pose and the bones, which is exactly
+       * what is measured here). Before that date this same block asserted the OPPOSITE: a drag state dropped the
+       * clip and held the procedural pose.
+       */
+      scene.setMotionMap({ resting: ['fixture'], held: ['fixture'] });
       scene.setState('held');
       scene.tick(0.1);
       var held = scene.describeMotions();
@@ -519,14 +528,15 @@ const PROBE = `
       var heldDrift = margins(restTargets, heldTargets);
       report.info.playingWhileHeld = held.playing;
       report.heldDriftDegrees = round(heldDrift.angle * 180 / Math.PI);
-      check('a drag state drops the clip and returns to the procedural pose', function () {
-        return held.playing === null && heldDrift.angle < 0.05;
+      check('a drag state draws its own clip rather than the procedural pose', function () {
+        return held.playing === 'fixture' && heldDrift.angle > 0.05;
       });
 
       // ---- and back ---------------------------------------------------------
+      scene.setMotionMap({ resting: ['fixture'] });
       scene.setState('resting');
       scene.tick(0.1);
-      check('the clip resumes when the drag state ends', function () {
+      check('the state\'s own clip is back when the drag state ends', function () {
         return scene.describeMotions().playing === 'fixture';
       });
 
@@ -875,8 +885,8 @@ const PROBE = `
               scene.setMotionMap({ resting: ['fixture', 'once'], working: ['fixture'] });
               enter('resting', 'offline');
               var beforeFlip = scene.describeMotions();
-              // Both flips go through a state the session machine can reach: a drag state (held, falling)
-              // legitimately clears every window, because the drag physics owns those poses.
+              // Both flips go through an ordinary status state, so the window is the state's own business: since
+              // 2026-10-13 a drag state has windows of its own too, and nothing in this check depends on that.
               enter('working', 'offline');
               enter('resting', 'offline');
               var afterFlip = scene.describeMotions();
