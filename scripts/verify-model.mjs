@@ -94,6 +94,34 @@ const SETTINGS_FILE = join(ROOT, 'build', 'fixtures', 'settings-verify.json');
 process.env.VRMPET3D_SETTINGS_FILE = SETTINGS_FILE;
 rmSync(SETTINGS_FILE, { force: true });
 
+/**
+ * And the three stores this suite did NOT own until 2026-10-12, which is a measured accident rather than a
+ * precaution.
+ *
+ * The import routes grew a FILE store (`addFile`/`removeFile`, and the motion `importDir`/`unimportDir`) whose
+ * files are resolved inside the running profile, exactly like the directory lists above — and this suite named
+ * only the directory lists. The first run after that change created `vrmpet3d-model-files.json` and
+ * `vrmpet3d-motion-imports.json` in the OPERATOR's profile: two files nothing had asked for, from a POST that only
+ * meant to exercise the legacy `{add: <directory>}` verb. The host no longer writes those stores for a legacy
+ * request, and this suite now names every store it does not own, so neither half of that accident can come back.
+ *
+ * The wizard's completion flag is here for the same reason and with a louder consequence: a suite that set it would
+ * mark the operator's machine as configured, which is the one state a test may never write.
+ */
+const IMPORT_STATE_DIR = join(ROOT, 'build', 'fixtures', 'import-state-verify');
+const MODEL_FILES_FILE = join(ROOT, 'build', 'fixtures', 'model-files-verify.json');
+const MOTION_IMPORTS_FILE = join(ROOT, 'build', 'fixtures', 'motion-imports-verify.json');
+const SETUP_FILE = join(ROOT, 'build', 'fixtures', 'setup-verify.json');
+process.env.VRMPET3D_IMPORT_DIR = IMPORT_STATE_DIR;
+process.env.VRMPET3D_MODEL_FILES_FILE = MODEL_FILES_FILE;
+process.env.VRMPET3D_MOTION_IMPORTS_FILE = MOTION_IMPORTS_FILE;
+process.env.VRMPET3D_SETUP_FILE = SETUP_FILE;
+rmSync(IMPORTED_MOTIONS_FILE, { force: true });
+rmSync(MODEL_FILES_FILE, { force: true });
+rmSync(MOTION_IMPORTS_FILE, { force: true });
+rmSync(SETUP_FILE, { force: true });
+rmSync(IMPORT_STATE_DIR, { recursive: true, force: true });
+
 let passed = 0;
 let failed = 0;
 const failures = [];
@@ -1243,11 +1271,12 @@ group('8. registered routes and both catalogs over HTTP');
       + ' | exact /vrmpet3d/model-info | exact /vrmpet3d/models | exact /vrmpet3d/motions | exact /vrmpet3d/preview'
       + ' | exact /vrmpet3d/say'
       + ' | exact /vrmpet3d/settings'
+      + ' | exact /vrmpet3d/setup-state'
       + ' | exact /vrmpet3d/state'
       + ' | exact /vrmpet3d/whale'
       + ' | exact /vrmpet3d/window'
       + ' | prefix /vrmpet3d/asset | prefix /vrmpet3d/motion | prefix /vrmpet3d/window/lib',
-    'apply registers exactly the documented routes, both settings pages, both windows, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
+    'apply registers exactly the documented routes, both settings pages, both windows, the first-run wizard\'s own state, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
   // The window's source prefix must NOT end in a slash: the server matches a prefix with
   // `pathname === prefix || pathname.startsWith(prefix + '/')`, so a trailing slash there makes
   // every real request miss and 404s the whole page. Asserted as a property, not just as the
@@ -1741,8 +1770,8 @@ group('10. imported model directories over HTTP');
   eq(refused.status, 400, 'a malformed body is refused');
   ok(/invalid JSON/.test(refused.payload?.error ?? ''), 'the refusal names the parse failure');
   refused = await post({});
-  eq(refused.status, 400, 'a body with neither add nor remove is refused');
-  ok(/expected \{add\} or \{remove\}/.test(refused.payload?.error ?? ''),
+  eq(refused.status, 400, 'a body with neither an import nor a removal is refused');
+  ok(/expected \{addFile\}/.test(refused.payload?.error ?? ''),
     'the refusal states the accepted shape');
   refused = await request('/vrmpet3d/models', { method: 'PUT', body: '{}' });
   eq(refused.status, 405, 'an unsupported method is refused');

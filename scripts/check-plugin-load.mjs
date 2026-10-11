@@ -52,6 +52,18 @@ const scratch = join(ROOT, 'build', 'probe', 'model-dirs-preflight.json');
 const settingsScratch = join(ROOT, 'build', 'probe', 'settings-preflight.json');
 process.env.VRMPET3D_MODEL_DIRS_FILE = scratch;
 process.env.VRMPET3D_SETTINGS_FILE = settingsScratch;
+/**
+ * And every store the plugin resolves inside the running profile, named here even though this preflight does not
+ * POST an import: `verify-model.mjs` learned the same lesson the hard way on 2026-10-12 — a suite that named only
+ * the directory lists left the two IMPORT stores (and the wizard's flag) pointing at the operator's real profile,
+ * and the first POST created them there. A preflight that applies the plugin should never be one route change away
+ * from writing the user's own state.
+ */
+process.env.VRMPET3D_MOTION_DIRS_FILE = join(ROOT, 'build', 'probe', 'motion-dirs-preflight.json');
+process.env.VRMPET3D_IMPORT_DIR = join(ROOT, 'build', 'probe', 'import-state-preflight');
+process.env.VRMPET3D_MODEL_FILES_FILE = join(ROOT, 'build', 'probe', 'model-files-preflight.json');
+process.env.VRMPET3D_MOTION_IMPORTS_FILE = join(ROOT, 'build', 'probe', 'motion-imports-preflight.json');
+process.env.VRMPET3D_SETUP_FILE = join(ROOT, 'build', 'probe', 'setup-preflight.json');
 
 let failures = 0;
 function report(ok, label, detail) {
@@ -182,8 +194,8 @@ report(service?.assetRoutes === null,
   // pet publishes for the floating window, the AI 碎碎念 pair (one generated line, and the provider catalog the
   // settings offer), DSH's own animated whale mark for the status prompt's mask, and the one route that ends the
   // application it is served from (重启 / 退出 DeepSeek Harness for the pet's right-click menu).
-  report(lateRegistrations.length === 17,
-    `a late webServer receives all seventeen routes (${lateRegistrations.join(', ') || 'none'})`);
+  report(lateRegistrations.length === 18,
+    `a late webServer receives all eighteen routes (${lateRegistrations.join(', ') || 'none'})`);
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/catalog'),
     'the catalog route is among them');
   report(lateRegistrations.some((entry) => entry === 'prefix /vrmpet3d/asset'),
@@ -709,7 +721,7 @@ report(service?.assetRoutes === null,
 
   // Registering twice must not happen: the server throws on a duplicate (kind, path).
   lateCtx.pending[0].callback(scope);
-  report(lateRegistrations.length === 17,
+  report(lateRegistrations.length === 18,
     `a second arrival does not re-register (${lateRegistrations.length} total)`);
 
   // Read the service THIS activation provided, not a Map entry: a second apply
