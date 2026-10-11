@@ -40,6 +40,24 @@ is.
    genuinely spans every suite (a manifest, activation or route-table change that several suites assert on), or
    this is a session's opening check that the operator asked for.
 
+## Verification never runs itself
+
+The packaged artifact carries no `scripts/` (`files[]` excludes it), so an installation — plugin manager, package
+manager or `github:` spec — gets the pet and not the suites; nothing in `apply()`, the launcher or a route ever
+reaches one. The suites live in the repository and are run by hand.
+
+The `desktop` suite is the one exception to "verification is invisible": it opens a **real always-on-top window**
+on the machine running it, because proving the window it makes is the point. Ask for a pass without it:
+
+```bash
+node scripts/verify-all.mjs --no-window      # the same nine suites; the desktop live half is skipped and says so
+node scripts/verify-desktop.mjs --no-window  # or VRMPET3D_SKIP_DESKTOP=1 for that one suite
+```
+
+Its Node half still runs, the skip is PRINTED rather than passed silently, and `check-docs.mjs` forces the live
+half back ON when it measures the documented count — so a switch left in someone's shell cannot make the numbers
+in the docs look wrong.
+
 ## Which suite covers what
 
 | What changed | Run this |

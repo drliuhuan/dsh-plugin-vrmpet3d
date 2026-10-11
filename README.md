@@ -143,6 +143,21 @@ installation to borrow an Electron from. Two habits this project cares about: af
 `--check` is the one-second assertion), and report a partial run as a partial run ("core: 1036 passed"), never as
 "all green".
 
+**Verification is a developer's instrument, and installing the plugin never runs it.** The packaged artifact
+(`files[]`) ships no `scripts/`, so an installation — through the plugin manager, a package manager, or a
+`github:` spec — receives the pet and not the suites; nothing in the plugin's own code calls one. The `desktop`
+suite is the only one that opens a **real always-on-top window** on the machine running it (it has to, to prove
+the window it makes), so a pass that should not disturb anyone asks for it to be left out:
+
+```bash
+node scripts/verify-all.mjs --no-window      # the same nine suites; that suite's live half is skipped and says so
+node scripts/verify-desktop.mjs --no-window  # or VRMPET3D_SKIP_DESKTOP=1, for that one suite
+```
+
+The desktop suite's Node half still runs, the skip is printed rather than passed silently, and
+`node scripts/check-docs.mjs` measures the documented count with the live half forced back ON, so the figure above
+never depends on who ran it.
+
 ## Project layout
 
 ```

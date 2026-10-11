@@ -20,7 +20,13 @@
  * Suites 7 and 8 need a Chromium-based browser; a missing browser is reported as a
  * skip, not a failure, because a headless environment without one is a legitimate
  * place to run the rest. Suite 9 skips itself in the same spirit when there is no
- * Electron installation to borrow from.
+ * Electron installation to borrow from — and it can be asked to leave its window out
+ * altogether with `--no-window` (or `VRMPET3D_SKIP_DESKTOP=1`), which is what a pass
+ * that should not put an always-on-top window on someone's screen uses. Its Node half
+ * still runs and the skip is printed rather than passed silently.
+ *
+ * Nothing here runs by itself. The packaged artifact ships no `scripts/` at all, so an
+ * installed copy of the plugin has no suites to run and no way to open that window.
  *
  * Suite 4 needs the installed app.asar, because it runs DSH's OWN client module
  * system rather than a copy of it. When that file cannot be read the page still
@@ -131,8 +137,17 @@ function browserAvailable() {
   return candidates.some(candidate => existsSync(candidate));
 }
 
+/**
+ * `--no-window` is the operator's "run everything, but do not put a window on my screen". It travels as the
+ * environment variable the desktop suite already answers to, because `spawnSync` inherits this process's
+ * environment: one switch, and no per-suite plumbing to keep in step.
+ */
+const noWindow = process.argv.includes('--no-window');
+if (noWindow) process.env.VRMPET3D_SKIP_DESKTOP = '1';
+
 const results = [];
 const needsBrowser = new Set(['clientchunk', 'browser', 'client']);
+if (noWindow) console.log('note  --no-window: the desktop suite will skip its live window\n');
 const haveBrowser = browserAvailable();
 
 for (const suite of SUITES) {

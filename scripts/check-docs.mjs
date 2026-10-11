@@ -124,8 +124,15 @@ group('3. documented check counts match the suites');
   /** The last suite whose run failed, for the failure message on the count assertion. */
   let lastSuiteError = null;
 
-  /** Run a suite and read the "N checks passed" figure it prints. */
-  function countFrom(args, pattern) {
+  /**
+   * Run a suite and read the "N checks passed" figure it prints.
+   *
+   * `envOverride` exists for the ONE suite whose count depends on how it was asked to run: the desktop
+   * suite's live half can be skipped (`--no-window`, `VRMPET3D_SKIP_DESKTOP=1`), which lowers the figure it
+   * prints. The docs quote the FULL suite, so that measurement forces the live half back on — otherwise an
+   * operator who keeps the switch in their shell would see the docs "disagree with reality" on every pass.
+   */
+  function countFrom(args, pattern, envOverride) {
     let output = '';
     try {
       output = execFileSync('node', args, {
@@ -133,6 +140,7 @@ group('3. documented check counts match the suites');
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
         maxBuffer: 64 * 1024 * 1024,
+        ...(envOverride ? { env: { ...process.env, ...envOverride } } : {}),
       });
     } catch (error) {
       // A suite that fails prints its own reason and exits non-zero, and `execFileSync` throws. The count
@@ -158,8 +166,13 @@ group('3. documented check counts match the suites');
     // would be a count read from a refusal.
     // The one suite that starts a real window. It reports its count even when the live half is
     // skipped for want of an installation to borrow Electron from — the Node half always runs —
-    // so the documented total does not depend on this machine's layout.
-    desktop: countFrom([join(ROOT, 'scripts', 'verify-desktop.mjs')], /desktop: (\d+) checks passed/),
+    // so the documented total does not depend on this machine's layout. The live half is forced
+    // ON for this measurement for the same reason: the docs quote the FULL suite, so a pass asked
+    // for with `--no-window` (or a VRMPET3D_SKIP_DESKTOP left in the operator's shell) must not
+    // make them look wrong. Empty strings beat both the current and the pre-rename name, because
+    // `lib/env.js` counts '' as unset.
+    desktop: countFrom([join(ROOT, 'scripts', 'verify-desktop.mjs')], /desktop: (\d+) checks passed/,
+      { VRMPET3D_SKIP_DESKTOP: '', PET3D_SKIP_DESKTOP: '' }),
   };
 
   for (const [name, count] of Object.entries(actual)) {

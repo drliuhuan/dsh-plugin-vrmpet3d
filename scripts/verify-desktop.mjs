@@ -16,6 +16,15 @@
 //
 // It never downloads anything, never writes into the installation, and always kills the
 // processes it starts.
+//
+// Run:  node scripts/verify-desktop.mjs [--no-window]
+//
+// THE LIVE HALF CAN BE TURNED OFF, and that is a distribution rule rather than a convenience:
+// this section is the only check in the project that puts a real always-on-top window on the
+// machine running it (it has to - proving the window it makes is the point). `--no-window`, or
+// `VRMPET3D_SKIP_DESKTOP=1`, leaves the Node half running, prints the skip, and opens nothing.
+// `verify-all --no-window` passes it down; `scripts/check-docs.mjs` forces it back ON when it
+// measures the documented count, so that figure never depends on who ran it.
 import { createServer } from 'node:http';
 // The loopback helper: `listen(0)` can be handed a port Chromium refuses (ERR_UNSAFE_PORT), which reads as
 // "the page never loaded" rather than as the port collision it is. See the helper's own header.
@@ -1331,7 +1340,17 @@ async function runLiveSettingsWindow(runtime, extraQuery) {
 }
 
 async function runLiveWindow() {
-  if (envVar('SKIP_DESKTOP') === '1') return { skipped: 'VRMPET3D_SKIP_DESKTOP=1' };
+  /**
+   * The live half's OFF switch, in the two spellings its two callers use: a person types `--no-window`,
+   * and `verify-all --no-window` sets the variable for every suite it spawns.
+   *
+   * Off is not the default, deliberately — this is the only check that can catch "the window is real but
+   * not what it claims", and the only one that puts a window on the machine running it.
+   */
+  const askedOff = process.argv.includes('--no-window');
+  if (askedOff || envVar('SKIP_DESKTOP') === '1') {
+    return { skipped: askedOff ? '--no-window' : 'VRMPET3D_SKIP_DESKTOP=1' };
+  }
 
   let runtime = null;
   try {
