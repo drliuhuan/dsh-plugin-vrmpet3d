@@ -1,0 +1,161 @@
+{
+  "capturedFrom": "/vrmpet3d/motions on port 19387",
+  "motions": [
+    {
+      "id": "a1",
+      "name": "attention/wave hand 1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a2",
+      "name": "attention/wave hand 2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a3",
+      "name": "attention/wave hand 3.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a4",
+      "name": "dance/极乐净土.vrma.br",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a5",
+      "name": "fail/fall down1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a6",
+      "name": "fail/fall down2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a7",
+      "name": "idle/coolIdleGlance.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a8",
+      "name": "idle/hungry1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "a9",
+      "name": "idle/hungry2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "aa",
+      "name": "idle/idle lookaround1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ab",
+      "name": "idle/idle lookaround2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ac",
+      "name": "idle/idle stretch1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ad",
+      "name": "idle/idle stretch2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ae",
+      "name": "idle/idle stretch3.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "af",
+      "name": "idle/idle stretch4.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ag",
+      "name": "idle/idle.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ah",
+      "name": "idle/idle2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ai",
+      "name": "idle/idle3.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "aj",
+      "name": "idle/idle4.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ak",
+      "name": "idle/innocentStandIdle.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "al",
+      "name": "idle/touch hair1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "am",
+      "name": "idle/touch hair2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "an",
+      "name": "offline/sleeping.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ao",
+      "name": "success/jump 1.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "ap",
+      "name": "success/jump 2.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    },
+    {
+      "id": "aq",
+      "name": "success/jump 3.vrma",
+      "format": "vrma",
+      "source": "bundled"
+    }
+  ]
+}

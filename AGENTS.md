@@ -72,6 +72,7 @@ in the docs look wrong.
 | `vendor/`, the pinned 3D stack | `node scripts/vendor-build.mjs --check` |
 | documentation, or any count those docs quote | `node scripts/check-docs.mjs` (it recomputes the totals, so it IS the local suite for this case) |
 | the profile wiring, or "is the running app current?" | `node scripts/check-profile.mjs` |
+| what the RUNNING app is actually serving (routes, page sources), after a restart | `node scripts/live-check.mjs` |
 
 Overlapping changes mean the union of those rows — still not the whole tree.
 

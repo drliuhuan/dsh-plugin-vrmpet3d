@@ -29,6 +29,16 @@ AI 碎碎念 / 模型动作 / 完成: the in-app pet offers it once per plugin A
 `<profile>/vrmpet3d-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
 asks again, exactly as the operator specified.
 
+**His CURRENT configuration is captured in `initial-config/`** — operator instruction, 2026-10-13: every step of the
+release's initial configuration goes into git, finished or not (「每一步都要上传到github，包括我还没有构造好的初始配置
+文件，即当前配置」). `node scripts/capture-config.mjs` copies the live profile's plugin config into that folder, `--check`
+compares without writing, and `--catalog` adds the id → file-name map a release needs. The folder is deliberately
+OUTSIDE `files[]`, so his machine's absolute paths never reach a user; `vrmpet3d-setup.json` is refused on purpose,
+because shipping the guide's `completed` flag would make every new user skip the guide. What SHIPS is the pack
+manifest's `defaults`, keyed by FILE NAME — the settings store's ids are minted per profile — and the two
+release-time jobs (that translation, and reverting his local-only values) are written out in
+`initial-config/README.md`.
+
 ## 1. What this is
 
 A **3D desktop pet** for DeepSeek Harness: a VRM on a transparent WebGL layer, driven by live session state. It runs

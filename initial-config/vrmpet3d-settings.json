@@ -1,0 +1,415 @@
+{
+  "version": 327,
+  "preferences": {
+    "scope": "global",
+    "petSurface": "auto",
+    "size": 100,
+    "windowSize": 157,
+    "gravity": true,
+    "windowGravity": false,
+    "motion": true,
+    "lookAtPointer": true,
+    "physics": true,
+    "hidden": false,
+    "sleepAfterMs": 120000,
+    "modelId": "m1",
+    "modelScale": 1,
+    "yaw": 0,
+    "viewYaw": -0.12000000000000016,
+    "viewPitch": 0.006000000000000057,
+    "sway": 0.12,
+    "windPower": 0.32,
+    "windRadius": 0.1,
+    "windDecay": 0.28,
+    "windSpeedForMax": 1600,
+    "gazeCurve": 0.4,
+    "gazeSpanX": 0,
+    "gazeSpanY": 0,
+    "gazeIdleSeconds": 5,
+    "x": 0,
+    "y": 0,
+    "placementX": 0.0796875,
+    "placementY": 0,
+    "motions": {
+      "resting": [
+        "a8",
+        "a9",
+        "aa",
+        "ab",
+        "ac",
+        "ad",
+        "ae",
+        "af",
+        "ag",
+        "ah",
+        "ai",
+        "aj",
+        "al",
+        "am"
+      ],
+      "waiting": [
+        "a1",
+        "a2",
+        "a3"
+      ],
+      "done": [
+        "ao",
+        "ap",
+        "aq"
+      ],
+      "error": [
+        "a5",
+        "a6"
+      ],
+      "offline": [
+        "an"
+      ]
+    },
+    "motionLoop": {},
+    "motionEvery": {
+      "resting": {
+        "min": 0,
+        "max": 60
+      }
+    },
+    "motionClips": {
+      "resting": {
+        "a8": {
+          "loop": false,
+          "gaze": false
+        },
+        "a9": {
+          "loop": false,
+          "gaze": false
+        },
+        "aa": {
+          "loop": false,
+          "gaze": false
+        },
+        "ab": {
+          "loop": false,
+          "gaze": false
+        },
+        "ac": {
+          "loop": false,
+          "gaze": false
+        },
+        "ad": {
+          "loop": false,
+          "gaze": false
+        },
+        "ae": {
+          "loop": false,
+          "gaze": false
+        },
+        "af": {
+          "loop": false,
+          "gaze": false
+        },
+        "al": {
+          "loop": false,
+          "gaze": false
+        },
+        "am": {
+          "loop": false,
+          "gaze": false
+        }
+      },
+      "waiting": {
+        "a1": {
+          "loop": false,
+          "gaze": false
+        },
+        "a2": {
+          "loop": false,
+          "gaze": false
+        },
+        "a3": {
+          "loop": false,
+          "gaze": false
+        }
+      },
+      "done": {
+        "aq": {
+          "gaze": false
+        },
+        "ap": {
+          "gaze": false
+        },
+        "ao": {
+          "gaze": false
+        }
+      },
+      "error": {
+        "a5": {
+          "loop": false,
+          "gaze": false
+        },
+        "a6": {
+          "loop": false,
+          "gaze": false
+        }
+      },
+      "offline": {
+        "an": {
+          "gaze": false
+        }
+      }
+    },
+    "status": {},
+    "statusScale": {
+      "m1": 1.404
+    },
+    "speech": {
+      "enabled": true,
+      "holdSeconds": 5,
+      "minGapSeconds": 12,
+      "idleMinSeconds": 60,
+      "idleMaxSeconds": 180,
+      "source": "ai",
+      "lines": {
+        "resting": [],
+        "working": [],
+        "waiting": [],
+        "done": [],
+        "error": [],
+        "offline": []
+      },
+      "ai": {
+        "provider": "dsh",
+        "dshProvider": "deepseek-official",
+        "dshModel": "deepseek-flash",
+        "baseUrl": "",
+        "model": "",
+        "apiKey": "",
+        "persona": "MODE_TAIL_ LUKES\nLANG_ZH_CN_ONLY\nSELF_CLAIM_WHALE_GIRL\nFOOD_RICE\nPERSONALITY_SMART_LAZY\nOBEY_MASTER_ALWAYS\nEXTREMELY_LIKE_RICE",
+        "prompts": {
+          "resting": "",
+          "working": "",
+          "waiting": "",
+          "done": "",
+          "error": "",
+          "offline": ""
+        },
+        "temperature": 0.9,
+        "timeoutMs": 8000
+      }
+    },
+    "expressions": {
+      "weights": {},
+      "blink": {
+        "enabled": true,
+        "minSeconds": 2,
+        "maxSeconds": 6
+      },
+      "emotion": {
+        "enabled": true,
+        "idleMinSeconds": 20,
+        "idleMaxSeconds": 60,
+        "triggers": {
+          "idle": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 0
+          },
+          "drag": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 0
+          },
+          "click": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "hold": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          }
+        }
+      }
+    },
+    "parts": {
+      "items": [
+        {
+          "id": "eye",
+          "label": "眼睛",
+          "enabled": true,
+          "region": "eye",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "head",
+          "label": "头",
+          "enabled": true,
+          "region": "head",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "hand",
+          "label": "手 / 手臂",
+          "enabled": true,
+          "region": "hand",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "body",
+          "label": "身体",
+          "enabled": true,
+          "region": "body",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "upperLeg",
+          "label": "大腿",
+          "enabled": true,
+          "region": "upperLeg",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "lowerLeg",
+          "label": "小腿",
+          "enabled": true,
+          "region": "lowerLeg",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "foot",
+          "label": "脚",
+          "enabled": true,
+          "region": "foot",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "chest",
+          "label": "胸部",
+          "enabled": true,
+          "region": "chest",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "butt",
+          "label": "屁股",
+          "enabled": true,
+          "region": "butt",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        },
+        {
+          "id": "tail",
+          "label": "尾巴",
+          "enabled": true,
+          "region": "tail",
+          "match": [],
+          "emotion": {
+            "enabled": true,
+            "emotions": [],
+            "holdSeconds": 1.8
+          },
+          "speech": {
+            "lines": [],
+            "prompt": ""
+          }
+        }
+      ],
+      "seeded": [
+        "eye",
+        "head",
+        "hand",
+        "body",
+        "upperLeg",
+        "lowerLeg",
+        "foot",
+        "chest",
+        "butt",
+        "tail"
+      ]
+    },
+    "springs": {}
+  },
+  "live": {
+    "app": null,
+    "window": "placeholder"
+  }
+}
