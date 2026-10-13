@@ -11,7 +11,7 @@ fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2267 checks · works offline
+no runtime dependencies · 9 verification suites · 2269 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -131,7 +131,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2267 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2269 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -147,7 +147,7 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 97 — the widget, the menu, the desktop page, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar and a posed model's part hit test |
-| `node scripts/verify-desktop.mjs` | 264 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
+| `node scripts/verify-desktop.mjs` | 266 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
 | `node scripts/check-docs.mjs` | documented paths, commands and counts match reality |

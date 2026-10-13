@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2267 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2269 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -97,6 +97,14 @@ him). And it talks on its own cadence: `workingMinSeconds`/`workingMaxSeconds` (
 beside the idle one, wired into `SpeechMachine.chatterAt` — the one event that speaks more than once while it lasts,
 never back-to-back and never sooner than `minGapSeconds`. That window has its own row in 通用设置 → 碎碎念
 (「工作嘀咕间隔」), because a feel value belongs where the person feeling it can move it.
+
+**The AI half of 碎碎念 is HIDDEN while 台词来源 is 内置短语** (operator, 2026-10-13: 「如果台词来源是内置台词，则下方的AI相关
+设置不显示」): with the built-in table chosen the model is never asked, so its provider, model, persona, temperature and 试一句
+are controls for a feature that is not in use. `showSpeech` hides the `#speech-ai` BLOCK and nothing inside it — the dsh/custom
+rows keep their own toggle, and the per-state boxes stay, because a 台词 box is where 自定义短语's own lines live. The page
+publishes `speech.aiVisible`, which is a DIFFERENT fact from `speech.aiControls` (the controls exist either way); the live
+settings-window half asserts `aiVisible === false` against a source it has just asserted is builtin, and the Node half owns the
+markup↔script join, which `--no-window` still checks.
 
 **The AI-prompt box in 部位 carries ONE generic grey hint, whatever the part is** (2026-10-13: 「胸部和屁股的AI提示词，
 默认状态下尽管有内置提示词，但是也应该是和其他部位的默认灰色字体提示一样」): 胸部/屁股 keep their shipped INSTRUCTIONS — the host

@@ -160,6 +160,20 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
   ok(setupHtml.includes('id="setup-ai-note"') && setupScript.includes("el('setup-ai-note')")
     && setupScript.includes('aiNote.hidden = speech.source'),
     "the AI step's explanation is markup the script shows and hides with the AI 来源 row");
+  /**
+   * AND 通用设置's 碎碎念 HAS THE SAME RULE FOR ITS OWN AI BLOCK (operator, 2026-10-13: 「如果台词来源是内置台词，则下方的AI
+   * 相关设置不显示」).
+   *
+   * The live half asserts the visibility itself, on a source that ships builtin; this is the join that makes that
+   * assertion meaningful — the container exists in the markup, the script hides THAT id, and the fact is published
+   * so a window can be read for it instead of photographed.
+   */
+  const globalHtml = readFileSync(join(ROOT, 'lib', 'global-page.html'), 'utf8');
+  const pageScript = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
+  ok(globalHtml.includes('id="speech-ai"')
+    && pageScript.includes("setRowHidden('speech-ai', speech.source === 'builtin')")
+    && pageScript.includes('speech.aiVisible'),
+    "碎碎念's AI block is hidden while the source is the built-in table, and that visibility is published");
 }
 
 // ---------------------------------------------------------------------------
@@ -936,7 +950,18 @@ if (live.skipped) {
         ok(Object.keys(speech.lineCounts || {}).length === 6,
           'with the per-state line counts published, so an empty box is readable from outside');
         ok(speech.aiControls === true, 'the AI half\'s provider, URL, model, key and persona controls');
-        ok(speech.testControls === true, 'and the 试一句 picker that has to answer even while the source is built-in');
+        ok(speech.testControls === true, 'and the 试一句 picker, wired whether or not its block is on screen');
+        /**
+         * THE AI HALF IS NOT ON SCREEN while the built-in table is chosen (operator, 2026-10-13: 「如果台词来源是
+         * 内置台词，则下方的AI相关设置不显示」).
+         *
+         * A different fact from the two checks above, which are about the controls EXISTING: with 内置短语 the model
+         * is never asked, so its provider, persona, temperature and 试一句 are settings for a feature that is not in
+         * use. The source is asserted to be builtin four lines up, in the same published snapshot, which is what
+         * makes this deterministic rather than a race.
+         */
+        ok(speech.aiVisible === false,
+          `and it is HIDDEN while the source is the built-in table (visible=${speech.aiVisible})`);
         /**
          * The shipped route, and the persona that now ships WITH it.
          *

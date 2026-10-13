@@ -876,7 +876,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2267 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
+Nine suites, 2269 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
 suites, the `build/` tools and the notes) — the `mmd` suite that used to make it ten went with MMD support on
 2026-10-12, and every figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs`
 recomputes them. The
@@ -921,7 +921,7 @@ since 2026-10-12 it is kept on disk rather than wired in — together with
 fixture): both feed only a format `Scene.loadMotion` now refuses, so only the VRMA half of this paragraph
 still describes this build.
 
-The **2267** the docs quote is the sum of the suites that print an assertion count,
+The **2269** the docs quote is the sum of the suites that print an assertion count,
 plus one for each suite that reports a verdict or a hash instead (`load`, `vendor`).
 `docs` deliberately excludes its own assertion count: including it is circular,
 because that count depends on whether the documented total matched, so a single run
