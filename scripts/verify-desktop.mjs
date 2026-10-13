@@ -182,11 +182,16 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
    * The live half asserts the visibility itself, on a source that ships builtin; this is the join that makes that
    * assertion meaningful — the container exists in the markup, the script hides THAT id for every source but AI 生成,
    * and the fact is published so a window can be read for it instead of photographed.
+   *
+   * The rule itself is a NAMED function (`speechSourceIsAi`) since the per-clip AI 提示词 box is shown by the same
+   * decision, and two copies of "is the source AI" is exactly how the block and the box would come to disagree. So
+   * what is asserted here is that the block is hidden through THAT function — the one source of the visibility — as
+   * well as the markup and the published fact it always was.
    */
   const globalHtml = readFileSync(join(ROOT, 'lib', 'global-page.html'), 'utf8');
   const pageScript = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
   ok(globalHtml.includes('id="speech-ai"')
-    && pageScript.includes("setRowHidden('speech-ai', speech.source !== 'ai')")
+    && pageScript.includes("setRowHidden('speech-ai', !speechSourceIsAi())")
     && pageScript.includes('speech.aiVisible'),
     "碎碎念's AI block is shown for the AI source alone, and that visibility is published");
 }

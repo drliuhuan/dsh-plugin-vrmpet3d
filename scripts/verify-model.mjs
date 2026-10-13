@@ -2640,6 +2640,33 @@ group('13. the AI 碎碎念 route: one call, made here, from nothing but the set
   eq(seen[seen.length - 1].body.messages[1].content, '说一句正在干活的自言自语。',
     'while the instruction is the state\'s');
   /**
+   * And the PER-CLIP AI 提示词 is APPENDED to that instruction, never put in its place.
+   *
+   * Operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」. The page sends it
+   * beside the state it belongs to — `POST /vrmpet3d/say {event, state, clipPrompt}` — because the instruction can come
+   * from three places (the state's box, the shipped starter, a part's own prompt) and a per-clip note has to sit after
+   * whichever of them named the subject. Asserted ON THE WIRE for the same reason every other instruction claim here
+   * is: the host is the only half that builds the request.
+   */
+  answer = '这支动作的话';
+  const clipPromptSay = await json('/vrmpet3d/say', 'POST',
+    { event: 'working', state: 'working', language: 'zh', clipPrompt: '这句要说得得意一点' });
+  eq(clipPromptSay.status, 200, 'a request carrying a per-clip 提示词 is answered');
+  eq(seen[seen.length - 1].body.messages[1].content, '说一句正在干活的自言自语。\n这句要说得得意一点',
+    'with the state\'s own instruction still the base and the clip\'s note appended after it');
+  // The cap is the one the settings store applies, so what the panel shows and what the model is told cannot disagree.
+  const longClipPrompt = await json('/vrmpet3d/say', 'POST',
+    { event: 'working', state: 'working', language: 'zh', clipPrompt: 'x'.repeat(400) });
+  eq(longClipPrompt.status, 200, 'an over-long one is accepted');
+  eq(seen[seen.length - 1].body.messages[1].content.length,
+    '说一句正在干活的自言自语。'.length + 1 + core.MOTION_LIMITS.promptLength,
+    'and is cut to the per-clip cap the store uses rather than to a number of its own');
+  const blankClipPrompt = await json('/vrmpet3d/say', 'POST',
+    { event: 'working', state: 'working', language: 'zh', clipPrompt: '   ' });
+  eq(blankClipPrompt.status, 200, 'a box holding only spaces is accepted');
+  eq(seen[seen.length - 1].body.messages[1].content, '说一句正在干活的自言自语。',
+    'and appends nothing, which is what "an empty box means no per-clip text" looks like on the wire');
+  /**
    * A SHIPPED part brings its OWN instruction, with nothing written in its box (operator, 2026-10-12: 「默认AI提示词
    * "被主人摸到胸部了，必须要傲娇的回骂这个摸人家胸的变态主人才行。"（匹配词和AI提示词写进系统底层，AI提示词那里默认留空，
    * 跟未输入状态一样，如果输入了，则以输入的为准）」).

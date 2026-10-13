@@ -1903,6 +1903,48 @@ group('6d. 碎碎念: what the pet says on its own');
   clock += hold + 1;
   eq(machine.observe(prefs, 'nonsense', null, 'zh', rnd), null, 'an unrecognised state says nothing');
 
+  /**
+   * THE CLIP THAT IS PLAYING DECIDES WHAT THE PET SAYS (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念」).
+   *
+   * `observe` takes the clip as its optional `motion` argument — `{ id, state }`, the same pair `Scene.currentFace`
+   * reads — and a line written for that clip WINS over the state's pool while it plays. Drawn through the pool
+   * machinery rather than around it: the clip's line is a one-line pool in front of the user's box, so "the clip
+   * wins" and "an empty box falls through as before" are the same rule seen from two sides.
+   */
+  clock += hold + 1;
+  const clipPrefs = core.cleanPreferences({
+    motionClips: { working: { a1: { speech: '这支动作说的话' } } },
+    speech: { source: 'custom', lines: { working: '状态自己的台词' } },
+  });
+  const withClip = new core.SpeechMachine(() => clock);
+  eq(withClip.observe(clipPrefs, 'working', null, 'zh', rnd, { id: 'a1', state: 'working' }), '这支动作说的话',
+    'the clip that is playing speaks its own line instead of the state\'s pool while it holds');
+  // A FRESH machine for each draw, because the throttle is real: `working` does not speak twice in a row, so
+  // reusing one machine here would measure the no-repeat rule instead of the pool this check is about.
+  const otherClip = new core.SpeechMachine(() => clock);
+  eq(otherClip.observe(clipPrefs, 'working', null, 'zh', rnd, { id: 'a2', state: 'working' }), '状态自己的台词',
+    'while another clip of the same state, with no line of its own, still draws the state\'s pool');
+  const noClip = new core.SpeechMachine(() => clock);
+  eq(noClip.observe(clipPrefs, 'working', null, 'zh', rnd), '状态自己的台词',
+    'and with NO clip playing — the procedural idle — nothing about this feature is visible');
+  // 静息态 has no event of its own, so it is the IDLE branch that has to see the clip: an authored idle clip
+  // plays for as long as the pet rests, and its line is what the pet mutters while it does.
+  const idleClip = new core.SpeechMachine(() => clock);
+  const idlePrefs = core.cleanPreferences({
+    motionClips: { resting: { a1: { speech: '休息时的一句' } } },
+    speech: { idleMinSeconds: 10, idleMaxSeconds: 10, source: 'custom', lines: { resting: ['别的'] } },
+  });
+  eq(idleClip.observe(idlePrefs, 'resting', null, 'zh', rnd, { id: 'a1', state: 'resting' }), null,
+    'the idle branch still waits out its drawn gap, clip or no clip');
+  clock += 10_000;
+  eq(idleClip.observe(idlePrefs, 'resting', null, 'zh', rnd, { id: 'a1', state: 'resting' }), '休息时的一句',
+    'and then the PLAYING clip\'s line is the idle remark');
+  // A clip whose line is written for another state says nothing here: the pair is (state, clip), exactly as it is
+  // for the expression and the gaze switch.
+  clock += hold + 1;
+  eq(withClip.observe(clipPrefs, 'done', null, 'zh', rnd, { id: 'a1', state: 'resting' }), null,
+    'a line stored for another state\'s clip is not spoken here: the pair is per state, like every other per-clip field');
+
   // The idle remark: not before the drawn gap, then once, and never inside the minimum gap after a line.
   const idler = new core.SpeechMachine(() => clock);
   eq(idler.observe(core.cleanPreferences({ speech: { idleMinSeconds: 10, idleMaxSeconds: 10 } }), 'resting', null, 'zh', () => 0),
@@ -2105,6 +2147,47 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   eq(ai.say('   ', 'done'), false, 'an empty answer is refused');
   eq(ai.say('a\nb', 'done'), true, 'a multi-line answer is flattened');
   eq(ai.line().indexOf('\n'), -1, 'so the bubble stays one line');
+
+  /**
+   * And the PLAYING clip's 提示词 rides with the request — as a REFINEMENT, which is what the field is for.
+   *
+   * Operator, 2026-10-13: the per-clip AI 提示词 exists only while the source is AI (「如果当前是AI碎碎念的话」). The
+   * core publishes it beside the state the request already names and does NOT choose how the two are joined:
+   * that is the host's (`/vrmpet3d/say` appends it to the instruction it resolved), because the instruction may
+   * be the state's box, the shipped starter or a part's own prompt, and a per-clip note has to sit after
+   * whichever of those named the subject.
+   */
+  clock = 300_000;
+  const clipAi = new core.SpeechMachine(() => clock);
+  const clipAiPrefs = core.cleanPreferences({
+    motionClips: { working: { a1: { speech: '本地说的一句', prompt: '这句要说得得意一点' } } },
+    speech: { source: 'ai', lines: { working: '兜底的一句' } },
+  });
+  eq(clipAi.observe(clipAiPrefs, 'working', null, 'zh', rnd, { id: 'a1', state: 'working' }), '本地说的一句',
+    'in AI mode the clip\'s own 碎碎念 is still the line that stands while the model thinks');
+  eq(clipAi.wantsAi.clipPrompt, '这句要说得得意一点', 'and its 提示词 travels with the request');
+  eq(clipAi.wantsAi.state, 'working', 'beside the state the instruction is looked up by, unchanged');
+  const clipAsked = [];
+  const clipBook = { handled: 0, inFlight: false, promise: null };
+  await core.pumpAiSpeech(clipAi, clipBook, (request) => { clipAsked.push(request); return Promise.resolve({ text: '模型的回答' }); });
+  eq(clipAsked.length, 1, 'the surface asks once for it');
+  eq(clipAsked[0].clipPrompt, '这句要说得得意一点', 'and the refinement is on the request the surface sends');
+  // A clip with a line but no 提示词 asks for no refinement, and one with a 提示词 but no line is silent locally
+  // and still refined: the two texts are independent, which is what two boxes in one row mean.
+  clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
+  const noteOnly = new core.SpeechMachine(() => clock);
+  const noteOnlyPrefs = core.cleanPreferences({
+    motionClips: { working: { a1: { prompt: '只说提示词' } } },
+    speech: { source: 'ai' },
+  });
+  eq(noteOnly.observe(noteOnlyPrefs, 'working', null, 'zh', rnd, { id: 'a1', state: 'working' }), null,
+    'a clip with a 提示词 and no 碎碎念 has no local line in AI mode, exactly like a state with an empty box');
+  eq(noteOnly.wantsAi.clipPrompt, '只说提示词', 'while the request still carries the refinement');
+  clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
+  const lineOnly = new core.SpeechMachine(() => clock);
+  eq(lineOnly.observe(clipAiPrefs, 'done', null, 'zh', rnd, { id: 'a1', state: 'done' }), null,
+    'and the pair is per state here too: a clip with nothing written for 任务达成 refines nothing');
+  eq(lineOnly.wantsAi.clipPrompt, null, 'so the host is asked the state\'s own question and no more');
 
   // Switched off means no speech AND no calls: the switch is about the pet talking, not about its voice box.
   clock = 400_000;
@@ -3200,6 +3283,58 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     { resting: { a1: { mouth: 'A' } } }, 'clearing the switch drops only the switch');
   same(core.cleanMotionClips({ resting: { a1: { gaze: true } } }), {},
     'a stored "gaze: true" is dropped rather than kept: the switch only ever records a refusal');
+
+  /**
+   * The two TEXTS a clip owns in a state (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词」).
+   *
+   * They ride on the SAME entry the expression and the gaze switch ride on, and they are validated by the same
+   * rule as every other line the pet says: one line, trimmed, capped, and DROPPED when empty. The last part is
+   * what the resolution below depends on — "the clip has a line" is `motionSpeechFor` answering a string, so an
+   * emptied box has to leave no field at all rather than store `''`.
+   */
+  same(core.cleanMotionClips({ resting: { a1: { speech: '  摸摸头  ', prompt: ' 说得得意一点 ' } } }),
+    { resting: { a1: { speech: '摸摸头', prompt: '说得得意一点' } } },
+    'cleanMotionClips keeps a per-clip 碎碎念 and AI 提示词, trimmed');
+  same(core.cleanMotionClips({ resting: { a1: { speech: '上\n下', prompt: 'a\tb' } } }),
+    { resting: { a1: { speech: '上 下', prompt: 'a b' } } },
+    'and every line the pet says is ONE line: newlines and tabs become spaces in both');
+  same(core.cleanMotionClips({ resting: { a1: { speech: '', prompt: '   ' } } }), {},
+    'an emptied box is DROPPED, never stored as an empty line that would win over the pool');
+  eq(core.cleanMotionClips({ resting: { a1: { speech: 'x'.repeat(80) } } }).resting.a1.speech.length,
+    core.SPEECH_LIMITS.lineLength, 'a long 碎碎念 is cut to the same length as every other spoken line');
+  eq(core.cleanMotionClips({ resting: { a1: { prompt: 'x'.repeat(400) } } }).resting.a1.prompt.length,
+    core.MOTION_LIMITS.promptLength, 'and a long 提示词 to the per-clip cap');
+  eq(core.MOTION_LIMITS.promptLength, 200, 'which ships as the documented two hundred characters');
+  same(core.cleanMotionClips({ resting: { a1: { speech: 5, prompt: ['no'] } } }), {},
+    'a text field that is not a string is refused rather than coerced');
+
+  // The WRITE path keeps a text the dropdowns know nothing about, and clears it like any other field.
+  same(core.setMotionClip(core.cleanPreferences({}), 'resting', 'a1', 'speech', '这样一句'),
+    { resting: { a1: { speech: '这样一句' } } }, 'setMotionClip writes a per-clip 碎碎念');
+  same(core.setMotionClip(core.cleanPreferences({}), 'resting', 'a1', 'prompt', '得意一点'),
+    { resting: { a1: { prompt: '得意一点' } } }, 'and a per-clip AI 提示词');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { loop: false, speech: '留着' } } } }),
+    'resting', 'a1', 'prompt', '加上'), { resting: { a1: { loop: false, speech: '留着', prompt: '加上' } } },
+  'and neither write disturbs the mode or the other text already stored');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { speech: '去掉', mouth: 'A' } } } }),
+    'resting', 'a1', 'speech', null), { resting: { a1: { mouth: 'A' } } },
+  'clearing a 碎碎念 drops that field and keeps the entry (the mouth is still decided)');
+  same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { speech: '最后一个' } } } }),
+    'resting', 'a1', 'speech', null), {},
+  'and clearing the LAST field drops the entry, so "no per-clip text" is one state of the map, not two');
+
+  // Resolution: the pair is (the state it plays in, the clip that is playing), read like the face and the gaze.
+  const textPrefs = core.cleanPreferences({
+    motionClips: { resting: { a1: { speech: '静息的一句', prompt: '静息的提示' }, a2: { loop: true } } },
+  });
+  eq(core.motionSpeechFor(textPrefs, 'resting', 'a1'), '静息的一句', 'motionSpeechFor reads the playing clip\'s line');
+  eq(core.motionPromptFor(textPrefs, 'resting', 'a1'), '静息的提示', 'and motionPromptFor its AI 提示词');
+  eq(core.motionSpeechFor(textPrefs, 'resting', 'a2'), null,
+    'a clip with no line of its own answers null — which is what makes the state\'s pool stand');
+  eq(core.motionSpeechFor(textPrefs, 'working', 'a1'), null,
+    'and the line is per STATE: the same clip in another state has none, exactly like the expression');
+  eq(core.motionPromptFor(core.cleanPreferences({}), 'resting', 'a1'), null,
+    'a profile that has never used the feature answers null on both, so nothing changes for it');
 
   // Operator, 2026-10-13: 「静止停看默认为2秒」.
   eq(core.DEFAULTS.gazeIdleSeconds, 2, 'the idle rule starts at the two seconds the operator asked for');

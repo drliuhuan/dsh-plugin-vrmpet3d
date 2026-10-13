@@ -7895,6 +7895,300 @@
       });
   });
 
+  /**
+   * 通用设置 → 状态与动作: the two TEXTS a clip owns in a state, driven through the REAL page.
+   *
+   * The operator's request of 2026-10-13 (「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」) put a
+   * 碎碎念 box and an AI 提示词 box on every ticked clip's row, and the parenthetical is the half that needs a test of
+   * its own: the 提示词 box is shown only while 台词来源 is AI 生成.
+   *
+   * Why this boots the whole page instead of reading the file: the row is built by `renderMotions` out of the markup
+   * 通用设置 carries, the motion catalog the host serves and the stored preferences, and the visibility rule is bound
+   * to the 台词来源 picker's own `change`. A probe that assembled the row itself would prove the idea and not the
+   * page — and this section has already been wrong in exactly that way (a hidden section still has its ids in the
+   * document).
+   *
+   * It answers the three routes the page reads with a fetch of its OWN rather than borrowing the shared spy the guide
+   * and picker checks use. The probe page carries stubs from every earlier check, and one of them rejects unknown
+   * routes; measured, that is why the page never adopted a snapshot here and the column read as empty. A route map of
+   * its own makes the check independent of what ran before it.
+   *
+   * It runs LAST, after the widget is disposed: the page installs a settings poll and a `storage` listener the moment
+   * it is evaluated, so it is given a document of its own and both are taken away again at the end.
+   */
+  asyncCheck('状态与动作: a clip carries its own 碎碎念, and its AI 提示词 only while the source is AI', function () {
+    var markup = globalThis.__VRMPET3D_GLOBAL_MARKUP__;
+    var source = globalThis.__VRMPET3D_GLOBAL_SOURCE__;
+    if (!markup || !source) return false;
+
+    var outerFetch = window.fetch;
+    var outerPage = document.body.getAttribute('data-page');
+    /**
+     * THE GUIDE'S DOCUMENT IS TAKEN BACK OUT FIRST, and this check cannot pass without it.
+     *
+     * `the first-run guide` inserts the wizard's markup straight into `document.body` and leaves it there, so the
+     * probe ends up carrying a SECOND `#speech-ai`, `#status` and `#motion-list` beside the ones this check injects.
+     * The page reads those ids with `getElementById`, which answers the FIRST match in the document — the guide's
+     * node — and measured, that is exactly how the AI-block visibility read `true` while the source was 内置短语.
+     * Removing the earlier document is what makes this check read the page it actually booted.
+     */
+    (function () {
+      ['setup-0', 'setup-1', 'setup-2', 'setup-3', 'setup-4', 'setup-5'].forEach(function (id) {
+        var node = document.getElementById(id);
+        if (node && node.parentNode) node.parentNode.removeChild(node);
+      });
+    })();
+    var host = document.createElement('div');
+    host.id = 'global-page-probe';
+    host.innerHTML = markup;
+    document.body.appendChild(host);
+    // `pageName()` reads the DOCUMENT's own `data-page`, and the probe page is not a settings page at all: without
+    // this the script would introduce itself as 模型参数 and skip the section under test.
+    document.body.setAttribute('data-page', 'global');
+
+    /** The catalog the rows are built from: two clips in 空闲, one elsewhere, derived from the state list itself. */
+    var clip = function (id, name, loop) { return { id: id, name: name, format: 'vrma', loop: loop === true, bytes: 1024 }; };
+    var catalog = [clip('a1', 'a1.vrma'), clip('a2', 'a2.vrma', true)];
+    (CORE.STATUS_STATES || []).forEach(function (state) {
+      if (state !== 'resting') catalog.push(clip(state + '-1', state + '-1.vrma'));
+    });
+    /**
+     * What the page adopts on its first settings poll: both clips ticked in 空闲, with the two texts already written
+     * for one of them — which is what makes "the row shows what was STORED" checkable rather than merely "the row has
+     * boxes". The store answers the way the host's does: a version that moves, and a patch merged into what it holds.
+     */
+    var store = {
+      version: 1,
+      preferences: {
+        modelId: '',
+        motions: { resting: ['a1', 'a2'] },
+        motionClips: { resting: { a1: { loop: false, speech: '摸鱼的一句', prompt: '这句要懒洋洋的' } } },
+        speech: { source: 'builtin' },
+      },
+    };
+    var patches = [];
+    var merge = function (target, patch) {
+      Object.keys(patch || {}).forEach(function (key) {
+        var value = patch[key];
+        if (value && typeof value === 'object' && !Array.isArray(value)
+          && target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])) {
+          var next = {};
+          Object.keys(target[key]).forEach(function (inner) { next[inner] = target[key][inner]; });
+          merge(next, value);
+          target[key] = next;
+        } else {
+          target[key] = value;
+        }
+      });
+      return target;
+    };
+    var answer = function (payload) {
+      return Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } }));
+    };
+    window.fetch = function (url, options) {
+      var path = String(url).split('?')[0];
+      var method = (options && options.method) || 'GET';
+      if (path === '/vrmpet3d/settings') {
+        if (method === 'POST') {
+          var body = null;
+          try { body = JSON.parse((options && options.body) || '{}'); } catch (_error) { body = null; }
+          patches.push(body);
+          merge(store.preferences, (body && body.preferences) || {});
+          store.version += 1;
+        }
+        return answer({ version: store.version, preferences: store.preferences, live: { app: null, window: null } });
+      }
+      if (path === '/vrmpet3d/motions') {
+        return answer({ motions: catalog, motionDefaults: {}, importedMotions: [], importedDirs: [] });
+      }
+      if (path === '/vrmpet3d/desktop') {
+        return answer({ state: 'stopped', pid: null, webgl2: false, renderer: null, modelId: null, page: null, errors: [] });
+      }
+      return Promise.reject(new Error('no route for ' + path));
+    };
+    (0, eval)(source);
+
+    var pause = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
+    var restore = function () {
+      window.fetch = outerFetch;
+      if (outerPage === null) document.body.removeAttribute('data-page');
+      else document.body.setAttribute('data-page', outerPage);
+      if (host.parentNode) host.parentNode.removeChild(host);
+    };
+    var page = function () { return globalThis.__VRMPET3D_CONFIG_STATE__ || null; };
+    var row = function () { return host.querySelector('.motion-state[data-state="resting"]'); };
+    var texts = function () {
+      var speechBox = row() ? row().querySelector('.clip-speech') : null;
+      var promptBox = row() ? row().querySelector('.clip-prompt') : null;
+      return {
+        speech: speechBox ? speechBox.value : null,
+        promptShown: Boolean(promptBox) && promptBox.hidden !== true,
+        prompt: promptBox ? promptBox.value : null,
+      };
+    };
+
+    return waitFor(function () {
+      /**
+       * "The page is up" is judged from what it PUBLISHED, not from a flag: every state's box set is drawn, the
+       * catalog has arrived (the two clips are offered) and both are TICKED in 空闲 — which is what puts the per-clip
+       * controls on a row at all, since a clip nobody ticked has no answer to give. The tick is also the retry: a poll
+       * that lands before the catalog renders the rows with nothing to tick, and the page repaints on the next one.
+       */
+      var state = page();
+      return Boolean(state && state.ready && row()
+        && state.motions.rows === (CORE.MOTION_STATES || []).length
+        && state.motions.offeredNames.a1 === 'a1.vrma'
+        && state.motions.stateIds.resting.length === 2);
+    }, 6000).then(function (ready) {
+      if (!ready) { restore(); return false; }
+      var before = page();
+      var builtinTexts = texts();
+      /** The built-in HALF, kept under its own name: the object below is filled in again for the AI half. */
+      var atBuiltin = {
+        speechRows: before.motions.clipSpeechRows,
+        promptRows: before.motions.clipPromptRows,
+        promptVisible: before.motions.clipPromptVisible,
+        speechValue: builtinTexts.speech,
+        promptShown: builtinTexts.promptShown,
+        promptValue: builtinTexts.prompt,
+        stored: before.motions.clipTexts['resting/a1'] || null,
+        source: before.speech.source,
+        aiVisible: before.speech.aiVisible,
+      };
+      var seen = report.clipTexts = { atBuiltin: atBuiltin };
+      /**
+       * THE APP'S OWN HALF, first: which line the pet actually SAYS is decided by `SpeechMachine.observe`, and the
+       * pair it decides from — the clip that is playing, in the state it plays in — is read off the SCENE in
+       * `VrmPet3DWidget.speechLine`. That is the wiring the panel cannot prove: the page can store a per-clip line
+       * perfectly while the widget never looks at it.
+       *
+       * The pair is STUBBED rather than waited for, on the same scene the earlier motion checks left an avatar on:
+       * this is a claim about which two values the widget reads, and waiting for a real clip to be playing would
+       * make it a claim about the motion scheduler instead. Both layers are given a line — the state's box one, the
+       * playing clip another — so a widget that ignored the clip would answer the pool and fail rather than pass.
+       */
+      var playingId = 'a1';
+      var playingState = 'resting';
+      var poolLine = '状态池子里的一句';
+      var clipLine = '这支动作说的话';
+      var tuned = Object.assign({}, widget.preferences);
+      tuned.speech = Object.assign({}, tuned.speech || {}, { source: 'custom', lines: { resting: [poolLine] } });
+      tuned.motionClips = Object.assign({}, tuned.motionClips || {}, {
+        resting: Object.assign({}, (tuned.motionClips || {}).resting || {}, {
+          a1: Object.assign({}, ((tuned.motionClips || {}).resting || {}).a1 || {}, { speech: clipLine }),
+        }),
+      });
+      /**
+       * The widget may be holding the same object the scene was built with, so BOTH copies are tuned and both are
+       * put back below — the same two-copies problem the one-shot check above deals with.
+       */
+      var keptWidget = widget.preferences;
+      var keptScene = widget.scene.preferences;
+      var keptPlayback = widget.scene.playback;
+      var keptPick = widget.scene.pickState;
+      /**
+       * The machine is CLEARED for the measurement, and put back afterwards.
+       *
+       * `observe` keeps a line up for its whole hold ("one line at a time, never two"), and this page has been
+       * speaking for many checks — so without this the answer would be whatever is ON SCREEN rather than what the
+       * machine would choose now. That is a fact about the throttle, not about the per-clip line, and it is measured
+       * here rather than assumed: the first version of this check reported the held line and looked like a defect.
+       */
+      var keptCurrent = widget.speech.current;
+      var keptEvent = widget.speech.lastEvent;
+      var keptSpoke = widget.speech.lastSpokeAt;
+      var keptIdle = widget.speech.idleAt;
+      var keptNow = widget.speech.now;
+      widget.preferences = tuned;
+      widget.scene.preferences = tuned;
+      widget.scene.playback = { id: playingId };
+      widget.scene.pickState = playingState;
+      widget.speech.current = null;
+      widget.speech.lastEvent = null;
+      widget.speech.lastSpokeAt = 0;
+      /**
+       * AND THE CLOCK IS MOVED, because that is what an idle remark waits for.
+       *
+       * 静息态 has no event of its own: its line is the IDLE remark, spoken once a gap of 20–60 seconds has passed
+       * (`idleMinSeconds`/`idleMaxSeconds`). A per-clip line written for a resting clip is therefore heard on that
+       * same cadence rather than the moment the clip starts — the shipped behaviour, not a new rule — so this check
+       * crosses the gap instead of waiting it out. `idleAt = 0` is "the gap has already elapsed" and the injected
+       * clock's own value is far past the minimum gap, so the idle branch draws its line on this call.
+       */
+      widget.speech.idleAt = 0;
+      widget.speech.now = function () { return 1e12; };
+      var spoken = widget.speechLine(playingState);
+      widget.preferences = keptWidget;
+      widget.scene.preferences = keptScene;
+      widget.scene.playback = keptPlayback;
+      widget.scene.pickState = keptPick;
+      widget.speech.current = keptCurrent;
+      widget.speech.lastEvent = keptEvent;
+      widget.speech.lastSpokeAt = keptSpoke;
+      widget.speech.idleAt = keptIdle;
+      widget.speech.now = keptNow;
+      report.clipSpeech = { playing: playingId, state: playingState, spoken: spoken, expected: clipLine };
+      if (spoken !== clipLine) throw new Error(JSON.stringify(report.clipSpeech));
+      /**
+       * The EDIT path, driven through the page's own control: typing into the box and firing `change` is what a user
+       * does, and the write has to reach the store as a patch — the same route the 表情/口型 dropdowns and the 凝视
+       * switch beside it use, and the reason this counts POSTs rather than reading the page back to itself.
+       */
+      var speechBox = row() ? row().querySelector('.clip-speech') : null;
+      if (speechBox) {
+        speechBox.value = '改过的一句';
+        speechBox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return pause(50).then(function () {
+        seen.wrote = patches.some(function (patch) {
+          var clips = patch && patch.preferences && patch.preferences.motionClips;
+          return Boolean(clips && clips.resting && clips.resting.a1 && clips.resting.a1.speech === '改过的一句');
+        });
+        seen.afterEdit = page().motions.clipTexts['resting/a1'] || null;
+        // And the 台词来源 picker, which is the rule the operator's parenthetical is about.
+        var sourceSelect = host.querySelector('#pref-speech-source');
+        if (sourceSelect) {
+          sourceSelect.value = 'ai';
+          sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        return pause(50).then(function () {
+          var atAi = page();
+          var aiTexts = texts();
+          seen.atAi = {
+            promptRows: atAi.motions.clipPromptRows,
+            promptVisible: atAi.motions.clipPromptVisible,
+            promptShown: aiTexts.promptShown,
+            aiVisible: atAi.speech.aiVisible,
+            source: atAi.speech.source,
+          };
+          restore();
+          var verdict = atBuiltin.speechRows === 2
+            // The 碎碎念 box is there whatever the source is, and it is showing the STORED line.
+            && atBuiltin.speechValue === '摸鱼的一句'
+            && atBuiltin.stored && atBuiltin.stored.speech === '摸鱼的一句'
+            && atBuiltin.stored.prompt === '这句要懒洋洋的'
+            // The 提示词 box belongs to the AI source: while the source is the built-in table it is on the row but
+            // HIDDEN, and the AI block above it is hidden by the same decision (`speech.aiVisible`).
+            && atBuiltin.promptRows === 0 && atBuiltin.promptVisible === false && atBuiltin.promptShown === false
+            && atBuiltin.promptValue === '这句要懒洋洋的'
+            && atBuiltin.source === 'builtin' && atBuiltin.aiVisible === false
+            // The edit went through the page's own write path and came back as the stored value.
+            && seen.wrote === true && seen.afterEdit && seen.afterEdit.speech === '改过的一句'
+            // Switching the source to AI 生成 shows it — two boxes, one rule.
+            && seen.atAi.source === 'ai' && seen.atAi.aiVisible === true
+            && seen.atAi.promptVisible === true && seen.atAi.promptRows === 2 && seen.atAi.promptShown === true;
+          // The whole readout travels with the failure, so a red names the field that was wrong instead of only
+          // saying "false" — the same reason every other probe here builds an object for its report.
+          if (verdict !== true) throw new Error(JSON.stringify(seen));
+          return true;
+        });
+      });
+    }, function (error) {
+      restore();
+      throw error;
+    });
+  });
+
   // Dispose comes last and after the async checks settle: they drive the live
   // widget, and the earlier promise-returning model check needs a turn of its
   // own before the report is written.

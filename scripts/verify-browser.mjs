@@ -126,6 +126,21 @@ function pickerMarkup() {
   return (body ? body[1] : '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
 }
 
+/**
+ * 通用设置's own markup, for the per-clip 碎碎念 row the probe drives.
+ *
+ * The two new text boxes live in 状态与动作, and that section renders on THIS page — `lib/config-page.js` reads the
+ * markup's `data-page` and returns early from the sections the current document does not carry — so proving the
+ * row really has them means booting the document they are on, exactly as the guide and the picker carry theirs
+ * above. The script is injected and evaluated from the check rather than as a live tag, because this page polls
+ * `/vrmpet3d/settings` from the moment it loads and the probe has no host store to answer it with.
+ */
+function globalMarkup() {
+  const html = readFileSync(join(ROOT, 'lib', 'global-page.html'), 'utf8');
+  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+  return (body ? body[1] : '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
+}
+
 function buildPage() {
   mkdirSync(BUILD, { recursive: true });
   // The client-half test needs lib/scene.js AND the plugin half itself, plus a
@@ -333,6 +348,13 @@ function buildPage() {
       `<script>globalThis.__VRMPET3D_SETUP_SOURCE__ = ${JSON.stringify(inlineScript(join(ROOT, 'lib', 'setup-page.js')))};</script>`,
       `<script>globalThis.__VRMPET3D_PICKER_MARKUP__ = ${JSON.stringify(pickerMarkup())};</script>`,
       `<script>globalThis.__VRMPET3D_PICKER_SOURCE__ = ${JSON.stringify(inlineScript(join(ROOT, 'lib', 'picker-page.js')))};</script>`,
+      /**
+       * 通用设置, for the per-clip 碎碎念 row. Markup and source as STRINGS for the same reason the guide's are:
+       * the page boots against its own document the moment it is evaluated, and it polls the host's settings
+       * store — which this page does not have — so it has to be started by the check that answers for it.
+       */
+      `<script>globalThis.__VRMPET3D_GLOBAL_MARKUP__ = ${JSON.stringify(globalMarkup())};</script>`,
+      `<script>globalThis.__VRMPET3D_GLOBAL_SOURCE__ = ${JSON.stringify(inlineScript(join(ROOT, 'lib', 'config-page.js')))};</script>`,
     ].join('\n');
   }
   // The delivery page is the one page that must NOT inline the sources: inlining

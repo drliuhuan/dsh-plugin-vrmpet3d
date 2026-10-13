@@ -133,6 +133,10 @@ label.pick input { accent-color: #5b8cff; }
 /* The per-clip 凝视 switch: a checkbox and its word, kept on one line with the three dropdowns. */
 #motion-list .clip-gaze { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 #motion-list .clip-gaze-box { margin: 0; }
+/* And the two TEXTS a clip owns in a state: its 碎碎念 line and its AI 提示词. They take what is left of the
+   row (the dropdowns, the mode and the switch all have fixed widths), which is what a sentence needs; the
+   提示词 box is `hidden` while the source is not the AI one, so it takes no room at all until it applies. */
+#motion-list .clip-text { flex: 1 1 160px; min-width: 120px; }
 /* The interval line inside a state's box set: two numbers and their unit, wrapping with the rest. */
 #motion-list .every { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 6px 140px; font-size: 11.5px; }
 #motion-list .every input { width: 62px; }
