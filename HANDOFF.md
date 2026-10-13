@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2281 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2287 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -117,6 +117,25 @@ him). And it talks on its own cadence: `workingMinSeconds`/`workingMaxSeconds` (
 beside the idle one, wired into `SpeechMachine.chatterAt` — the one event that speaks more than once while it lasts,
 never back-to-back and never sooner than `minGapSeconds`. That window has its own row in 通用设置 → 碎碎念
 (「工作嘀咕间隔」), because a feel value belongs where the person feeling it can move it.
+
+**The 2026-10-13 round on the prompt and the bubble** (operator, four rules in one message):
+
+  * 状态文字 WRAPS NEVER, 碎碎念 WRAPS — at the pet's own box width, three lines at most, growing UPWARD from its bottom
+    anchor so it cannot touch the prompt below it. The floating window now reports a CONSTANT reserved band for the bubble
+    (`speechBand` in [lib/desktop-page.js](lib/desktop-page.js)) instead of the measured box, which is what 「彻底杜绝宠物盒子
+    大小变化的问题」 means: the window's size is decided by the pet and the prompt alone, so a long remark can no longer push
+    it into the work area's edge and make the pet jump.
+  * 工作中 WINS over a finished turn (「当有一个任务完成，有一个任务在进行的时候，状态文字以任务进行中为准」), and while DSH
+    reports an unread completion somewhere it carries DSH's own green dot — the app's `StateDot` in its `done` state, copied
+    rule for rule (`#22c55e`, a 6px core in a 10px slot), fed by `completionUnread` from the session status map.
+  * 「深度求索中后面不加任何时间了」: the shipped 工作中 line is `深度求索中 ···`. The `{duration}` token and its whole
+    substitution path stay (a user's own line may still carry it, and `verify.mjs` drives it that way).
+  * 完成 PERSISTS until the user is back IN that session AND the DSH window is FOCUSED (`PetMachine.resolve`'s acknowledgement
+    now requires `this.focused`; the app's pet feeds it `document.hasFocus()`), which is the fix for 「完成状态无法持续」 — it used
+    to clear after its hold even when DSH was buried behind another application. On the web UI the two coincide.
+  * AND a heartbeat bug fell out of it: `report(lastBeat.state, lastBeat.line, null, true)` passed a junk clock to force a
+    send, which also told the host "no clock" every few seconds — the floating window's 用时 was cleared on every beat. It
+    passes the last real clock and the `force` flag that exists for it now.
 
 **The AI half of 碎碎念 is shown for the AI source ALONE** (operator, 2026-10-13: 「如果台词来源是内置台词，则下方的AI相关
 设置不显示」, and when asked whether 自定义短语 should keep it: 「自定义短语也隐藏」 — 自定义 never calls a model either): with

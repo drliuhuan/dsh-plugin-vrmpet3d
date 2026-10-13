@@ -11,7 +11,7 @@ fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2281 checks · works offline
+no runtime dependencies · 9 verification suites · 2287 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -131,7 +131,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2281 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2287 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -142,7 +142,7 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1111 — state machine, and the nine motion states |
+| `node scripts/verify.mjs` | 1117 — state machine, and the nine motion states |
 | `node scripts/verify-model.mjs` | 750 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |

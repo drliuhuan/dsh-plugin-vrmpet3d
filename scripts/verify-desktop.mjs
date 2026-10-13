@@ -1085,12 +1085,13 @@ if (live.skipped) {
          */
         const statusTexts = motions.statusTexts || {};
         /**
-         * 工作中 is DSH's own running line, token and all — copied from the app's `chat.deepDivingFor` rather
-         * than invented, because the operator asked for that label verbatim: "我要的是dsh内部的前面带着一个鲸鱼
-         * 尾巴图标的'深度求索中，用时XX分XX秒 ···'". The token is what the renderer replaces with the live clock.
+         * 工作中 is DSH's running line WITHOUT a clock (operator, 2026-10-13: 「深度求索中后面不加任何时间了」).
+         *
+         * The `{duration}` token is still the language a line may use — the settings page documents it and the core
+         * suite pins the substitution — but it is no longer what ships: the default is the app's token-free label.
          */
-        ok(statusTexts.working === '深度求索中，用时 {duration} ···',
-          `工作中 shows DSH's own running line (${statusTexts.working})`);
+        ok(statusTexts.working === '深度求索中 ···',
+          `工作中 shows DSH's running line with no clock (${statusTexts.working})`);
         ok(statusTexts.waiting === '我有问题要问你', `等待确认 asks its question (${statusTexts.waiting})`);
         ok(statusTexts.done === '任务达成', `任务完成 reports it (${statusTexts.done})`);
         ok(statusTexts.error === '遇到问题了...', `出错 reports the failure (${statusTexts.error})`);
@@ -1665,9 +1666,19 @@ async function runLiveWindow() {
     if (report.checks.bounds && report.checks.petRect) {
       const bounds = report.checks.bounds;
       const box = report.checks.petRect;
-      ok(Math.abs(bounds.width - box.width) <= 1 && Math.abs(bounds.height - box.height) <= 1
-        && Math.abs(bounds.x - box.left) <= 1 && Math.abs(bounds.y - box.top) <= 1,
-        `and sits exactly on it (window ${bounds.x},${bounds.y} ${bounds.width}x${bounds.height} vs pet ${box.left},${box.top} ${box.width}x${box.height})`);
+      /**
+       * The window CONTAINS the pet rather than being exactly it.
+       *
+       * It always carried the frame margin (`petSized` and the probe's own box checks are about that), and since
+       * 2026-10-13 it also reserves a fixed band for 碎碎念 above the pet — a constant, so that a longer remark cannot
+       * resize the window and make the pet jump near a screen edge (「彻底杜绝宠物盒子大小变化的问题」). What has to hold
+       * is therefore containment, on both axes and on both edges.
+       */
+      ok(bounds.x <= box.left + 1 && bounds.y <= box.top + 1
+        && bounds.x + bounds.width >= box.left + box.width - 1
+        && bounds.y + bounds.height >= box.top + box.height - 1
+        && bounds.width >= box.width - 1 && bounds.height >= box.height - 1,
+        `and holds it (window ${bounds.x},${bounds.y} ${bounds.width}x${bounds.height} vs pet ${box.left},${box.top} ${box.width}x${box.height})`);
     }
     if (report.ok !== true) {
       // The numbers, not just the verdict: a capture whose size differs from the window's, or a

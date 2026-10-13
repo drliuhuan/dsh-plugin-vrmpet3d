@@ -596,7 +596,11 @@
      * The duration comes from the latest turn (`PetMachine.statusClock`), which the app learns from the boundary
      * frames — so a probe that wants DSH's own label has to hand it one, exactly as the stream does. The frame's
      * `time` is the turn's start, and that is what the label counts from.
+     *
+     * AND THE LINE HAS TO CARRY THE TOKEN: the shipped one no longer does (operator, 2026-10-13: 「深度求索中后面不加任何
+     * 时间了」), so this check writes the clocked line a user would — which is also what keeps the substitution covered.
      */
+    widget.preferences.status = CORE.setStatus(widget.preferences, 'working', 'text', '深度求索中，用时 {duration} ···');
     widget.boundary({
       type: 'turn/start',
       sessionId: 's1',
@@ -1072,6 +1076,7 @@
     var bubbleStyle = bubble ? globalThis.getComputedStyle(bubble) : null;
     var onSpeech = {
       up: Boolean(bubble) && bubble.hidden === false,
+      boxWidth: Math.round(widget.placement.width),
       fontBefore: speechBefore,
       fontAfter: bubbleFont(bubble),
       expectedFont: CORE.speechPromptFontPx(CORE.statusScaleFor(widget.preferences, modelId)) + 'px',
@@ -1123,8 +1128,9 @@
       && onSpeech.size === onSpeech.sizeBefore       // …and still did not move the pet
       && parseFloat(onSpeech.fontAfter) > parseFloat(onSpeech.fontBefore)   // the bubble itself got bigger…
       && onSpeech.fontAfter === onSpeech.expectedFont // …to exactly what the core says it should be
-      && onSpeech.whiteSpace === 'nowrap'            // 「不管碎碎念和状态信息多长，都不要换行」
-      && onSpeech.maxWidth === 'none'                // 「给盒子的宽度留大一点」: no cap narrower than the line
+      && onSpeech.whiteSpace === 'normal'            // 碎碎念 WRAPS (状态文字 is the one that must not)
+      && parseFloat(onSpeech.maxWidth) > 0           // at the pet's own width, so the bubble cannot outgrow it
+      && Math.round(parseFloat(onSpeech.maxWidth)) <= onSpeech.boxWidth
       && Boolean(textOnly.stored) && textOnly.stored[modelId] === textOnly.scale // remembered PER MODEL
       && Boolean(pushedPatch) && Boolean(pushedPatch.statusScale)                // and pushed to the host…
       && pushedPatch.statusScale[modelId] === 1.3                                // …so a snapshot cannot drop it
@@ -5396,6 +5402,8 @@
          * page publishes the origin its rectangle is expressed against, which is what makes the two comparable.
          */
         var statusQuiet = pet.status();
+        // The clocked line, because the shipped 工作中 line has had no 用时 since 2026-10-13 ("深度求索中后面不加任何时间了").
+        pet.preferences.status = CORE.setStatus(pet.preferences, 'working', 'text', '深度求索中，用时 {duration} ···');
         pet.setState('working', { startedAt: Date.now() - (14 * 60000 + 46000), endedAt: null });
         var statusRect = pet.status();
         /**
@@ -5618,6 +5626,9 @@
          * for ever, and the label therefore lost its duration — "深度求索中的时间也没了"). Driven here rather than assumed,
          * because the window is a different page with its own reading of the relay.
          */
+        // The token has to be in the line for there to be a clock at all: the shipped line has none (see the in-app
+        // check above), so this writes the one a user would.
+        pet.preferences.status = CORE.setStatus(pet.preferences, 'working', 'text', '深度求索中，用时 {duration} ···');
         pet.setState('working', 'state');
         var stateClockText = (function () {
           var node = document.querySelector('.vrmpet3d-desktop-status-text');
@@ -6447,6 +6458,23 @@
         fontPx: node ? node.style.getPropertyValue('--vrmpet3d-desktop-speech-font') : null,
         expectedFont: CORE.speechPromptFontPx(CORE.statusScaleFor(pet.preferences, bubbleModel)) + 'px',
       };
+      /**
+       * AND THE RESERVED RECTANGLE IS A CONSTANT — a much longer line must not move or resize it.
+       *
+       * This is the operator's 「彻底杜绝宠物盒子大小变化的问题」 as a measurement: the window's bounds are the union of
+       * the pet, the menu, the prompt and the 碎碎念 band, and while that band was the measured bubble every longer
+       * remark pushed the window further left and up — near a screen edge the OS clamped it and the pet jumped.
+       */
+      var bandBefore = reported;
+      pet.setSpeech('这一句碎碎念刻意写得非常非常长，长到必须折行，而且比宠物本身还要宽出许多，用来证明窗口的预留区不会跟着文字一起变大。');
+      var longBox = pet.speech();
+      var bandAfter = pet.rect() ? pet.rect().speech : null;
+      var sameBand = Boolean(bandBefore && bandAfter)
+        && bandBefore.left === bandAfter.left && bandBefore.top === bandAfter.top
+        && bandBefore.width === bandAfter.width && bandBefore.height === bandAfter.height
+        // …and the bubble itself stays INSIDE it, wrapped at the pet's own width.
+        && Boolean(longBox) && longBox.width <= bandAfter.width && longBox.height <= bandAfter.height;
+
       var clearedReturn = pet.setSpeech(null);
       var cleared = node ? node.hidden === true : false;
       var clearedRect = pet.rect() ? pet.rect().speech : null;
@@ -6463,6 +6491,9 @@
         bubbleInteractive: bubbleInteractive,
         promptInteractive: promptInteractive,
         speechWheel: speechWheel,
+        band: bandAfter || reported,
+        longBox: longBox,
+        sameBand: sameBand,
         cleared: cleared,
         clearedReturn: clearedReturn,
         clearedRect: clearedRect,
@@ -6478,7 +6509,11 @@
         && speechWheel.scaleAfter > speechWheel.scaleBefore          // the notch resized the TEXT…
         && speechWheel.windowAfter === speechWheel.windowBefore      // …and not the window
         && speechWheel.fontPx === speechWheel.expectedFont           // at the size the core says
-        && cleared && clearedReturn === null && clearedRect === null;
+        && cleared && clearedReturn === null
+        // The reported 碎碎念 rect is the BAND, not the bubble: it is there whether or not a line is up, and it does
+        // not move when the line does (that is what stops the window resizing under the pet).
+        && Boolean(clearedRect) && clearedRect.width > 0 && clearedRect.height > 0
+        && sameBand;
     });
   });
 
@@ -6736,6 +6771,8 @@
          * cannot be one frame out of step with each other.
          */
         var beforeSwitch = pet.scene.describeMotions();
+        // Ditto: the switch check reads the prompt beside the clip, so the line it reads has to carry the clock.
+        pet.preferences.status = CORE.setStatus(pet.preferences, 'working', 'text', '深度求索中，用时 {duration} ···');
         pet.setState('working', { startedAt: Date.now() - (14 * 60000 + 46000), endedAt: null });
         found.stateBefore = { state: pet.scene.state, picked: beforeSwitch ? beforeSwitch.picked : null };
         return nextFrame().then(nextFrame).then(nextFrame).then(function () {

@@ -1080,7 +1080,13 @@ group('6. state machine precedence');
    */
   machine.boundary({ type: 'turn/end', sessionId: 's', seq: 10, reason: 'completed' });
   clock += core.COMPLETION_SETTLE_MS + 1;
-  eq(machine.boundary(onlineIdle), 'done', 'boundary(snapshot) alone re-resolves the state');
+  /**
+   * A bare event re-resolves against the LAST snapshot — `working`, from the failure block above — and since
+   * 2026-10-13 work outranks a completion, so 进行中 is what it answers. The completion is not gone: the same frame
+   * with nothing running shows it.
+   */
+  eq(machine.boundary({}), 'working', 'boundary(event) alone re-resolves against the last snapshot, and work wins');
+  eq(machine.resolve(onlineIdle), 'done', 'while an idle snapshot shows the completion that was waiting');
 
   // Greeting outranks offline and working but not an interaction.
   machine.greet();
@@ -1190,49 +1196,77 @@ group('6b2. a finished turn waits for the user to come back to ITS session');
   };
 
   eq(frame('B'), 'working', 'the second session is busy, so the pet works');
-  // A finishes while the user is looking at B: the store edge writes the notice, and the machine WAITS IT OUT.
-  statuses.set('A', { running: false });
+  /**
+   * A finishes while the user is looking at B, and DSH marks that completion UNREAD — the green dot in its session list.
+   *
+   * This is the case the two 2026-10-13 rules are about: the pet stays on 进行中 (the completion does not interrupt a
+   * running task) and shows DSH's unread dot, while the completion itself waits for the user to go back to A.
+   */
+  statuses.set('A', { running: false, completionUnread: true });
   eq(frame('B'), 'working', 'A finishing is withheld while its settle window runs');
   clock += core.COMPLETION_SETTLE_MS + 1;
-  eq(frame('B'), 'done',
-    'A finishing puts 任务达成 up once nothing started again, even though the user is in B');
-  eq(machine.notice && machine.notice.sessionId, 'A', 'and the notice remembers WHICH session finished');
+  eq(frame('B'), 'working', 'and B still running keeps the pet on 进行中, whatever A did');
+  eq(machine.notice && machine.notice.sessionId, 'A', 'while the notice remembers WHICH session finished');
+  eq(machine.unreadCount, 1, 'and DSH’s unread flag for it is what the prompt’s green dot is drawn from');
 
   clock += 60_000;
-  eq(frame('B'), 'done', 'a minute later it is still there: no window ends it');
-  clock += 3_600_000;
-  eq(frame('B'), 'done', 'nor an hour later — the user has not been back to A');
-  eq(frame('B'), 'done', 'and looking at B again does not acknowledge it');
+  eq(frame('B'), 'working', 'a minute later the dot is still there');
+  eq(machine.notice && machine.notice.sessionId, 'A', 'and so is the completion behind it');
 
   /**
-   * The user switches to A: THAT is the acknowledgement.
+   * The REST is the machine's own rules, driven directly rather than through the aggregate.
    *
-   * The pet then shows B's work, because B is busy — so the assertion that matters is the notice itself, and
-   * that is why it is checked on its own line rather than inferred from the state.
+   * The aggregate writes a notice of its own for any session whose `running` falls (that is how it hears a turn end
+   * with no RPC boundary), so stopping B here to see 任务达成 would hand the machine B's notice instead of A's — a test
+   * of the fixture rather than of the rule. What the aggregate owns is already asserted above: the unread flag, and
+   * work outranking a completion.
    */
-  eq(frame('A'), 'working', 'switching to the session that finished acknowledges it');
-  eq(machine.notice, undefined, 'the notice is gone, not merely hidden');
-  eq(frame('B'), 'working', 'and it does not come back when the user moves on: B is busy again');
-  eq(frame('B'), 'working', 'nor on the frame after that — a dismissed notice stays dismissed');
+  let soloPrefs = core.cleanPreferences({});
+  const solo = new core.PetMachine(() => clock, 300_000);
+  solo.preferencesOf = () => soloPrefs;
+  const inA = { available: true, running: false, pending: false, currentSessionId: 'A' };
+  const inB = { available: true, running: false, pending: false, currentSessionId: 'B' };
+
+  solo.boundary(inA, { type: 'turn/end', sessionId: 'A', seq: 1, reason: 'completed' });
+  clock += core.COMPLETION_SETTLE_MS + 1;
+  eq(solo.resolve(inB), 'done', 'and with nothing running the completion shows as 任务达成');
+  clock += 3_600_000;
+  eq(solo.resolve(inB), 'done', 'an hour later it is still there — the user has not been back to A');
+  eq(solo.resolve(inB), 'done', 'and looking at B again does not acknowledge it');
+
+  /**
+   * The user goes back to A — WITH THE DSH WINDOW FOCUSED — and that is the acknowledgement (2026-10-13: 「必须切换dsh窗口
+   * 为焦点且回到已完成的会话才消失」). Both halves are asserted, because either one alone would clear the line for
+   * somebody who was in another application and saw nothing.
+   */
+  solo.setFocus(false);
+  eq(solo.resolve(inA), 'done', 'being in the session is not enough while DSH is in the background');
+  solo.setFocus(true);
+  eq(solo.resolve(inA), 'resting', 'focus plus that session is what acknowledges it');
+  eq(solo.notice, undefined, 'the notice is gone, not merely hidden');
+  eq(solo.resolve(inB), 'resting', 'and it does not come back when the user moves on');
 
   /**
    * The hold is a FLOOR, not an expiry: a duration the user raised means the line is guaranteed that long even
    * when they are already in the session — which is how somebody asks for a longer look at it.
    */
-  holdPrefs = core.cleanPreferences({ status: { done: { seconds: 30 } } });
+  soloPrefs = core.cleanPreferences({ status: { done: { seconds: 30 } } });
   clock += 1_000;
-  machine.boundary(aggregate.snapshot(), { type: 'turn/end', sessionId: 'A', seq: 7, reason: 'completed' });
+  solo.boundary(inA, { type: 'turn/end', sessionId: 'A', seq: 2, reason: 'completed' });
   clock += core.COMPLETION_SETTLE_MS + 1;
-  eq(frame('A'), 'done', 'a new completion in A shows while the user is right there');
+  eq(solo.resolve(inA), 'done', 'a new completion in A shows while the user is right there');
   clock += 10_000;
-  eq(frame('A'), 'done', 'and a raised 持续时间 holds it for at least that long');
+  eq(solo.resolve(inA), 'done', 'and a raised 持续时间 holds it for at least that long');
   clock += 21_000;
-  eq(frame('A'), 'working', 'after which being in the session clears it');
-  holdPrefs = core.cleanPreferences({});
+  eq(solo.resolve(inA), 'resting', 'after which being in the session clears it');
 
   /**
    * 出错 takes the same road — the operator named both — with the latch it always had about which notice wins.
+   *
+   * B is running again here, and the failure still outranks it: 出错 is not a completion, so the 进行中 rule above does
+   * not apply to it.
    */
+  statuses.set('B', { running: true });
   clock += 1_000;
   machine.boundary(aggregate.snapshot(), { type: 'turn/end', sessionId: 'A', seq: 8, reason: 'error' });
   eq(frame('B'), 'error', 'a failure in A shows while the user is in B');
@@ -1281,8 +1315,11 @@ group('6c. the per-state status prompt');
     'and the motion map is those six plus the three pointer poses, derived rather than written twice');
   eq(core.MOTION_STATES.length, 9, 'nine states carry a 状态与动作 row');
 
-  eq(core.statusLineFor(blank, 'working'), '深度求索中，用时 {duration} ···',
-    '工作态 ships DSH’s own running line, clock token and all');
+  eq(core.statusLineFor(blank, 'working'), '深度求索中 ···',
+    '工作态 ships DSH’s running line with NO clock (operator, 2026-10-13: 「深度求索中后面不加任何时间了」)');
+  eq(core.statusLineFor(core.cleanPreferences({ status: { working: { text: '深度求索中，用时 {duration} ···' } } }), 'working'),
+    '深度求索中，用时 {duration} ···',
+    'while the clock token stays in the language: a line the user writes may still carry it');
   eq(core.statusLineFor(blank, 'waiting'), '我有问题要问你', '等待确认 asks the question');
   eq(core.statusLineFor(blank, 'done'), '任务达成', '任务完成 reports the completion');
   eq(core.statusLineFor(blank, 'error'), '遇到问题了...', '出错 reports the failure');
@@ -1311,18 +1348,27 @@ group('6c. the per-state status prompt');
   {
     const now = 1_800_000_000_000;
     const started = now - (14 * 60000 + 46000);
-    const line = core.statusFor(blank, 'working', started, now);
+    /**
+     * The CLOCK belongs to a line that carries the token, and the SHIPPED line no longer does (2026-10-13:
+     * 「深度求索中后面不加任何时间了」). Nothing about the machinery changed — this is the line a user writes when they
+     * want the app's clock back, and it is what every assertion below drives.
+     */
+    const clocked = core.cleanPreferences({ status: { working: { text: '深度求索中，用时 {duration} ···' } } });
+    const line = core.statusFor(clocked, 'working', started, now);
     eq(line.text, '深度求索中，用时 14分46秒 ···', 'the prompt substitutes the live clock for the token');
     eq(line.icon, true, 'and 工作中 wears DSH’s whale mark');
-    eq(core.statusFor(blank, 'waiting', now, now).icon, false,
+    eq(core.statusFor(clocked, 'waiting', now, now).icon, false,
       'no other state wears it: the operator’s four lines are their own messages');
-    eq(core.statusFor(blank, 'working', now, now).text, '深度求索中，用时 1秒 ···',
+    eq(core.statusFor(clocked, 'working', now, now).text, '深度求索中，用时 1秒 ···',
       'a turn that has just begun reads one second, never zero — the app floors it there');
-    eq(core.statusFor(blank, 'working', undefined, now).text, '深度求索中，用时 1秒 ···',
+    eq(core.statusFor(clocked, 'working', undefined, now).text, '深度求索中，用时 1秒 ···',
       'and an unknowable start still substitutes rather than leaking the raw token');
     // The clock is what makes the prompt change by itself: same state, one second later, new words.
-    eq(core.statusFor(blank, 'working', started, now + 1000).text, '深度求索中，用时 14分47秒 ···',
+    eq(core.statusFor(clocked, 'working', started, now + 1000).text, '深度求索中，用时 14分47秒 ···',
       'the clock ticks by re-deriving the line, which is what the renderers re-key on');
+    // And the shipped line has no clock in it, so there is nothing to tick.
+    eq(core.statusFor(blank, 'working', started, now + 5000).text, '深度求索中 ···',
+      'while the shipped line shows no clock at all, on any frame');
     // A line without the token is untouched, so a user’s own wording is still their own.
     const ownLine = core.cleanPreferences({});
     ownLine.status = core.setStatus(ownLine, 'working', 'text', '我在想…');
@@ -1339,7 +1385,8 @@ group('6c. the per-state status prompt');
    * `@deepseek-ai/dsh-client-ui-chat/lib/client.js` (`RunningStatus`, `TurnProcessNodeView`).
    */
   {
-    const prefs = core.cleanPreferences({});
+    // The user's own clocked line again: the turn rules below are about the token's value, not about the default.
+    const prefs = core.cleanPreferences({ status: { working: { text: '深度求索中，用时 {duration} ···' } } });
     const t0 = 2_000_000_000_000;
     // A turn that began four minutes ago, on a state that was entered seconds ago: the TURN is what is reported.
     const turnStart = t0 - 4 * 60000;
