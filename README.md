@@ -128,7 +128,9 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2238 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
+**9 verification suites, 2238 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
+before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
 
 ```bash
