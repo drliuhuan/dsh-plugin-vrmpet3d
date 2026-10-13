@@ -680,18 +680,39 @@ app.whenReady().then(async () => {
      * 先过一次 IPC（页面 → 启动器聚焦 → 页面）—— 跨过这一步之后，页面自己发出的请求就不再被认可。操作者
      * 2026-10-12 的反馈「并没有成功，光标没有被锁住」正是这个原因，而自检里唯一稳定拿到锁的那条路径，就是主进程用
      * `userGesture: true` 替页面请求（`locked: true`，见下面的实测）。
+     *
+     * 取锁脚本还把 `requestPointerLock()` 的 promise **交出来**，而不是自己吞掉：它是"浏览器答复了"的时刻
+     * （授予或拒绝），而不是"脚本执行了"的时刻 —— 启动器要等的正是它，才能在授权迟到（请求发出之后这次旋转已经
+     * 结束）时把锁收回（见下面那个 `.then`）。返回 `undefined` 的老版 Chromium 等于"立刻答复"，判断退化成
+     * "脚本已执行"，也是安全的。
      */
     const ORBIT_LOCK_JS = '(function () {'
       + ' var c = document.querySelector("canvas");'
       + ' if (!c || typeof c.requestPointerLock !== "function") return "no-canvas";'
-      + ' try { var r = c.requestPointerLock(); if (r && typeof r.catch === "function") r.catch(function () {}); }'
+      + ' try { var r = c.requestPointerLock(); if (r && typeof r.catch === "function") r.catch(function () {}); return r; }'
       + ' catch (error) { return String(error && error.message); }'
-      + ' return "asked";'
       + ' })()';
+    /**
+     * 交回光标的脚本 —— **无条件**调用 `exitPointerLock()`。
+     *
+     * 上一版是 `if (document.pointerLockElement) document.exitPointerLock()`，而"交回"恰恰发生在锁还在路上的
+     * 时候：页面松手 → 这条 IPC → 启动器发这个脚本，而浏览器可能尚未把锁授予渲染进程（`pointerLockElement`
+     * 还是 null）。那一刻这一次释放被自己的判断吞掉，锁随后落地、页面以为没有锁、启动器以为交回过了 —— 操作者
+     * 的两句话就是它的两个面：「右键点击后菜单点击没反应」（点击的投递目标是那个被锁的元素，到不了菜单项）和
+     * 「没有在拖动，却把右键锁住了」。规范上没锁时 `exitPointerLock()` 什么都不做，所以无条件调用是免费的。
+     */
     const ORBIT_UNLOCK_JS = '(function () {'
-      + ' if (document.pointerLockElement && typeof document.exitPointerLock === "function") document.exitPointerLock();'
+      + ' if (typeof document.exitPointerLock === "function") document.exitPointerLock();'
       + ' return document.pointerLockElement === null;'
       + ' })()';
+
+    /** 交回光标。旋转结束、以及授权迟到时都走这里，缺一次就是一把没人释放的锁。 */
+    const releaseOrbitLock = () => {
+      if (win.isDestroyed()) return;
+      try {
+        win.webContents.executeJavaScript(ORBIT_UNLOCK_JS, true).catch(() => {});
+      } catch (_error) { /* the window is going away */ }
+    };
 
     ipcMain.on('vrmpet3d:orbit', (event, active) => {
       if (win.isDestroyed()) return;
@@ -705,7 +726,16 @@ app.whenReady().then(async () => {
          */
         setTimeout(() => {
           if (win.isDestroyed() || !orbitFocus) return;
-          win.webContents.executeJavaScript(ORBIT_LOCK_JS, true).catch(() => {});
+          win.webContents.executeJavaScript(ORBIT_LOCK_JS, true).then(() => {
+            /**
+             * 浏览器答复时才检查"这次旋转还成立吗"。
+             *
+             * 页面对同一种迟到也有一道网（它的 `pointerlockchange`：锁落地时 `orbitAsked` 已是 false 就当场交回），
+             * 但启动器这一侧的问题是"我请求了一把没人要的锁"，所以它自己也得能收回。两层都留着：卡住的是**全局
+             * 输入状态**，一次误判就是鼠标被扣住，不值得只靠一层。
+             */
+            if (!orbitFocus) releaseOrbitLock();
+          }).catch(() => { /* 被拒或页面正在退出：没有锁要交回 */ });
         }, 30);
         return;
       }
@@ -713,7 +743,7 @@ app.whenReady().then(async () => {
       win.setFocusable(false);
       if (win.isFocused()) win.blur();
       win.setAlwaysOnTop(true, 'screen-saver');
-      try { win.webContents.executeJavaScript(ORBIT_UNLOCK_JS, true).catch(() => {}); } catch (_error) { /* the window is going away */ }
+      releaseOrbitLock();
     });
     ipcMain.on('vrmpet3d:quit', () => app.quit());
     win.on('closed', () => app.quit());

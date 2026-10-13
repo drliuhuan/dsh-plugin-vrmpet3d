@@ -6203,11 +6203,18 @@
        *
        * 主窗的 `orbitLock` 检查里是同一件事。这里让页面相信它被锁上了（属性 + `pointerlockchange`），再派发一个
        * `clientX` 完全不动、只有 `movementX` 变化的移动：视角必须转。
+       *
+       * 顺序是断言的一部分，不是排版：授权必须在**这次旋转还活着**的时候落地（先按下、先越过阈值让页面向启动器
+       * 要锁，再让假的授权到达）。锁落地时 `orbitAsked` 已经不是 true 的那种授权，页面会当成"没人要的锁"当场
+       * 交回 —— 那正是下面 `lateGrantReleased` 断言的那件事，而这里要钉的是它的反面：活着的旋转，锁留得住。
        */
+      send('pointerdown', 300, 300, 85);
+      send('pointermove', 320, 308, 85);
+      var exitsBeforeGrant = exitLockCalls;
       Object.defineProperty(document, 'pointerLockElement', { value: canvas, configurable: true });
       document.dispatchEvent(new Event('pointerlockchange'));
+      var heldThroughGesture = exitLockCalls === exitsBeforeGrant && document.pointerLockElement === canvas;
       var yawBeforeLocked = pet.preferences.viewYaw;
-      send('pointerdown', 300, 300, 85);
       canvas.dispatchEvent(new PointerEvent('pointermove', {
         bubbles: true, cancelable: true, button: 2, buttons: 2, pointerId: 85,
         clientX: 300, clientY: 300, screenX: 300, screenY: 300, movementX: 45, movementY: 9,
@@ -6226,6 +6233,23 @@
       document.dispatchEvent(new Event('pointerlockchange'));
       pet.closeMenu();
 
+      /**
+       * 反面：**授权比手势迟到** —— 页面必须当场把锁交回。
+       *
+       * 启动器在 `orbit(true)` 之后 30 ms 才发请求，Chromium 再往返回一趟，所以一次快速右拖可以在锁落地之前
+       * 就松手（上面那次 `pointerup` 就是）：此时页面已经不再要锁了。若这样的锁留下来，鼠标事件的投递目标就是
+       * 那个被锁的元素 —— 菜单的点击到不了菜单项（操作者：「右键点击后菜单点击没反应」），光标被扣住却并没有人
+       * 在拖动（「没有在拖动，却把右键锁住了」）。这里不按下一次按压取巧：松手之后再让授权到达，锁必须被放掉，
+       * 而且只放掉一次。
+       */
+      var exitsBeforeLateGrant = exitLockCalls;
+      Object.defineProperty(document, 'pointerLockElement', { value: canvas, configurable: true });
+      document.dispatchEvent(new Event('pointerlockchange'));
+      var lateGrantReleased = exitLockCalls === exitsBeforeLateGrant + 1
+        && document.pointerLockElement === null;
+      // 浏览器随后会把这次释放通知回来（真实语义），页面必须照常收下它。
+      document.dispatchEvent(new Event('pointerlockchange'));
+
       report.windowGesture = {
         afterStill: afterStill, afterWobble: afterWobble, afterBigWobble: afterBigWobble,
         noFocusOnStill: noFocusOnStill, noFocusOnWobble: noFocusOnWobble, noFocusOnBigWobble: noFocusOnBigWobble,
@@ -6233,6 +6257,7 @@
         askedForFocus: askedForFocus, pageLeftTheLockAlone: pageLeftTheLockAlone,
         handedFocusBack: handedFocusBack, turnedOnMovement: turnedOnMovement,
         orbitingReported: orbitingReported, orbitingCleared: orbitingCleared,
+        heldThroughGesture: heldThroughGesture, lateGrantReleased: lateGrantReleased,
         orbitCalls: orbitCalls, lockCalls: lockCalls, exitLockCalls: exitLockCalls,
       };
 
@@ -6246,7 +6271,7 @@
         && noFocusOnStill && noFocusOnWobble && noFocusOnBigWobble
         && afterOrbit === false && orbited === true
         && askedForFocus && pageLeftTheLockAlone && handedFocusBack && turnedOnMovement
-        && orbitingReported && orbitingCleared;
+        && orbitingReported && orbitingCleared && heldThroughGesture && lateGrantReleased;
     });
   });
   /**

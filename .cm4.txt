@@ -1,0 +1,38 @@
+A pointer lock with no owner: the right button stayed captured, and the menu could not be clicked
+
+Operator, 2026-10-13: 「右键点击后菜单点击没反应，或者没有在拖动，却把右键锁住了」 — the second half of the mouse report (the
+click-through half was the 碎碎念 band missing from `plannedOrigin()`, fixed in 5a4d0f6).
+
+THE LATCH: nothing in the tree could release a lock that arrived late.
+  * the page's `endOrbitGesture()` early-returns when `!orbitAsked`, and the release path clears that flag BEFORE it tells the
+    launcher anything (`lib/desktop-page.js`);
+  * the `blur` net needs a NEW blur, and the release path had already blurred the window (`desktop/main.js`);
+  * `pointerlockchange` only acted when a lock was LOST, never when it arrived;
+  * the launcher's unlock script was guarded by `if (document.pointerLockElement) …` — it could only release a lock it could
+    already SEE, while the request goes out 30 ms late and Chromium answers a round trip after that.
+A fast right-drag — or a wobble past the 10px threshold — that releases inside that window lands the grant after
+`orbitAsked` is false and after the blur: the pointer stays captured with no gesture behind it (c), mouse events route to the
+locked element so menu rows never receive the click (b), and the launcher reads a frozen cursor position to decide
+click-through, which is (a) again from the other side.
+
+THE FIX (both halves kept on purpose: a stuck GLOBAL input state is worth two nets):
+  * the page hands a late grant straight back: `pointerlockchange` releases when `locked && !orbitAsked` — `orbitAsked` is
+    exactly "I asked for a lock and have not said let go";
+  * `ORBIT_LOCK_JS` returns `requestPointerLock()`'s promise, so the launcher's `executeJavaScript` settles when the browser
+    ANSWERS rather than when the script ran, and it re-checks `orbitFocus` in that `.then`;
+  * `ORBIT_UNLOCK_JS` drops its guard entirely — the spec makes `exitPointerLock()` a no-op when nothing is locked, so the
+    guard bought nothing and could swallow the one release that mattered;
+  * one `releaseOrbitLock()` helper, used by both the release path and the late-grant re-check.
+
+VERIFIED, figures as printed: desktop **269 WITH the real window** (the only run that exercises the launcher half: the promise,
+the unconditional unlock and the `.then` re-check), client-test 97 in a real browser — the existing `windowGesture` check now
+lands a fake grant while the gesture is live (`heldThroughGesture`) and a second, late one after `pointerup`
+(`lateGrantReleased`, with `exitLockCalls: 1` and the element cleared), inside the same check, so no count moves — core 1120,
+host+model 750, `client-chunks --check` 3/3 fresh. The docs' counts do not move. NOT run: check-docs.mjs, verify-all.mjs.
+
+NOT PROVEN: whether Chromium would refuse that late grant on its own because the document had already lost focus — the
+ordering is open from source alone, which is why the fix does not depend on it. Accepted trade-off: if an old orbit's answer
+arrives after a NEW gesture already took its lock, the launcher releases the fresh one; that costs one lock on one orbit and
+self-heals, where a stuck global mouse lock does not.
+
+Also: `.cm3.txt` (the previous commit's message file) was committed by mistake — deleted here.
