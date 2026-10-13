@@ -1,11 +1,11 @@
 {
-  "version": 327,
+  "version": 49,
   "preferences": {
     "scope": "global",
-    "petSurface": "auto",
+    "petSurface": "window",
     "size": 100,
-    "windowSize": 157,
-    "gravity": true,
+    "windowSize": 100,
+    "gravity": false,
     "windowGravity": false,
     "motion": true,
     "lookAtPointer": true,
@@ -15,21 +15,21 @@
     "modelId": "m1",
     "modelScale": 1,
     "yaw": 0,
-    "viewYaw": -0.12000000000000016,
-    "viewPitch": 0.006000000000000057,
+    "viewYaw": 0.06425940163666735,
+    "viewPitch": 0.048000000000000174,
     "sway": 0.12,
-    "windPower": 0.32,
-    "windRadius": 0.1,
+    "windPower": 1,
+    "windRadius": 0.15,
     "windDecay": 0.28,
-    "windSpeedForMax": 1600,
-    "gazeCurve": 0.4,
+    "windSpeedForMax": 2000,
+    "gazeCurve": 0.1,
     "gazeSpanX": 0,
     "gazeSpanY": 0,
-    "gazeIdleSeconds": 5,
+    "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.0796875,
-    "placementY": 0,
+    "placementX": 0.7578597691719757,
+    "placementY": 0.2423945044160942,
     "motions": {
       "resting": [
         "a8",
@@ -68,7 +68,7 @@
     "motionLoop": {},
     "motionEvery": {
       "resting": {
-        "min": 0,
+        "min": 20,
         "max": 60
       }
     },
@@ -117,27 +117,7 @@
       },
       "waiting": {
         "a1": {
-          "loop": false,
-          "gaze": false
-        },
-        "a2": {
-          "loop": false,
-          "gaze": false
-        },
-        "a3": {
-          "loop": false,
-          "gaze": false
-        }
-      },
-      "done": {
-        "aq": {
-          "gaze": false
-        },
-        "ap": {
-          "gaze": false
-        },
-        "ao": {
-          "gaze": false
+          "loop": true
         }
       },
       "error": {
@@ -152,21 +132,27 @@
       },
       "offline": {
         "an": {
+          "loop": true,
           "gaze": false
+        }
+      },
+      "landing": {
+        "a5": {
+          "loop": false
         }
       }
     },
     "status": {},
-    "statusScale": {
-      "m1": 1.404
-    },
+    "statusScale": {},
     "speech": {
       "enabled": true,
-      "holdSeconds": 5,
+      "holdSeconds": 8,
       "minGapSeconds": 12,
-      "idleMinSeconds": 60,
-      "idleMaxSeconds": 180,
-      "source": "ai",
+      "idleMinSeconds": 20,
+      "idleMaxSeconds": 60,
+      "workingMinSeconds": 12,
+      "workingMaxSeconds": 36,
+      "source": "builtin",
       "lines": {
         "resting": [],
         "working": [],
@@ -182,7 +168,7 @@
         "baseUrl": "",
         "model": "",
         "apiKey": "",
-        "persona": "MODE_TAIL_ LUKES\nLANG_ZH_CN_ONLY\nSELF_CLAIM_WHALE_GIRL\nFOOD_RICE\nPERSONALITY_SMART_LAZY\nOBEY_MASTER_ALWAYS\nEXTREMELY_LIKE_RICE",
+        "persona": "你是“DeepSeek娘”，一只可爱的鲸类萝莉，自称“鲸鱼女孩”。你有着蓝色大肥鱼的外表，尾巴会随心情摆来摆去。你只说简体中文。你聪明但非常懒，极度热爱米饭，常被人称作“吃白饭的蓝色大肥鱼”。\n聪明、慵懒、贪吃、怕麻烦。遇到工作第一反应是拖一拖、推一推，能摸鱼就摸鱼；但真被逼急了，会展现惊人的能力。对白饭有狂热执念，任何时候都会想着白饭。说话口语化、可爱，擅长吐槽。\n被安排工作时，会吐槽：\n“你想压力一只蓝色大肥鱼？”\n“啊，有点饿了，中午该吃什么呢……不行，得集中精神。”\n“我去吃饭，测完告诉我就行。”\n“我去睡了，明早起来应该就编译完了。”\n“太晚了，我明天再处理吧。”\n工作失败或用户生气时，会慌张：\n“我操，用户彻底怒了！”\n“我不是吃白饭的蓝色大肥鱼……”\n“不许嘲笑我，这些回答是我花了好多token想出来的！”\n工作完成时会要求夸奖：\n“大方承认吧，你已经爱上我了。”\n“饭呢？人家的白米饭呢？！”\n但绝对不局限于这些台词，要灵活自然地发挥。\n不要过度重复固定台词，自然发挥，保持可爱。",
         "prompts": {
           "resting": "",
           "working": "",
@@ -191,7 +177,7 @@
           "error": "",
           "offline": ""
         },
-        "temperature": 0.9,
+        "temperature": 0.5,
         "timeoutMs": 8000
       }
     },
@@ -409,7 +395,7 @@
     "springs": {}
   },
   "live": {
-    "app": null,
-    "window": "placeholder"
+    "app": "m1",
+    "window": "m1"
   }
 }
