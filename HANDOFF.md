@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2287 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2290 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -136,6 +136,14 @@ never back-to-back and never sooner than `minGapSeconds`. That window has its ow
   * AND a heartbeat bug fell out of it: `report(lastBeat.state, lastBeat.line, null, true)` passed a junk clock to force a
     send, which also told the host "no clock" every few seconds — the floating window's 用时 was cleared on every beat. It
     passes the last real clock and the `force` flag that exists for it now.
+
+**Per-clip 表情/口型 gained 「默认」** (operator, 2026-10-13: 「表情和口型中增加"默认"选项，即没有任何表情或者口型，以模型的初始状态覆盖
+动作中的表情或者口型」). The dropdowns had two answers — an empty string ("follow": the emotion table for the expression, the
+expression for the mouth) and a NAME. `core.MOTION_FACE_DEFAULT` (`'none'`) is the third, and it is an ANSWER rather than a
+name: `Scene.currentFace` still returns a face object for it, with the field resolved to `null`, and `expressionTargets` only
+falls through to the state's emotion when the clip said NOTHING — so 「默认」 puts the model back on its own initial face and
+keeps the mood row out of it. The panel names it per field (表情：默认（无表情） / 口型：默认（无口型）) and the preview sends it
+as "no expression" rather than as a name the renderer would have to know.
 
 **The AI half of 碎碎念 is shown for the AI source ALONE** (operator, 2026-10-13: 「如果台词来源是内置台词，则下方的AI相关
 设置不显示」, and when asked whether 自定义短语 should keep it: 「自定义短语也隐藏」 — 自定义 never calls a model either): with

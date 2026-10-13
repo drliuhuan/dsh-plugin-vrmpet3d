@@ -1314,6 +1314,20 @@ group('6c. the per-state status prompt');
   same(core.MOTION_STATES, core.STATUS_STATES.concat(core.INTERACTION_STATES),
     'and the motion map is those six plus the three pointer poses, derived rather than written twice');
   eq(core.MOTION_STATES.length, 9, 'nine states carry a 状态与动作 row');
+  /**
+   * The 「默认」 answer for the per-clip 表情/口型 dropdowns (operator, 2026-10-13): a THIRD value beside "follow" (`''`)
+   * and a name, meaning "no expression (or mouth) at all" — the model's own initial face, overriding both the clip's
+   * declared face and the mood the state's row picked.
+   */
+  eq(core.MOTION_FACE_DEFAULT, 'none', '默认 is one named value, not a name spelled in three files');
+  {
+    const clipPrefs = core.cleanPreferences({ motionClips: { resting: { a1: { expression: core.MOTION_FACE_DEFAULT, mouth: core.MOTION_FACE_DEFAULT } } } });
+    const clipEntry = core.motionClipFor(clipPrefs, 'resting', 'a1');
+    eq(clipEntry && clipEntry.expression, core.MOTION_FACE_DEFAULT,
+      'and it survives the store as a value, unlike an empty string which is DROPPED (that is "follow")');
+    eq(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { expression: '' } } } }), 'resting', 'a1'), null,
+      'while the follow answer stores nothing at all');
+  }
 
   eq(core.statusLineFor(blank, 'working'), '深度求索中 ···',
     '工作态 ships DSH’s running line with NO clock (operator, 2026-10-13: 「深度求索中后面不加任何时间了」)');

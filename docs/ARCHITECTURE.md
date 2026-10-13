@@ -165,7 +165,7 @@ plugin's own script is served through a combo URL whose path is `/plugins/`.
 `lib/core.js` contains the state machine, fall physics, framing maths, idle motion,
 motion-format detection and preference cleaning, and imports neither DOM nor
 three.js. That is not tidiness for its own sake: those are the parts most likely to
-be subtly wrong, and keeping them pure lets the core suite's 1117 checks run in well
+be subtly wrong, and keeping them pure lets the core suite's 1120 checks run in well
 under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
@@ -876,7 +876,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2287 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
+Nine suites, 2290 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
 suites, the `build/` tools and the notes) — the `mmd` suite that used to make it ten went with MMD support on
 2026-10-12, and every figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs`
 recomputes them. The
@@ -921,7 +921,7 @@ since 2026-10-12 it is kept on disk rather than wired in — together with
 fixture): both feed only a format `Scene.loadMotion` now refuses, so only the VRMA half of this paragraph
 still describes this build.
 
-The **2287** the docs quote is the sum of the suites that print an assertion count,
+The **2290** the docs quote is the sum of the suites that print an assertion count,
 plus one for each suite that reports a verdict or a hash instead (`load`, `vendor`).
 `docs` deliberately excludes its own assertion count: including it is circular,
 because that count depends on whether the documented total matched, so a single run

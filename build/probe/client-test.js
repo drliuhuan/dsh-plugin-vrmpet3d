@@ -6978,6 +6978,48 @@
                 // 7. A clip whose OWN tracks drive the face: the blink gate and its readout must both see it.
                 found.faceFromClip = pet.scene.clipDrivesFace({ tracks: [{ name: 'Face.morphTargetInfluences[blink]' }] });
                 found.faceFromBones = pet.scene.clipDrivesFace({ tracks: [{ name: 'Face.quaternion' }] });
+                /**
+                 * 「默认」 — the THIRD answer for a clip's 表情/口型, and the reason the two others cannot cover it: it
+                 * means NO expression at all, which has to silence both the clip's own declared face and the mood the
+                 * state's row picked (operator, 2026-10-13: 「以模型的初始状态覆盖动作中的表情或者口型」).
+                 *
+                 * Driven against the scene's own resolution rather than the DOM, because that is where the three layers
+                 * meet: `currentFace` reads the per-clip entry, `expressionTargets` decides whether the emotion gets
+                 * the slot.
+                 */
+                // Everything this needs is stashed and put back: the block's own earlier flags are read off the SAME
+                // scene, and the checks after it read the same preferences.
+                var keptClips = pet.preferences.motionClips;
+                var keptPlayback = pet.scene.playback;
+                var keptPick = pet.scene.pickState;
+                var keptPreview = pet.scene.preview;
+                var keptMood = pet.scene.expressionBehaviour;
+                var clipMap = CORE.setMotionClip(pet.scene.preferences || pet.preferences, 'resting', 'a1', 'expression',
+                  CORE.MOTION_FACE_DEFAULT);
+                // The scene may be holding the preferences object it was built with rather than the page's copy, so both
+                // are written (and both are restored below).
+                var keptSceneClips = pet.scene.preferences ? pet.scene.preferences.motionClips : undefined;
+                pet.preferences.motionClips = clipMap;
+                if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) pet.scene.preferences.motionClips = clipMap;
+                pet.scene.playback = { id: 'a1' };
+                pet.scene.pickState = 'resting';
+                pet.scene.preview = null;
+                var blankFace = pet.scene.currentFace();
+                pet.scene.expressionBehaviour = { blink: 0, blinkExpression: 'blink', emotion: 'happy', emotionWeight: 1 };
+                var blankTargets = pet.scene.expressionTargets();
+                pet.preferences.motionClips = keptClips;
+                if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) {
+                  pet.scene.preferences.motionClips = keptSceneClips;
+                }
+                pet.scene.playback = keptPlayback;
+                pet.scene.pickState = keptPick;
+                pet.scene.preview = keptPreview;
+                pet.scene.expressionBehaviour = keptMood;
+                found.faceDefault = {
+                  answered: Boolean(blankFace),
+                  expression: blankFace ? blankFace.expression : 'no answer',
+                  moodLeaked: Object.prototype.hasOwnProperty.call(blankTargets, 'happy'),
+                };
                 var blinkBefore = pet.scene.blinkState().paused;
                 pet.scene.playback.record.faceTracks = true;
                 found.blinkPausedWithClipFace = pet.scene.blinkState().paused !== blinkBefore
@@ -6991,6 +7033,9 @@
                   && found.heldFlag === true && found.heldClamped === true
                   && found.randomLow === 'a1' && found.randomHigh === 'a2'
                   && found.faceFromClip === true && found.faceFromBones === false
+                  // 「默认」 answers "no expression", and that answer keeps the state's mood out of the slot.
+                  && found.faceDefault.answered === true && found.faceDefault.expression === null
+                  && found.faceDefault.moodLeaked === false
                   && found.blinkPausedWithClipFace === true;
               });
             });

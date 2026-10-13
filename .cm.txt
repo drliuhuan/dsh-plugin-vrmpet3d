@@ -1,0 +1,20 @@
+「默认」 joins 跟随 and a name in the per-clip 表情/口型 dropdowns
+
+Operator, 2026-10-13: 「表情和口型中增加"默认"选项，即没有任何表情或者口型，以模型的初始状态覆盖动作中的表情或者口型」. The previous
+round left `core.MOTION_FACE_DEFAULT` defined but unwired; this wires it.
+
+  * `lib/scene.js` — `currentFace` treats the value as an ANSWER rather than a name: the face object is still returned (that
+    is what stops the layer below from filling the slot) with the field resolved to `null`. `expressionTargets` already fell
+    through to the state's emotion only when the clip said NOTHING, so an answer of "nothing" now silences the mood instead
+    of inviting it back — which is the 「覆盖动作中的表情或者口型」 half, covering both the clip's own declared face and the
+    emotion row.
+  * `lib/config-page.js` — both dropdowns gain the option (表情：默认（无表情） / 口型：默认（无口型）), and the hover preview
+    sends it as "no expression" rather than as a name the renderer would have to know.
+
+VERIFIED, figures as printed: core 1120 (was 1117; the new pins are the constant, "it survives the store as a value", and
+"follow stores nothing at all"), client-test 97 in a real browser — the scene-level pin drives `currentFace` and
+`expressionTargets` and asserts the answer is present, resolves to no expression, and keeps a `happy` mood row out of the
+slot — and desktop **269 WITH the real window**, which is the suite the config page belongs to. `client-chunks` regenerated
+(scene.js changed) and `--check` 3/3 fresh. The documented total moves 2287 → 2290. NOT run: check-docs.mjs, verify-all.mjs.
+
+Also: `.c9.txt` (the previous commit's message file) was committed by mistake — it is deleted here.
