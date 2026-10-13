@@ -7,11 +7,16 @@ redistribution**, and many forbid commercial use outright. Committing one into a
 plugin repository would make the repository itself undistributable, whatever the
 author's intent. So:
 
-* `assets/models/` holds **exactly one model file, and only because its own embedded licence says it may
-  be redistributed**: `SampleModel.vrm` (VRoid's ヴィータ), which is also the shipped default. The licence
-  terms are read out of the file and asserted by `scripts/check-docs.mjs`, so a future swap for a model
-  that does not grant them fails there instead of shipping. Everything else about the folder is in
+* `assets/models/` holds **exactly two model files**, and each one ships for a reason this repository can
+  name: `BlueFatFish.vrm` (蓝色小肥鱼Deepseek, by 木子恶魔), the shipped default, **redistributed with its
+  author's permission**, and `SampleModel.vrm` (VRoid's ヴィータ), the fallback, whose **own embedded licence**
+  grants redistribution. `scripts/check-docs.mjs` asserts which files are there and what each one's basis is,
+  so a future swap for a model with neither fails there instead of shipping. Everything else about the
+  folder — including the source and author to credit for each — is in
   [`../assets/models/README.md`](../assets/models/README.md).
+* **A permission is not a licence.** Where a model ships on its author's consent rather than on terms carried
+  inside the file, that consent covers *this* distribution only: the credit (source and author) travels with
+  the file, and nothing here re-licenses it for anyone else.
 * The **procedurally generated placeholder** avatar is a **fixture, not a fallback**: `usePlaceholder` in
   `lib/scene.js` builds it for the geometry probes and the browser suite, gated on
   `globalThis.__VRMPET3D_PLACEHOLDER__`, which nothing in the shipped plugin defines. A model that fails to
@@ -265,8 +270,8 @@ no MMD clip to load any more.)*
 - [ ] I have not rendered and committed frames of it either.
 - [ ] If this plugin is ever published or shared, I have re-checked whether the
       model's terms permit that — and if in doubt, I shipped no model of my own
-      instead (the one file this repository ships is the bundled `SampleModel.vrm`, and it is there because
-      its own licence allows it — see §1).
+      instead (the files this repository ships are the two bundled models, and each is there because its
+      author permitted the distribution or its own licence allows it — see §1).
 - [ ] I have read any embedded metadata (`extensions.VRMC_vrm.meta`), because it is
       frequently **stricter** than the author's public distribution rules.
 - [ ] I have the right to use every **motion** file too. Motion files are licensed

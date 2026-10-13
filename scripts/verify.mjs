@@ -2710,20 +2710,29 @@ group('10. constants are self-consistent');
   /**
    * Removing the built-in avatar, and what "default" now means.
    *
-   * Operator, 2026-10-10: "移除内置替身，默认模型设置为SampleModel". The default is the EMPTY id — automatic — and
-   * `resolveModelId` is the rule that turns it into a catalogued model, with the NAME (not the scan-order id)
-   * doing the choosing, because ids drift when files are added or the host restarts.
+   * Operator, 2026-10-10: "移除内置替身，默认模型设置为SampleModel" — and 2026-10-13, with a second bundled model in
+   * hand: 「把BlueFatFish作为默认模型」. The default is the EMPTY id — automatic — and `resolveModelId` is the rule that
+   * turns it into a catalogued model, with the NAME (not the scan-order id) doing the choosing, because ids drift
+   * when files are added or the host restarts.
    */
   eq(core.DEFAULTS.modelId, '', 'the shipping default names no model: it resolves against the catalog');
+  eq(core.BUNDLED_DEFAULT_MODEL, 'BlueFatFish.vrm',
+    'the bundled default is named once, for the resolver, the picker and the documentation');
+  eq(core.BUNDLED_FALLBACK_MODEL, 'SampleModel.vrm', 'and so is the bundled model it falls back to');
   const catalogFixture = [
     { id: 'm1', name: 'HatsuneMikuNT.vrm' },
     { id: 'm2', name: 'SampleModel.vrm' },
-    { id: 'm3', name: 'fish.glb' },
+    { id: 'm3', name: 'BlueFatFish.vrm' },
   ];
-  eq(core.resolveModelId(catalogFixture, ''), 'm2', 'an empty preference resolves to SampleModel');
-  eq(core.resolveModelId(catalogFixture, 'm9'), 'm2',
+  eq(core.resolveModelId(catalogFixture, ''), 'm3',
+    'an empty preference resolves to the bundled default, BlueFatFish.vrm');
+  eq(core.resolveModelId(catalogFixture, 'm9'), 'm3',
     'and so does an id that is no longer in the catalog — ids are positions in a scan, so they drift');
-  eq(core.resolveModelId(catalogFixture, 'm3'), 'm3', 'a stored id that IS in the catalog is honoured');
+  eq(core.resolveModelId(catalogFixture, 'm1'), 'm1', 'a stored id that IS in the catalog is honoured');
+  eq(core.resolveModelId([{ id: 'm1', name: 'SampleModel.vrm' }], ''), 'm1',
+    'with only the other bundled model in the catalog, the fallback is what an empty preference gets');
+  eq(core.resolveModelId([{ id: 'm1', name: 'nested/BlueFatFish.vrm' }], ''), 'm1',
+    'and the default is matched on the FILE name, so a copy the user nested in a folder still counts');
   eq(core.resolveModelId([{ id: 'm1', name: 'a.glb' }], ''), 'm1',
     'without any VRM, the first model of any kind beats showing nothing');
   eq(core.resolveModelId([], ''), '', 'and an empty catalog resolves to nothing, which the surfaces report');

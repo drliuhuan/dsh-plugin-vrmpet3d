@@ -4,11 +4,14 @@ A **3D desktop pet** for DeepSeek Harness. It renders a VRM — or a plain glTF/
 floats it over the application frame, and drives it from live session status: working while a turn runs, asking for
 attention when an approval is waiting, celebrating when a turn completes, napping when nothing has happened.
 
-It ships **one redistributable model** ([assets/models/SampleModel.vrm](assets/models/SampleModel.vrm)) as the
-default, so a fresh install shows a real pet with nothing to configure.
+It ships **two models**, both redistributable with it, so a fresh install shows a real pet with nothing to
+configure: [assets/models/BlueFatFish.vrm](assets/models/BlueFatFish.vrm) (蓝色小肥鱼Deepseek, by 木子恶魔 — the
+default) and [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm) (ヴィータ, by VRoid プロジェクト — the
+fallback). The source, the author and the terms of each are in
+[assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2238 checks · works offline
+no runtime dependencies · 9 verification suites · 2254 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -39,7 +42,7 @@ retired MMD chapters.
 * For the floating window: an **Electron runtime**, which the launcher borrows from the DSH installation by hard
   links. Without one the pet still works inside DSH.
 * For the scripts: **Node 22+**. A Chromium-based browser (Edge or Chrome) for the browser suites.
-* A model file. The bundled SampleModel is the default; your own VRMs are imported as files, copied into the
+* A model file. The bundled BlueFatFish is the default; your own VRMs are imported as files, copied into the
   plugin's own storage (see below).
 
 ## Install
@@ -128,7 +131,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2238 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2254 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -139,8 +142,8 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1089 — state machine, and the nine motion states |
-| `node scripts/verify-model.mjs` | 738 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
+| `node scripts/verify.mjs` | 1093 — state machine, and the nine motion states |
+| `node scripts/verify-model.mjs` | 750 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 97 — the widget, the menu, the desktop page, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar and a posed model's part hit test |
@@ -180,7 +183,7 @@ lib/        the plugin: core.js (rules) · index.js (host routes) · scene.js (r
 desktop/    the launcher: the window, the always-on-top rules, the self-test
 scripts/    the suites and the tools
 docs/       ARCHITECTURE.md (design) · ASSET-CONTRACT.md (model/motion files) · models/
-assets/     the one bundled model
+assets/     the two bundled models (BlueFatFish.vrm · SampleModel.vrm)
 vendor/     the pinned 3D stack (build-time only; the chunk is committed)
 ```
 
@@ -196,6 +199,12 @@ vendor/     the pinned 3D stack (build-time only; the chunk is committed)
 
 MIT — see [LICENSE](LICENSE). It bundles other MIT-licensed software as one generated file
 ([lib/client.vendor.js](lib/client.vendor.js)): three.js, `@pixiv/three-vrm` and `@pixiv/three-vrm-animation`. It
-ships exactly one 3D model file, [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm), whose own embedded
-metadata allows redistribution, modification and commercial use with no attribution required; every other model is
-the user's and stays under its own author's terms.
+ships exactly two 3D model files, and both may be redistributed with it:
+
+| file | model | author | source | terms |
+| --- | --- | --- | --- | --- |
+| [assets/models/BlueFatFish.vrm](assets/models/BlueFatFish.vrm) | 蓝色小肥鱼Deepseek | 木子恶魔 | <https://www.aplaybox.com/details/model/ayXkRzVflmnd> | 经作者授权分发 — credited here as the author asks |
+| [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm) | ヴィータ | VRoid プロジェクト | <https://vroid.com/en/studio> | its own embedded licence: redistribution, modification and commercial use allowed, no attribution required |
+
+The first is what a fresh profile resolves to; the second is the fallback. Every other model is the user's and stays
+under its own author's terms.

@@ -245,36 +245,73 @@ group('4. structural invariants');
 // ---------------------------------------------------------------------------
 {
   /**
-   * The bundled model: ONE file, named, and redistributable.
+   * The bundled models: TWO files, named, each on a basis this repository can state.
    *
    * This used to assert that `assets/models/` shipped nothing at all — the rule while the plugin's default was a
    * procedurally generated avatar. The operator replaced that on 2026-10-10 ("把Sample Model设为内置模型…请务必做成
-   * 默认模型并随插件分发"), and the reason it is legitimate is the file's own embedded licence, so that is what gets
-   * asserted rather than the absence of a file: the licence query string inside the GLB must still say
-   * redistribution/modification/commercial are allowed and credit is unnecessary. A future swap for a model that
-   * does NOT say that fails here instead of shipping.
+   * 默认模型并随插件分发"), and on 2026-10-13 he added a SECOND file and made it the default: 「把BlueFatFish作为默认
+   * 模型」「需要注明来源和作者」, redistributing it with the author's permission.
+   *
+   * The two bases differ, so they are asserted differently:
+   *
+   *   * `SampleModel.vrm` ships on terms carried INSIDE the file — a VRoid Hub licence query string — and those
+   *     terms are read out of it here, so a swap for a model that does not grant them fails instead of shipping;
+   *   * `BlueFatFish.vrm` ships on the author's PERMISSION, which no file can prove. What is asserted instead is
+   *     that its own metadata names the author, and that the documentation credits that author and the source the
+   *     operator supplied — both in the folder's README and in the licence section a packager reads.
    */
   const bundled = join(ROOT, 'assets', 'models');
   ok(existsSync(bundled), 'assets/models/ exists');
   if (existsSync(bundled)) {
-    const entries = readdirSync(bundled).filter(name => name !== 'README.md');
-    ok(entries.join(', ') === 'SampleModel.vrm',
-      'and ships exactly the one built-in model', entries.join(', '));
-    const modelPath = join(bundled, 'SampleModel.vrm');
-    if (existsSync(modelPath)) {
-      const bytes = readFileSync(modelPath);
+    const entries = readdirSync(bundled).filter(name => name !== 'README.md').sort();
+    ok(entries.join(', ') === 'BlueFatFish.vrm, SampleModel.vrm',
+      'and ships exactly the two built-in models', entries.join(', '));
+
+    const samplePath = join(bundled, 'SampleModel.vrm');
+    if (existsSync(samplePath)) {
+      const bytes = readFileSync(samplePath);
       ok(bytes.length > 1000000 && bytes.subarray(0, 4).toString('latin1') === 'glTF',
-        `which is a real binary glTF (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+        `SampleModel.vrm is a real binary glTF (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
       // The JSON chunk is the second one, and the licence lives in its VRM metadata. Read as latin1 so the
       // comparison cannot be broken by a byte that is not valid UTF-8.
       const text = bytes.toString('latin1');
-      ok(text.includes('redistribution=allow'), 'and whose embedded licence allows redistribution');
+      ok(text.includes('redistribution=allow'), 'and its embedded licence allows redistribution');
       ok(text.includes('modification=allow'), 'and modification');
       ok(text.includes('corporate_commercial_use=allow'), 'and commercial use by corporations');
       ok(text.includes('credit=unnecessary'), 'and requires no attribution');
       ok(text.includes('VRoid'), 'while crediting its author in the file itself');
     } else {
-      ok(false, 'the built-in SampleModel.vrm is committed');
+      ok(false, 'the bundled SampleModel.vrm is committed');
+    }
+
+    const fatFishPath = join(bundled, 'BlueFatFish.vrm');
+    if (existsSync(fatFishPath)) {
+      const bytes = readFileSync(fatFishPath);
+      ok(bytes.length > 1000000 && bytes.subarray(0, 4).toString('latin1') === 'glTF',
+        `BlueFatFish.vrm is a real binary glTF (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+      const text = bytes.toString('latin1');
+      ok(text.includes('VRMC_vrm'), 'and is a VRM 1.0 (VRMC_vrm)');
+      // The author lives in the metadata as UTF-8, so it is matched as BYTES: latin1-decoding the chunk would
+      // mangle every multi-byte character and the comparison could never match.
+      ok(bytes.includes(Buffer.from('木子恶魔', 'utf8')), 'and carries its author in its own metadata');
+
+      /**
+       * The credit, in the documentation, in the words the operator gave.
+       *
+       * Two files are checked on purpose: `assets/models/README.md` is where a reader is sent for this folder,
+       * and README.md's licence section is where a packager looks. A credit that lives in one and is edited out
+       * of the other is the failure this catches.
+       */
+      const SOURCE = 'https://www.aplaybox.com/details/model/ayXkRzVflmnd';
+      const folderDoc = readFileSync(join(bundled, 'README.md'), 'utf8');
+      const licenceDoc = readFileSync(join(ROOT, 'README.md'), 'utf8');
+      ok(folderDoc.includes('木子恶魔') && folderDoc.includes(SOURCE),
+        'and assets/models/README.md credits it with its author and the source the operator gave');
+      ok(folderDoc.includes('经作者授权分发'), 'and states the basis it ships on');
+      ok(licenceDoc.includes('木子恶魔') && licenceDoc.includes(SOURCE),
+        'and README.md credits the same author and source');
+    } else {
+      ok(false, 'the bundled BlueFatFish.vrm is committed');
     }
   }
 

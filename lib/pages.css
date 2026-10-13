@@ -287,6 +287,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .model-card-remove { position: absolute; top: 6px; right: 6px; min-height: 0; padding: 0 6px; line-height: 20px;
   font-size: 11px; border-radius: 999px; background: rgba(0,0,0,.55); }
 .model-card-remove:hover { background: rgba(200,60,60,.85); }
+/* 自带模型的来源与作者, under the grid rather than on a tile — see `renderCredits` in lib/model-picker.js. A line
+   per bundled model, each wrapping rather than overflowing (the source is a long URL). */
+.model-credits { display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+  padding-top: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.model-credits > .k { font-size: 11px; opacity: .8; }
+.model-credit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 11px; }
+.model-credit-name { color: #cfd6e6; }
+.model-credit-source { color: #8daeff; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   body { padding: 16px 12px; }
   .card { padding: 12px; }

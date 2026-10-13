@@ -389,12 +389,13 @@ group('3. model catalog');
    * The bundled model is part of every catalog now.
    *
    * `buildCatalog` scans `assets/models` FIRST (source `bundled`) and the configured directories after it, so the
-   * operator's built-in SampleModel.vrm (2026-10-10: "请务必做成默认模型并随插件分发") is listed beside the sandbox
-   * fixtures — and takes the first id, which is why these assertions are name-based rather than id-based.
+   * files this plugin ships — SampleModel.vrm (2026-10-10: "请务必做成默认模型并随插件分发") and, since
+   * 2026-10-13, BlueFatFish.vrm (「把BlueFatFish作为默认模型」) — are listed beside the sandbox fixtures, and take the
+   * first ids. That is why these assertions are name-based rather than id-based.
    */
   const bundledModels = catalog.models.filter(model => model.source === 'bundled');
-  eq(bundledModels.map(model => model.name).join(','), 'SampleModel.vrm',
-    'the built-in model is listed first, from the bundled directory');
+  eq(bundledModels.map(model => model.name).join(','), 'BlueFatFish.vrm,SampleModel.vrm',
+    'both built-in models are listed first, from the bundled directory, in scan order');
   const fixtureModels = catalog.models.filter(model => model.source !== 'bundled');
   const names = fixtureModels.map(model => model.name).sort();
   eq(fixtureModels.length, 3, `only real model files are listed beside it (got: ${names.join(', ')})`);
@@ -505,21 +506,30 @@ group('4. asset route');
   ok(/no-store/.test(response.headers['cache-control']), 'the response is not cached');
 
   /**
-   * And the BUNDLED model is served too — that is what "随插件分发" has to mean end to end.
+   * And the BUNDLED models are served too — that is what "随插件分发" has to mean end to end.
    *
-   * The catalog lists it from `assets/models` (source `bundled`), and the asset route resolves ids through the
-   * same map, so the built-in default is fetchable by both pet surfaces with no user configuration at all. This
-   * is the one check that proves the bytes actually reach a page rather than merely sitting in the repository.
+   * The catalog lists them from `assets/models` (source `bundled`), and the asset route resolves ids through the
+   * same map, so the shipped models are fetchable by both pet surfaces with no user configuration at all. This is
+   * the one check that proves the bytes actually reach a page rather than merely sitting in the repository — and
+   * since 2026-10-13 that means BOTH files, because the catalogue's first `bundled` entry is no longer the only one.
    */
-  const builtIn = store.models.find(model => model.source === 'bundled');
-  ok(Boolean(builtIn), `the catalog carries the bundled model (${builtIn ? builtIn.name : 'none'})`);
-  if (builtIn) {
+  const builtIns = store.models.filter(model => model.source === 'bundled');
+  eq(builtIns.length, 2, `the catalog carries both bundled models (${builtIns.map(model => model.name).join(', ') || 'none'})`);
+  for (const builtIn of builtIns) {
     const served = await call(`/vrmpet3d/asset?m=${encodeURIComponent(builtIn.id)}`);
-    eq(served.status, 200, 'and the asset route serves it');
+    eq(served.status, 200, `${builtIn.name}: the asset route serves it`);
     eq(served.body.subarray(0, 4).toString('latin1'), 'glTF', 'as a real binary glTF');
-    eq(served.body.length, builtIn.bytes, 'the whole built-in model is streamed');
-    ok(served.body.toString('latin1').includes('redistribution=allow'),
-      'with the licence terms that allow shipping it still inside the file');
+    eq(served.body.length, builtIn.bytes, 'and the whole file is streamed, byte for byte');
+  }
+  // The terms INSIDE the file are the basis ONE of the two ships on, and they have to survive the route as well
+  // as sit in the repository (check-docs reads the same string off disk).
+  const sampleModel = builtIns.find(model => model.name === 'SampleModel.vrm');
+  if (sampleModel) {
+    const servedSample = await call(`/vrmpet3d/asset?m=${encodeURIComponent(sampleModel.id)}`);
+    ok(servedSample.body.toString('latin1').includes('redistribution=allow'),
+      "with SampleModel.vrm's licence terms that allow shipping it still inside the file");
+  } else {
+    ok(false, 'the bundled SampleModel.vrm is catalogued');
   }
 
   // A sibling texture.
@@ -1422,8 +1432,9 @@ group('8. registered routes and both catalogs over HTTP');
   const packSize = motionCatalog.payload.motions.filter(motion => motion.source === 'bundled').length;
   eq(service.describe().motionCount, packSize + 1,
     `describe() counts the motions (the fixture plus the ${packSize}-clip bundled pack)`);
-  // +1 for the bundled SampleModel, which is in every catalog since 2026-10-10.
-  eq(service.describe().modelCount, 2, 'describe() still counts the models (the fixture plus the built-in)');
+  // +2 for the two bundled models, which are in every catalog — SampleModel.vrm since 2026-10-10 and
+  // BlueFatFish.vrm since 2026-10-13.
+  eq(service.describe().modelCount, 3, 'describe() still counts the models (the fixture plus the two built-in ones)');
   eq(service.assetRoutes.motions, '/vrmpet3d/motions', 'assetRoutes names the motion catalog route');
   eq(service.assetRoutes.motion, '/vrmpet3d/motion', 'assetRoutes names the motion byte route');
   eq(service.assetRoutes.catalog, '/vrmpet3d/catalog', 'the existing catalog path is unchanged');
@@ -1787,7 +1798,7 @@ group('10. imported model directories over HTTP');
   eq(state.headers['content-type'], 'application/json; charset=utf-8', 'the list is JSON');
   eq(state.headers['access-control-allow-origin'], '*', 'the list is readable by the page');
   eq(state.payload.importedDirs.length, 0, 'a first run has no imported directories');
-  eq(state.payload.modelCount, 2, 'the count covers the configured directory and the built-in model');
+  eq(state.payload.modelCount, 3, 'the count covers the configured directory and the two built-in models');
   eq(state.payload.catalogFile, resolve(scratch), 'the route names the file it persists to');
   /**
    * The READ side carries the catalogue, not only the imported lists.
@@ -1810,7 +1821,7 @@ group('10. imported model directories over HTTP');
   eq(added.payload.persistError, null, 'a successful write reports no error');
   eq(added.payload.importedDirs.length, 1, 'the reply carries the refreshed list');
   eq(added.payload.importedDirs[0], resolve(importSandbox), 'the directory is stored resolved');
-  eq(added.payload.modelCount, 3, 'the reply carries the refreshed catalog count (two fixtures plus the built-in)');
+  eq(added.payload.modelCount, 4, 'the reply carries the refreshed catalog count (two fixtures plus the two built-in)');
   ok(added.payload.models.some(model => model.name === 'guest.vrm'),
     'the imported model is in the reply catalog');
 
@@ -1830,7 +1841,7 @@ group('10. imported model directories over HTTP');
   const again = await post({ add: importSandbox });
   eq(again.status, 200, 'importing the same directory again succeeds');
   eq(again.payload.importedDirs.length, 1, 'importing the same directory twice is a no-op');
-  eq(again.payload.modelCount, 3, 'the catalog does not double-count the second import');
+  eq(again.payload.modelCount, 4, 'the catalog does not double-count the second import');
 
   // Refusals. Each names its own reason, and none of them touches the list.
   let refused = await post({ add: missing });
@@ -1855,7 +1866,8 @@ group('10. imported model directories over HTTP');
   const removed = await post({ remove: importSandbox });
   eq(removed.status, 200, 'POST remove drops a directory');
   eq(removed.payload.importedDirs.length, 0, 'the reply carries the list after the removal');
-  eq(removed.payload.modelCount, 2, 'the catalog drops the imported model, and keeps only the fixture and the built-in');
+  eq(removed.payload.modelCount, 3,
+    'the catalog drops the imported model, and keeps only the fixture and the two built-in ones');
   ok(!removed.payload.models.some(model => model.name === 'guest.vrm'),
     'the removed model is gone from the reply catalog');
   eq(JSON.parse(readFileSync(scratch, 'utf8')).modelDirs.length, 0, 'the removal is persisted');
@@ -2247,9 +2259,38 @@ group('12. what a model contains, over real HTTP (the settings window reads this
   const thumbnail = await server.call(`/vrmpet3d/model-thumbnail?m=${encodeURIComponent(bundled.id)}`);
   eq(thumbnail.status, 200, 'the thumbnail route answers for the built-in model');
   eq(thumbnail.headers['content-type'], 'image/png', 'and serves the image with its own type');
-  const expectedThumb = vrmInfo.thumbnailImage(vrmInfo.readGlb(join(ROOT, 'assets', 'models', 'SampleModel.vrm')));
+  // Read back from the file the catalogue entry ITSELF names, so this stays a round trip — and stays true
+  // whichever bundled model `find` lands on, which is what broke when a second one was added.
+  const expectedThumb = vrmInfo.thumbnailImage(vrmInfo.readGlb(join(ROOT, 'assets', 'models', bundled.name)));
   ok(Boolean(expectedThumb) && thumbnail.body.equals(expectedThumb.bytes),
     `and the bytes are the file's OWN thumbnail (${expectedThumb ? `${expectedThumb.width}x${expectedThumb.height}` : 'none found'})`);
+
+  /**
+   * + THE MODEL AN EMPTY PREFERENCE RESOLVES TO, and the credit the picker prints for it.
+   *
+   * Operator, 2026-10-13: 「把BlueFatFish作为默认模型」 and 「需要注明来源和作者」. Both are reached here the way a fresh
+   * page reaches them — the catalogue plus the resolver — rather than by reading a constant.
+   */
+  const defaultId = coreModule.resolveModelId(catalog.payload.models, '');
+  const defaultModel = catalog.payload.models.find((model) => model.id === defaultId);
+  eq(defaultModel && defaultModel.name, 'BlueFatFish.vrm',
+    'an empty preference resolves to the bundled default, BlueFatFish.vrm');
+  /**
+   * The credit travels IN the catalogue — one object per bundled entry, built from `BUNDLED_MODEL_CREDITS` — so
+   * the picker prints what the host says instead of keeping a second copy of who made what. Every user model
+   * carries `credit: null` rather than no key, which is the shape a page (and a probe) reads.
+   */
+  const creditedNames = catalog.payload.models.filter((model) => model.credit).map((model) => model.name).sort();
+  eq(creditedNames.join(', '), 'BlueFatFish.vrm, SampleModel.vrm',
+    'and both bundled models carry a credit, and nothing else does');
+  const fatFish = catalog.payload.models.find((model) => model.name === 'BlueFatFish.vrm');
+  eq(fatFish && fatFish.credit.author, '木子恶魔', 'BlueFatFish.vrm credits its author');
+  eq(fatFish && fatFish.credit.title, '蓝色小肥鱼Deepseek', "and the model's own name");
+  eq(fatFish && fatFish.credit.source, 'https://www.aplaybox.com/details/model/ayXkRzVflmnd',
+    'and the source the operator supplied');
+  eq(fatFish && fatFish.credit.license, '经作者授权分发，需注明来源与作者', 'and the basis it ships on');
+  ok(catalog.payload.models.every((model) => (model.source === 'bundled' ? Boolean(model.credit) : model.credit === null)),
+    'while every user model carries credit: null rather than no key at all');
   const noThumbnail = await server.call(`/vrmpet3d/model-thumbnail?m=${encodeURIComponent(vrmId)}`);
   eq(noThumbnail.status, 404, 'a VRM that carries no thumbnail answers 404, not an empty image');
   ok(/no thumbnail/.test(noThumbnail.body.toString('utf8')), 'and says which case it is');

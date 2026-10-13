@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2238 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2254 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -451,7 +451,7 @@ Two habits that are not optional:
 | [scripts/](scripts/) | the suites and the tools; [AGENTS.md](AGENTS.md) maps them |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the design in depth: why the split is where it is, the vendors, the traps |
 | [docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md) | what a model/motion file must be, and the RETIRED MMD chapters |
-| [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm) | the ONE bundled model (redistributable; see its README) |
+| [assets/models/](assets/models/) | the TWO bundled models: `BlueFatFish.vrm` (蓝色小肥鱼Deepseek / 木子恶魔 — the default, redistributed with the author's permission) and `SampleModel.vrm` (ヴィータ / VRoid プロジェクト — the fallback, allowed by its own embedded licence); sources and terms in its README |
 | [assets/motions/](assets/motions/) | the bundled `.vrma` pack, scanned as a bundled motion source; its `vrmpet3d-motions.json` declares each clip's 循环/单次 and the (currently empty) default state mapping |
 
 ## 7. Environment facts for THIS machine
