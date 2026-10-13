@@ -25,6 +25,16 @@ build/probe/settings-*-dom.html
 build/probe/settings-*.png
 build/*.png
 
+# NOT PART OF THE PLUGIN, and therefore not on this branch: the suites, the
+# build/probe tools and the working notes live on `dev`, where development happens
+# (operator, 2026-10-13: 「这些调试相关的内容不要放进main…main 只放插件本身」). They are
+# listed here so that a `git add -A` on this branch cannot quietly drag them back
+# in — on `dev` they are tracked, and an ignore rule does not apply to a tracked
+# file, so one .gitignore serves both branches.
+scripts/
+build/
+AGENTS.md
+
 # Build-only; `cd vendor && npm install` restores it. The compiled chunk in
 # lib/client.vendor.js is committed instead, so the plugin runs with no toolchain.
 vendor/node_modules/
