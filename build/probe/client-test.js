@@ -6466,7 +6466,9 @@
        * remark pushed the window further left and up — near a screen edge the OS clamped it and the pet jumped.
        */
       var bandBefore = reported;
-      pet.setSpeech('这一句碎碎念刻意写得非常非常长，长到必须折行，而且比宠物本身还要宽出许多，用来证明窗口的预留区不会跟着文字一起变大。');
+      // Exactly `SPEECH_LIMITS.lineLength` characters — the longest remark the pool or a model answer can be, which
+      // is what the band is sized for. A longer string would be testing a line the product cannot produce.
+      pet.setSpeech('一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十');
       var longBox = pet.speech();
       var bandAfter = pet.rect() ? pet.rect().speech : null;
       var sameBand = Boolean(bandBefore && bandAfter)
