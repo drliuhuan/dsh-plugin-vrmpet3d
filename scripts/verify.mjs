@@ -892,10 +892,23 @@ group('5. preferences');
   core.setEmotionTrigger(prefs, 'click', { emotions: ['happy'] });
   eq(prefs.expressions.emotion.triggers.click.holdSeconds, beforePatch,
     'and naming emotions does not disturb the duration');
-  ok(core.BLINK_EXPRESSIONS.includes('blink') && core.MOUTH_EXPRESSIONS.length === 5,
+  ok(core.BLINK_EXPRESSIONS.includes('blink') && core.MOUTH_EXPRESSIONS.length === 10,
     'the behaviours name the VRM presets they drive, so the panel can say what a switch will try');
+  /**
+   * AND IN BOTH SPELLINGS VRM HAS USED (operator, 2026-10-13: 「状态与动作中，每个动作的表情和口型设置始终是空的，必须动态从
+   * 模型上加载」).
+   *
+   * Listing only VRM 1.0's `aa`/`ih`/`ou`/`ee`/`oh` is half of that bug: the bundled `SampleModel.vrm` is a VRM 0.x
+   * file whose mouth shapes are preset-keyed `a`/`i`/`u`/`e`/`o` with labels `A`/`I`/`U`/`E`/`O`, so its 口型 dropdown
+   * was empty and its mouth shapes were offered as mood rows. Measured against the file itself, not assumed.
+   */
+  ok(['a', 'i', 'u', 'e', 'o'].every((name) => core.MOUTH_EXPRESSIONS.includes(name)),
+    'and the VRM 0.x spellings of the mouth shapes are in the list too, not only the 1.0 ones');
+  ok(['blink_l', 'blink_r'].every((name) => core.BLINK_EXPRESSIONS.includes(name)),
+    'with the 0.x split blinks, which the emotion table must not offer as moods either');
   ok((core.BEHAVIOUR_EXPRESSIONS || []).indexOf('blink') !== -1
     && (core.BEHAVIOUR_EXPRESSIONS || []).indexOf('aa') !== -1
+    && (core.BEHAVIOUR_EXPRESSIONS || []).indexOf('a') !== -1
     && (core.BEHAVIOUR_EXPRESSIONS || []).indexOf('lookUp') !== -1,
     'and the expressions other behaviours own are listed apart, so the emotion table cannot offer them');
   ok(!('EMOTION_EXPRESSIONS' in core),

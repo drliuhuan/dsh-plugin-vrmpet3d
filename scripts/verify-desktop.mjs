@@ -909,6 +909,23 @@ if (live.skipped) {
           && globalPage.modelOptions === null,
           'and neither page carries the other\'s sections (no 碎碎念/状态 on the model page,'
             + ' no 部位/弹簧骨/model picker on the 通用设置 page)');
+        /**
+         * AND THE 通用设置 PAGE KNOWS THE MODEL'S VOCABULARY, which it has to fetch to know.
+         *
+         * Operator, 2026-10-13: 「通用设置面板中，状态与动作中，每个动作的表情和口型设置始终是空的，必须动态从模型上加载」. The
+         * per-clip 表情/口型 dropdowns are built from the model's own expression list, and this page used to refuse to
+         * ask for it (the guard tested for the MODEL PICKER, which only the other page has) — so every one of those
+         * dropdowns held its single 跟随 entry and nothing else, for good. The fixture model declares expressions, so
+         * "loaded" means options beyond 跟随, in both dropdowns.
+         *
+         * The MOUTH count is not asserted here because this fixture has no mouth presets at all (blink, happy,
+         * surprised, wag) — the empty-mouth half of the same report is a VOCABULARY bug, pinned against the bundled
+         * 0.x `SampleModel.vrm` in the core suite.
+         */
+        const clipFaces = (globalPage.motions || {}).clipFaceOptions || {};
+        ok(clipFaces.expression > 0 && clipFaces.selects >= 2,
+          `and the per-clip 表情/口型 dropdowns list the MODEL's own words, loaded on this page`
+            + ` (${clipFaces.expression} expressions, ${clipFaces.mouth} mouth shapes in this fixture, model ${clipFaces.model})`);
         const sizes = shown.sizes || {};
         ok(sizes.controls === true,
           'and two separate size controls, one per surface, rather than one shared key');

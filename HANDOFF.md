@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2278 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2281 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -125,6 +125,23 @@ use. `showSpeech` hides the `#speech-ai` BLOCK and nothing inside it — the dsh
 per-state boxes stay, because a 台词 box is where 自定义短语's own lines live. The page publishes `speech.aiVisible`, which is
 a DIFFERENT fact from `speech.aiControls` (the controls exist either way); the live settings-window half asserts
 `aiVisible === false` against a source it has just asserted is builtin, and the Node half owns the markup↔script join.
+
+**The 通用设置 page reads the MODEL for its 状态与动作 dropdowns** (operator, 2026-10-13: 「通用设置面板中，状态与动作中，每个动作
+的表情和口型设置始终是空的，必须动态从模型上加载」). Two bugs behind one symptom:
+
+  * `loadModelInfo` refused to ask unless the MODEL PICKER was in the document — true while the only expression names on screen
+    were the model page's emotion table, and false the moment 状态与动作 grew a per-clip 表情/口型 dropdown, because those options
+    ARE the model's expression list. The guard now asks `needsModelVocabulary()` (`model-select` OR `motion-list`); the 通用设置
+    page loads the catalog too (so a fresh profile with nothing live can still resolve a model); the info is re-read when a model
+    was switched from another window (`modelInfoId`); and one in-flight read is shared instead of asking twice per boot (measured:
+    two identical `model-info` requests before that guard went in).
+  * the VOCABULARY: `MOUTH_EXPRESSIONS`/`BLINK_EXPRESSIONS` listed only VRM 1.0's spellings (`aa`, `blinkLeft`), while the bundled
+    VRM 0.x `SampleModel.vrm` carries `a`/`i`/`u`/`e`/`o` and `blink_l`/`blink_r` (read out of the file, not guessed). Its 口型
+    dropdown was empty for that reason as well, and its mouth shapes were offered as MOODS in the 表情 table. Both spellings are
+    listed now, and `expressionAnswersTo` in [lib/config-page.js](lib/config-page.js) matches an expression's name OR its
+    presetName, case-insensitively. Asserted both ways: the vocabulary against the file's own keys in `verify.mjs`, the loaded
+    options in the desktop suite's live half (`motions.clipFaceOptions`), and both were measured in a real Chromium against the
+    real pages — 6 expressions / 3 mouths on a stub, and 15 expressions / **5 mouths (A E I O U)** against `SampleModel.vrm`.
 
 **The AI-prompt box in 部位 carries ONE generic grey hint, whatever the part is** (2026-10-13: 「胸部和屁股的AI提示词，
 默认状态下尽管有内置提示词，但是也应该是和其他部位的默认灰色字体提示一样」): 胸部/屁股 keep their shipped INSTRUCTIONS — the host
