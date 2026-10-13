@@ -188,15 +188,15 @@ report(service?.assetRoutes === null,
   };
   lateCtx.pending[0].callback(scope);
 
-  // Nineteen routes: the five asset/motion ones, the desktop window's page and sources and its on/off
-  // control, what a model file contains, the TWO settings pages (模型参数 and 通用设置, separate documents since
-  // 2026-10-11) plus the FIRST-RUN GUIDE (its page and its own state), the settings store, the transient preview
+  // Twenty-one routes: the five asset/motion ones, the desktop window's page and sources and its on/off
+  // control, what a model file contains plus the THUMBNAIL a picker shows beside it, the TWO settings pages
+  // (模型参数 and 通用设置, separate documents since 2026-10-11) plus the FIRST-RUN GUIDE (its page and its own
+  // state) and the MODEL PICKER's page (切换模型, added 2026-10-13), the settings store, the transient preview
   // the settings window drives, the live state the in-app pet publishes for the floating window, the AI 碎碎念
-  // pair (one generated line, and the provider catalog the settings offer), DSH's own animated whale mark for the
-  // status prompt's mask, and the one route that ends the application it is served from (重启 / 退出 DeepSeek
-  // Harness for the pet's right-click menu).
-  report(lateRegistrations.length === 19,
-    `a late webServer receives all nineteen routes (${lateRegistrations.join(', ') || 'none'})`);
+  // pair (one generated line, and the provider catalog the settings offer), and DSH's own animated whale mark
+  // for the status prompt's mask.
+  report(lateRegistrations.length === 21,
+    `a late webServer receives all twenty-one routes (${lateRegistrations.join(', ') || 'none'})`);
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/catalog'),
     'the catalog route is among them');
   report(lateRegistrations.some((entry) => entry === 'prefix /vrmpet3d/asset'),
@@ -205,10 +205,14 @@ report(service?.assetRoutes === null,
     "the desktop window's page route is among them");
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/model-info'),
     "and the route that describes a model's contents");
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/model-thumbnail'),
+    'and the route that serves one model\'s own thumbnail image');
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/config'),
     "and the model-parameter window's page");
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/global'),
     'and the 通用设置 page, a second document rather than a hidden half of the first');
+  report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/picker'),
+    "and 切换模型's page, the model picker the guide's 偏好模型 step is also built from");
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/preview'),
     'and the preview channel the settings window drives');
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/state'),
@@ -335,7 +339,7 @@ report(service?.assetRoutes === null,
     const list = /var ITEMS = \[([\s\S]*?)\];/.exec(menuSource);
     const ids = list ? [...list[1].matchAll(/'([a-zA-Z]+)'/g)].map((match) => match[1]) : [];
     report(JSON.stringify(ids) === JSON.stringify([
-      'resetView', 'resetSize', 'globalSettings', 'modelSettings', 'surface', 'gravity', 'closePet',
+      'resetView', 'resetSize', 'globalSettings', 'switchModel', 'modelSettings', 'surface', 'gravity', 'closePet',
     ]), `the shared list is the operator's entries in order, without 重启/退出 (${ids.join(', ') || 'none'})`);
     report(/surfaceWindow: '切换回窗口外'/.test(menuSource) && /surfaceApp: '切换回窗口内'/.test(menuSource),
       'and the 切换 row still carries both directions in the table');
@@ -666,13 +670,20 @@ report(service?.assetRoutes === null,
      * the model was asked to write the line. The rule now lives in ONE function (`core.partSpeechLines(item, allowed)`)
      * and the argument is `speech.source === 'builtin'` in the app's machine AND in the window's own press path: two
      * copies of a shipped-default rule is how these two surfaces have drifted every time before (2026-10-12: the
-     * drag, the fall and the landing each cost a pass). The settings page passes the same expression so its
-     * placeholder can stop promising the table it just switched off.
+     * drag, the fall and the landing each cost a pass).
+     *
+     * The SETTINGS page used to pass that expression too, because 部位's placeholder spelled the shipped lines out
+     * (「碎碎念：留空则说内置的 变态！」). The operator removed the announcement (2026-10-13: 「碎碎念框那行也变成通用灰字」),
+     * so the page has nothing left to compute: it reads the table ONLY to publish its content for the panel's
+     * self-test (deliberately, source or not), and it must not grow a second copy of the source rule to keep the old
+     * wording alive. This pair is what says so.
      */
     report(/partSpeechLines\(item, speech\.source === 'builtin'\)/.test(coreSource)
-      && /core\.partSpeechLines\(item, speech\.source === 'builtin'\)/.test(windowSource)
-      && /partSpeechLines\(item, partSource === 'builtin'\)/.test(configSource),
-      'both press paths and the settings page pass the SAME source argument to the shipped part lines');
+      && /core\.partSpeechLines\(item, speech\.source === 'builtin'\)/.test(windowSource),
+      'both press paths pass the SAME source argument to the shipped part lines');
+    report(/core\.partSpeechLines\(item\)/.test(configSource)
+      && !/partSpeechLines\(item, partSource/.test(configSource),
+      'and the settings page reads the table ONLY to publish it, never to word a hint with it');
     /**
      * The DATA-LOSS LATCH, pinned in the source.
      *
@@ -725,7 +736,7 @@ report(service?.assetRoutes === null,
 
   // Registering twice must not happen: the server throws on a duplicate (kind, path).
   lateCtx.pending[0].callback(scope);
-  report(lateRegistrations.length === 19,
+  report(lateRegistrations.length === 21,
     `a second arrival does not re-register (${lateRegistrations.length} total)`);
 
   // Read the service THIS activation provided, not a Map entry: a second apply

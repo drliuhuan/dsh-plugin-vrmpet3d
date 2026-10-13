@@ -2218,16 +2218,46 @@
       settle(240);
       probe.stage.rotation.x = 0;
 
+      /**
+       * AND THE IDLE TURNS NOTHING.
+       *
+       * The procedural idle used to add a whole-body yaw to the stage (`YAW_GAIN`), so the pet slowly turned
+       * left and right while nothing was happening; the operator removed it on 2026-10-13 (「停用idle状态下微旋转」).
+       * The sway goes BACK to its shipped amount for this measurement, because the point is that the yaw is gone
+       * whatever the sway says — and the user's OWN yaw preference must still be what the stage wears.
+       */
+      var idlePrefs = probe.preferences;
+      idlePrefs.sway = 0.12;
+      idlePrefs.yaw = 0;
+      probe.applyPreferences(idlePrefs);
+      settle(60);
+      var yawSamples = [];
+      for (var yawStep = 0; yawStep < 12; yawStep += 1) {
+        settle(15);
+        yawSamples.push(probe.stage.rotation.y);
+      }
+      var yawDrift = Math.max.apply(null, yawSamples) - Math.min.apply(null, yawSamples);
+      idlePrefs.yaw = 0.5;
+      probe.applyPreferences(idlePrefs);
+      settle(20);
+      var yawApplied = probe.stage.rotation.y;
+      idlePrefs.yaw = 0;
+      probe.applyPreferences(idlePrefs);
+
       found.swing = {
         lateral: +lateral.toFixed(5), vertical: +vertical.toFixed(5),
         verticalWithoutLean: +verticalNoLean.toFixed(5),
         pitchDown: +pitchDown.toFixed(4), pitchUp: +pitchUp.toFixed(4),
         pitchSettled: +pitchSettled.toFixed(6),
+        idleYawDrift: +yawDrift.toFixed(6),
+        yawApplied: +yawApplied.toFixed(6),
       };
       var swingOk = vertical > 0.01 && verticalNoLean >= 0
         && vertical > 4 * verticalNoLean
         && pitchDown > 0.02 && pitchUp < -0.02
-        && Math.abs(pitchSettled) < 1e-6;
+        && Math.abs(pitchSettled) < 1e-6
+        // The idle writes NO world rotation, and the user's own yaw is still followed exactly.
+        && yawDrift < 1e-9 && Math.abs(yawApplied - 0.5) < 1e-9;
 
       probe.dispose();
       if (canvas.parentNode) canvas.remove();
@@ -2294,6 +2324,9 @@
     var zh = menuApi.strings('zh');
     var words = zh.resetView === '重置视角' && zh.resetSize === '重置大小'
       && zh.globalSettings === '通用设置' && zh.modelSettings === '当前模型参数设置'
+      // 切换模型: the model picker's own row, added 2026-10-13, and it belongs to the SHARED table because both
+      // pets offer it — the operator asked for it in both menus, with the guide's 偏好模型 content behind it.
+      && zh.switchModel === '切换模型'
       && zh.surfaceWindow === '切换回窗口外' && zh.surfaceApp === '切换回窗口内'
       && zh.gravity === '重力'
       // The two meanings of the last row, and they are NOT the same words: the app's pet is hidden, the
@@ -2327,7 +2360,7 @@
       enabledOutsideDebug: enabledOutsideDebug,
     };
     return opened && sharedClass && stylesheet && words
-      && ids.join(',') === 'resetView,resetSize,globalSettings,modelSettings,surface,gravity,closePet'
+      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,modelSettings,surface,gravity,closePet'
       && disabledInDebug && enabledOutsideDebug;
   });
 
@@ -3673,11 +3706,173 @@
   // real model load, and a model load re-applies the motion map — running the two
   // at once made the first version of those checks measure that reload instead of
   // their own action.
+  /**
+   * BOTH SURFACES SAY WHICH MODEL THEY LOADED — which is what ends the picker's progress bar.
+   *
+   * The operator's 「明明模型已经切换好了，为什么还走了这么长时间的进度条」 was this contract missing: `live.app` was
+   * reported once, at boot, and `live.window` was never reported by the window at all (the host stamped it from the
+   * launcher's startup model). The bar waits for a surface to say "the model you asked for is on screen", so with
+   * a stale value it waited out its timeout however fast the model appeared.
+   *
+   * Driven for real on both halves: the window page mounted with a settings route that answers, and a second
+   * in-app widget built after the same stub is in place (the shared one above captured its fetch at mount, when
+   * this page had no host at all).
+   */
+  asyncCheck('both surfaces report the model they loaded, so a picker knows a switch finished', function () {
+    var fixtureBytes = (function () {
+      var encoded = globalThis.__VRMPET3D_VRM_BASE64__;
+      if (!encoded) return null;
+      var binary = atob(encoded);
+      var out = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+      return out.buffer;
+    })();
+    if (!fixtureBytes) return false;
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
+    if (!desktop || typeof desktop.mount !== 'function') return false;
+    var catalog = { models: [{ id: 'm1', name: 'SampleModel.vrm', source: 'bundled' }] };
+    var pushed = [];
+    var settingsStub = function (url, options) {
+      var method = (options && options.method) || 'GET';
+      if (method === 'POST' && options && options.body) {
+        try { pushed.push(JSON.parse(options.body)); } catch (error) { pushed.push(null); }
+        return { ok: true, status: 200, json: function () { return Promise.resolve({ version: 2, preferences: {}, live: {} }); } };
+      }
+      return { ok: true, status: 200, json: function () {
+        return Promise.resolve({ version: 1, preferences: { modelId: 'm1' }, live: { app: null, window: null } });
+      } };
+    };
+    var routes = {
+      '/vrmpet3d/settings': settingsStub,
+      '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve(catalog); } }; },
+      '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(fixtureBytes); } }; },
+      '/vrmpet3d/motions': function () {
+        return { ok: true, json: function () { return Promise.resolve({ motions: [], motionDefaults: {}, importedMotions: [], importedDirs: [] }); } };
+      },
+    };
+    var restore = stubFetch(routes);
+    var livePushes = function (surface) {
+      return pushed.filter(function (body) { return body && body.live && body.live[surface]; });
+    };
+
+    var windowHost = document.createElement('div');
+    windowHost.style.position = 'absolute';
+    windowHost.style.left = '-2000px';
+    var windowCanvas = document.createElement('canvas');
+    windowCanvas.width = 900;
+    windowCanvas.height = 600;
+    windowHost.appendChild(windowCanvas);
+    document.body.appendChild(windowHost);
+    var pet = desktop.mount({
+      canvas: windowCanvas,
+      bridge: { reportRect: function () {}, ready: function () {}, onCursor: function () {} },
+      modelId: 'm1',
+      screen: { x: 0, y: 0, width: 900, height: 600 },
+      storage: { getItem: function () { return null; }, setItem: function () {} },
+    });
+
+    // The in-app half: a FRESH widget, because the shared one captured a fetch from before this stub existed.
+    var appHost = document.createElement('div');
+    appHost.style.position = 'absolute';
+    appHost.style.left = '-2000px';
+    document.body.appendChild(appHost);
+    var appPet = new CLIENT.VrmPet3DWidget(appHost, { language: 'en' });
+    appPet.initScene();
+
+    return pet.ready.then(function () {
+      return appPet.refreshCatalog().then(function () { return appPet.loadModel('m1'); });
+    }).then(function (status) {
+      var windowReports = livePushes('window');
+      var appReports = livePushes('app');
+      report.liveReport = {
+        windowLoaded: pet.loadedModel(),
+        windowReports: windowReports.map(function (body) { return body.live.window; }),
+        appLoaded: appPet.loadedModelId,
+        appOk: Boolean(status && status.ok),
+        appReports: appReports.map(function (body) { return body.live.app; }),
+      };
+      var ok = Boolean(status && status.ok) && appPet.loadedModelId === 'm1'
+        && windowReports.length >= 1 && windowReports[windowReports.length - 1].live.window === 'm1'
+        && appReports.length >= 1 && appReports[appReports.length - 1].live.app === 'm1';
+      appPet.dispose();
+      // The window page has a frame loop and a poll of its own: leaving it mounted is how two later checks
+      // (the drag/orbit one and the remark one) came to measure this page's noise instead of their own.
+      if (typeof pet.destroy === 'function') pet.destroy();
+      if (appHost.parentNode) appHost.parentNode.removeChild(appHost);
+      if (windowHost.parentNode) windowHost.parentNode.removeChild(windowHost);
+      restore();
+      return ok;
+    }, function (error) {
+      report.liveReport = 'threw: ' + (error && error.message);
+      if (typeof pet.destroy === 'function') pet.destroy();
+      if (appHost.parentNode) appHost.parentNode.removeChild(appHost);
+      if (windowHost.parentNode) windowHost.parentNode.removeChild(windowHost);
+      restore();
+      return false;
+    });
+  });
+
   var modelFallback = check('a model select with a bad id falls back to the placeholder', function () {
     // No /vrmpet3d/asset route exists in this page, so the fetch must fail and the
     // widget must keep rendering rather than blank out.
     return widget.loadModel('m-does-not-exist').then(function (status) {
       return status && status.ok === false && widget.scene.kind === 'placeholder';
+    });
+  });
+
+  /**
+   * A MODEL IMPORTED WHILE THE PET IS RUNNING still switches.
+   *
+   * Operator, 2026-10-13: 「选中新导入的模型，都无法切换过去」. The pet reads the catalog ONCE, so the id an import mints
+   * is one its list has never heard of — and `resolveModelId` then answers with the model already on screen, which
+   * makes the change a no-op. This drives `followModelPreference` with exactly that state and asserts the two halves
+   * of the fix: the catalog is RE-READ, and the id that gets asked for is the one the store names.
+   *
+   * `loadModel` is spied on rather than run: what is under test is the DECISION (which id, after which re-read),
+   * not a VRM parse, and a real parse would drag this page's asset/motion/state stubs into a check that is about
+   * neither. The core rule it stands on (`catalogMisses`) is asserted on its own in the core suite.
+   */
+  asyncCheck('a model imported while the pet is running still switches (the catalog is re-read)', function () {
+    var sample = [{ id: 'm1', name: 'SampleModel.vrm', source: 'bundled' }];
+    var grown = sample.concat([{ id: 'm2', name: 'dropped.vrm', source: 'user' }]);
+    var before = { catalog: widget.catalog, modelId: widget.preferences.modelId, loaded: widget.loadedModelId };
+    var realLoad = widget.loadModel;
+    var asked = [];
+    widget.loadModel = function (id) { asked.push(id); widget.loadedModelId = id; return Promise.resolve({ ok: true }); };
+    var catalogCalls = 0;
+    var restore = stubFetch({
+      '/vrmpet3d/catalog': function () {
+        catalogCalls += 1;
+        return { ok: true, json: function () { return Promise.resolve({ models: grown.slice() }); } };
+      },
+    });
+    var put = function () {
+      widget.catalog = before.catalog;
+      widget.preferences.modelId = before.modelId;
+      widget.loadedModelId = before.loaded;
+      widget.loadModel = realLoad;
+      restore();
+    };
+    // Phase 1: the held catalog predates the import, so the id it names is a MISS and the list must be read again.
+    widget.catalog = { models: sample.slice() };
+    widget.loadedModelId = 'm1';
+    widget.preferences.modelId = 'm2';
+    return widget.followModelPreference().then(function () {
+      var first = { catalogCalls: catalogCalls, asked: asked.slice() };
+      // Phase 2: the catalog now carries it, so no further read is needed — the load is still requested.
+      asked.length = 0;
+      widget.loadedModelId = 'm1';
+      return widget.followModelPreference().then(function () {
+        var second = { catalogCalls: catalogCalls, asked: asked.slice() };
+        put();
+        report.catalogReread = { first: first, second: second };
+        return first.catalogCalls >= 1 && first.asked.join(',') === 'm2'
+          && second.catalogCalls === first.catalogCalls && second.asked.join(',') === 'm2';
+      });
+    }, function (error) {
+      put();
+      report.catalogReread = 'threw: ' + (error && error.message);
+      return false;
     });
   });
 
@@ -5677,7 +5872,7 @@
       restoreFetch();
       return opened === true && closed && sharedClass && stylesheet && noSwitchRow
         && closeWordsDiffer && gravityRowOff && gravityMarked
-        && ids.join(',') === 'resetView,resetSize,globalSettings,modelSettings,gravity,closePet'
+        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,modelSettings,gravity,closePet'
         && Boolean(rect) && rect.width > 0 && rect.height > 0;
     });
   });
@@ -6508,6 +6703,173 @@
    * actually bent), the range the spine sweeps over the clip (a body that is actually turning), and the
    * declared curl on every finger joint read out of the GLB's own JSON.
    */
+  /**
+   * THE OPERATOR'S ONE-SHOT RULES, driven through the real scheduler on a real avatar.
+   *
+   * 「当状态的动作列表里有循环动作时，单次动作结束后，必须衔接循环动作，严禁单次动作循环播放；如果没有循环动作，单次动作
+   * 结束后停止在最后一帧；单次动作可以在循环动作未完成时触发；循环动作和单次动作的触发都是随机的（即没有固定顺序）」
+   * (2026-10-13). Each clause is one assertion below, and the state is the operator's own shape: a looping
+   * posture beside a non-looping reaction (his `resting` is 4 loops and 10 reactions).
+   */
+  asyncCheck('a finished reaction chains into a loop, or holds its last frame — never loops itself', function () {
+    var desktop = globalThis.__VRMPET3D_DESKTOP__;
+    var waveBase64 = globalThis.__VRMPET3D_WAVE_BASE64__;
+    var restBase64 = globalThis.__VRMPET3D_REST_BASE64__;
+    var vrmBase64 = globalThis.__VRMPET3D_VRM_BASE64__;
+    if (!desktop || typeof desktop.mount !== 'function') return false;
+    if (!waveBase64 || !restBase64 || !vrmBase64) return false;
+
+    var waveBytes = Uint8Array.from(atob(waveBase64), function (c) { return c.charCodeAt(0); });
+    var restBytes = Uint8Array.from(atob(restBase64), function (c) { return c.charCodeAt(0); });
+    var vrmBytes = Uint8Array.from(atob(vrmBase64), function (c) { return c.charCodeAt(0); });
+
+    var host = document.createElement('div');
+    host.style.position = 'fixed';
+    host.style.left = '-2400px';
+    host.style.top = '0';
+    host.style.width = '600px';
+    host.style.height = '600px';
+    document.body.appendChild(host);
+    var canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 600;
+    host.appendChild(canvas);
+
+    /** The operator's state: a2 loops (the posture), a1 is a REACTION in this state only. */
+    var stored = {
+      modelId: 'a1',
+      motions: { resting: ['a1', 'a2'] },
+      motionClips: { resting: { a1: { loop: false } } },
+    };
+    var storage = {
+      getItem: function () { return JSON.stringify(stored); },
+      setItem: function (key, value) { try { stored = JSON.parse(value); } catch (error) { /* leave it */ } },
+    };
+
+    var realFetch = globalThis.fetch;
+    globalThis.fetch = function (url) {
+      var path = String(url);
+      if (path.indexOf('/vrmpet3d/motions') === 0) {
+        return Promise.resolve(new Response(JSON.stringify({ motions: [
+          { id: 'a1', name: 'vrmpet3d-wave.vrma', format: 'vrma' },
+          { id: 'a2', name: 'vrmpet3d-rest.vrma', format: 'vrma' },
+        ] }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }
+      if (path.indexOf('/vrmpet3d/motion?m=') === 0) {
+        var id = String(url).slice(String(url).indexOf('m=') + 2);
+        return Promise.resolve(new Response(id === 'a2' ? restBytes : waveBytes, { status: 200 }));
+      }
+      if (path.indexOf('/vrmpet3d/asset') === 0) return Promise.resolve(new Response(vrmBytes, { status: 200 }));
+      return realFetch.apply(globalThis, arguments);
+    };
+
+    var pet = null;
+    var found = {};
+    function nextFrame() {
+      return new Promise(function (resolve) {
+        globalThis.requestAnimationFrame(function () { resolve(); });
+      });
+    }
+    /** Put a clip one frame from its end, so the next frame's decision sees it FINISHED. */
+    function almostDone(scene, id) {
+      var record = scene.motionClips[id];
+      if (record && record.action && record.duration > 0) record.action.time = Math.max(0, record.duration - 0.001);
+      return record;
+    }
+
+    return Promise.resolve()
+      .then(function () {
+        pet = desktop.mount({
+          canvas: canvas,
+          bridge: { reportRect: function () {}, ready: function () {}, onCursor: function () {} },
+          modelId: 'a1',
+          screen: { x: 0, y: 0, width: 900, height: 600 },
+          storage: storage,
+        });
+        return pet.ready;
+      })
+      .then(function () { return nextFrame().then(nextFrame).then(nextFrame); })
+      .then(function () {
+        // 1. The posture is the LOOP, drawn on entry: a reaction is not what a state wears.
+        var drawn = pet.scene.describeMotions();
+        found.pickedOnEntry = drawn ? drawn.picked : null;
+        found.playingOnEntry = drawn ? drawn.playing : null;
+        // 2. A reaction fires while the loop is STILL RUNNING.
+        var loopRecord = pet.scene.playback ? pet.scene.playback.record : null;
+        found.loopStillRunning = Boolean(loopRecord) && !pet.scene.motionFinished(loopRecord);
+        var fired = pet.scene.startScheduledMotion('resting');
+        found.firedWhileLoop = fired ? fired.id : null;
+        // 3. The reaction itself is a ONE-SHOT: LoopOnce, and not clamped (there is a loop to hand over to).
+        var reaction = pet.scene.motionClips.a1;
+        found.reactionLoopMode = reaction ? reaction.playingLoop : 'no record';
+        found.reactionClamped = reaction ? reaction.action.clampWhenFinished : null;
+        almostDone(pet.scene, 'a1');
+        return nextFrame().then(nextFrame);
+      })
+      .then(function () {
+        // 4. It finished: the LOOP takes over — and the reaction is not playing again.
+        var after = pet.scene.describeMotions();
+        found.chainedTo = after ? after.playing : null;
+        found.oneShotAfter = pet.scene.oneShot ? pet.scene.oneShot.id : null;
+        // 5. A state with NO loop: the reaction HOLDS its last frame instead of falling back to the idle.
+        pet.scene.setMotionMap({ resting: ['a1'] });
+        return nextFrame().then(nextFrame).then(function () {
+          found.noLoopBase = pet.scene.describeMotions().playing;
+          almostDone(pet.scene, 'a1');
+          return nextFrame().then(nextFrame).then(function () {
+            var held = pet.scene.describeMotions();
+            found.heldPlaying = held ? held.playing : null;
+            found.heldFlag = Boolean(pet.scene.playback && pet.scene.playback.held);
+            found.heldClamped = Boolean(pet.scene.motionClips.a1 && pet.scene.motionClips.a1.action.clampWhenFinished);
+            /**
+             * 6. Both draws are RANDOM, and this is asserted through the scene's own injected random rather
+             * than by watching many draws: 0 takes the first candidate, 1 the last, so "no fixed order" is a
+             * fact about the code path instead of a hope about a distribution.
+             */
+            pet.scene.preferences.motionClips = {};
+            pet.scene.setMotionMap({ resting: ['a1', 'a2'] });
+            pet.scene.random = function () { return 0; };
+            pet.scene.forgetMotionPick();
+            return nextFrame().then(nextFrame).then(function () {
+              found.randomLow = pet.scene.describeMotions().picked;
+              pet.scene.random = function () { return 0.999; };
+              pet.scene.forgetMotionPick();
+              return nextFrame().then(nextFrame).then(function () {
+                found.randomHigh = pet.scene.describeMotions().picked;
+                // 7. A clip whose OWN tracks drive the face: the blink gate and its readout must both see it.
+                found.faceFromClip = pet.scene.clipDrivesFace({ tracks: [{ name: 'Face.morphTargetInfluences[blink]' }] });
+                found.faceFromBones = pet.scene.clipDrivesFace({ tracks: [{ name: 'Face.quaternion' }] });
+                var blinkBefore = pet.scene.blinkState().paused;
+                pet.scene.playback.record.faceTracks = true;
+                found.blinkPausedWithClipFace = pet.scene.blinkState().paused !== blinkBefore
+                  || pet.scene.blinkState().paused === true;
+                report.oneShotRules = found;
+                return found.pickedOnEntry === 'a2' && found.playingOnEntry === 'a2'
+                  && found.loopStillRunning === true && found.firedWhileLoop === 'a1'
+                  && found.reactionLoopMode === false && found.reactionClamped === false
+                  && found.chainedTo === 'a2' && found.oneShotAfter === null
+                  && found.noLoopBase === 'a1' && found.heldPlaying === 'a1'
+                  && found.heldFlag === true && found.heldClamped === true
+                  && found.randomLow === 'a1' && found.randomHigh === 'a2'
+                  && found.faceFromClip === true && found.faceFromBones === false
+                  && found.blinkPausedWithClipFace === true;
+              });
+            });
+          });
+        });
+      })
+      .catch(function (error) {
+        report.oneShotRules = { error: String((error && error.message) || error) };
+        return false;
+      })
+      .then(function (ok) {
+        globalThis.fetch = realFetch;
+        if (pet) pet.destroy();
+        if (host.parentNode) host.parentNode.removeChild(host);
+        return ok;
+      });
+  });
+
   asyncCheck('the resting clip hangs the arms down, bends the elbows and turns the body slowly', function () {
     var desktop = globalThis.__VRMPET3D_DESKTOP__;
     var restBase64 = globalThis.__VRMPET3D_REST_BASE64__;
@@ -6877,6 +7239,140 @@
   });
 
   /**
+   * 切换模型 — the page the right-click menu opens, driven on its own.
+   *
+   * The guide's check below proves the SHARED component (grid, both import routes, click-to-switch); this one proves
+   * the page built around it, which is a different file with a different job: mount the component into
+   * `#picker-mount`, read the current model from the settings store, and write a clicked tile through it. It runs
+   * BEFORE the guide's check and takes its markup away again, because both pages carry an element with `id="status"`
+   * and the guide's boot would otherwise find this page's status node.
+   *
+   * No launcher bridge is installed here on purpose: this is the browser-tab case, where the picker has no native
+   * dialog and a dropped or chosen file would be uploaded as bytes.
+   */
+  asyncCheck('切换模型: the picker page switches the model when a thumbnail is clicked', function () {
+    var markup = globalThis.__VRMPET3D_PICKER_MARKUP__;
+    var source = globalThis.__VRMPET3D_PICKER_SOURCE__;
+    var spy = globalThis.__VRMPET3D_SETUP_SPY__;
+    if (!markup || !source || !spy) return false;
+
+    var outerFetch = window.fetch;
+    var outerBridge = globalThis.vrmpet3dDesktop;
+    var host = document.createElement('div');
+    host.id = 'picker-page-probe';
+    host.innerHTML = markup;
+    document.body.appendChild(host);
+    window.fetch = globalThis.__VRMPET3D_SETUP_FETCH__ || outerFetch;
+    spy.enabled = true;
+    globalThis.vrmpet3dDesktop = undefined;
+    (0, eval)(source);
+
+    var page = globalThis.__VRMPET3D_PICKER_STATE__;
+    /** This check's own pause: the guide's `after` lives in ITS closure, and borrowing it is how one check breaks another. */
+    var pause = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
+    var restore = function () {
+      spy.enabled = false;
+      // The live report belongs to the surface, and the guide's check below runs after this one: leaving it set
+      // would tell that page a pet is showing a model it never loaded, and its switch could never settle.
+      spy.liveApp = null;
+      window.fetch = outerFetch;
+      globalThis.vrmpet3dDesktop = outerBridge;
+      if (host.parentNode) host.parentNode.removeChild(host);
+    };
+    if (!page) { restore(); return false; }
+
+    return waitFor(function () {
+      var state = page();
+      return state.hasSnapshot === true && state.picker && state.picker.total >= 1;
+    }, 4000).then(function (ready) {
+      if (!ready) { restore(); return false; }
+      var cards = host.querySelectorAll('.model-card');
+      var tile = cards[cards.length - 1];
+      var id = tile ? tile.getAttribute('data-model-id') : null;
+      var pick = tile ? tile.querySelector('.model-card-pick') : null;
+      /**
+       * Count only the writes that could BE the second switch.
+       *
+       * The spy is shared, and the widget mounted at the top of this page also talks to the settings store while
+       * it is enabled — including the `live` report this build added after every load. Counting every settings
+       * POST therefore flaked: the assertion is "a second click did not ask for the model again", so it counts
+       * the posts that name that model.
+       */
+      var switchWrites = function () {
+        return spy.posts.filter(function (entry) {
+          return entry.path === '/vrmpet3d/settings' && entry.body && entry.body.preferences
+            && entry.body.preferences.modelId === id;
+        }).length;
+      };
+      var writesBefore = switchWrites();
+      if (pick) pick.click();
+      return pause(150).then(function () {
+        var wrote = spy.posts.some(function (entry) {
+          return entry.path === '/vrmpet3d/settings' && entry.body && entry.body.preferences
+            && entry.body.preferences.modelId === id;
+        });
+        /**
+         * THE PROGRESS BAR, and the lock that is the reason it exists (「增加一个切换进度条，防止用户快速反复切换导致
+         * 故障」): the click starts a switch, the bar comes UP, the picker refuses input — and a second click on the
+         * same tile is not a second write. The bar comes down when a SURFACE reports the model as loaded
+         * (`liveApp`), never merely because the store took the id.
+         */
+        var duringSwitch = page();
+        // Read the BAR while it is up: by the time the switch settles this node is hidden again.
+        var progressNode = host.querySelector('.model-progress');
+        var progressNodeVisible = Boolean(progressNode && progressNode.hidden === false);
+        // The count AFTER the first click: THAT is the baseline a second click must not move.
+        var writesAfterFirstClick = switchWrites();
+        if (pick) pick.click();
+        return pause(120).then(function () {
+          var afterSecondClick = page();
+          var writesAfter = switchWrites();
+          // The pet catches up: a live report is a STORE CHANGE (`settingsStore.update({live})` bumps the version,
+          // see lib/settings.js), so the probe moves both — the value and the version the page polls for.
+          spy.liveApp = id;
+          spy.version += 1;
+          return waitFor(function () {
+            var state = page();
+            return state.picker && state.picker.switching === null;
+          }, 5000).then(function (settled) {
+            var finished = page();
+            report.pickerPage = {
+              cards: cards.length,
+              clicked: id,
+              wrote: wrote,
+              hasNativePicker: duringSwitch.picker ? duringSwitch.picker.hasNativePicker : null,
+              currentAtStart: duringSwitch.current,
+              switching: duringSwitch.picker ? duringSwitch.picker.switching : null,
+              progressVisible: duringSwitch.picker ? duringSwitch.picker.progressVisible : null,
+              progressNodeVisible: progressNodeVisible,
+              lockedWhileSwitching: duringSwitch.picker ? duringSwitch.picker.locked : null,
+              secondClickWrote: writesAfter > writesAfterFirstClick,
+              settled: settled,
+              switchingAtEnd: finished.picker ? finished.picker.switching : 'unknown',
+              progressAtEnd: finished.picker ? finished.picker.progressVisible : null,
+            };
+            restore();
+            // The page has no launcher bridge here — the browser-tab case the drop target exists for.
+            return cards.length >= 1 && Boolean(id) && wrote === true
+              && report.pickerPage.hasNativePicker === false
+              && report.pickerPage.switching === id
+              && report.pickerPage.progressVisible === true
+              && report.pickerPage.progressNodeVisible === true
+              && report.pickerPage.lockedWhileSwitching === true
+              && report.pickerPage.secondClickWrote === false
+              && settled === true
+              && report.pickerPage.switchingAtEnd === null
+              && report.pickerPage.progressAtEnd === false;
+          });
+        });
+      });
+    }, function (error) {
+      restore();
+      throw error;
+    });
+  });
+
+  /**
    * The FIRST-RUN GUIDE, driven the way a user drives it: six screens, a finish, and the write each screen owes.
    *
    * The guide is a page script that boots against its own document, and this harness carries that document — the
@@ -6941,67 +7437,159 @@
         if (!ready) return false;
         var atStart = visible();
 
-        // ② 偏好模型: the picker asks the LAUNCHER, and the path goes to the host as a FILE to copy.
-        document.getElementById('setup-model-pick').click();
-        return after(120).then(function () {
+        /**
+         * ② 偏好模型: the SHARED model picker (2026-10-13), driven through both of its ways in.
+         *
+         * The step is no longer a button plus a typed-path row — it is the component the 切换模型 page mounts too,
+         * and the operator asked for them to be identical. So this walks what a user actually does:
+         *
+         *   1. a file is DROPPED on the target, which is the path a browser tab has — the page uploads the file's
+         *      bytes, and `spy.uploads` is where that shows up. A dropped file is only ever a `File`, so this is the
+         *      half of the feature a path-only test would never reach;
+         *   2. the drop zone is clicked, which asks the LAUNCHER for a file (the fake bridge hands back a path) and
+         *      the host copies from that path.
+         *
+         * Each one is followed by a wait for the SWITCH to settle, and that is the progress bar's own rule rather
+         * than a probe convenience: while a model is loading, the picker refuses input (「防止用户快速反复切换导致故障」),
+         * so an import attempted during one is answered with a line of text and nothing else. The switch settles on
+         * the store's word here because this probe has no pet to report `live`.
+         *
+         * Both imports have to end in a `modelId` write, because choosing a model in a guide called 「偏好模型」 and
+         * then not choosing it would be a strange half-step.
+         */
+        var pickerApi = globalThis.__VRMPET3D_MODEL_PICKER__;
+        var dropZone = document.querySelector('#setup-model-picker .model-drop');
+        if (!pickerApi || !dropZone) { report.firstRunGuideError = 'no model picker mounted'; return false; }
+        var cardsAtStart = document.querySelectorAll('#setup-model-picker .model-card').length;
+        /**
+         * True once the picker has no switch in flight — the bar's own state. It is the COMPONENT's root that
+         * carries `data-switching` (the mount is just the element the page hands it), and reading the mount is
+         * how this helper first "passed" while a model was still loading.
+         */
+        var pickerIdle = function () {
+          var root = document.querySelector('#setup-model-picker .model-picker');
+          return Boolean(root && root.getAttribute('data-switching') !== '1');
+        };
+        /** The DROP: a real `File` through a real `DataTransfer`/`DragEvent`, because the handler reads
+         *  `event.dataTransfer.files` — a synthesised object would test the assertion rather than the code. */
+        var dropped = null;
+        try {
+          var transfer = new DataTransfer();
+          transfer.items.add(new File([new Uint8Array(64)], 'dropped.vrm', { type: 'application/octet-stream' }));
+          dropped = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer });
+        } catch (error) {
+          report.firstRunGuideDropError = String(error && error.message);
+        }
+        if (dropped) dropZone.dispatchEvent(dropped);
+        // The pet that is not on this probe page catches up, the way the real in-app pet reports: without a live
+        // report the switch would still settle on the store's word, but WITH one the wait below is the real path.
+        spy.liveApp = 'm9';
+        /**
+         * Wait for the DROP's import to be FINISHED, not merely recorded: the upload is spied the moment the fetch
+         * is issued, while the host is still reading it — and an import running is a picker that refuses the next
+         * one (`data-busy`). `importedModels` moves when the reply has been adopted and the switch it starts is
+         * what `pickerIdle` waits out.
+         */
+        return waitFor(function () {
+          return spy.uploads.length > 0 && guide().importedModels >= 1 && pickerIdle();
+        }, 6000).then(function (droppedAndSettled) {
+          var dropUpload = spy.uploads.filter(function (entry) {
+            return entry.path === '/vrmpet3d/models' && entry.name === 'dropped.vrm' && entry.bytes === 64;
+          })[0] || null;
+          // Then the launcher's own dialog, once the drop's switch has finished — and wait for BOTH the POST and
+          // the switch it starts, because the picker is mid-load either way and `after(ms)` would be a guess.
+          dropZone.click();
+          return waitFor(function () {
+            return posted('/vrmpet3d/models', function (body) { return body.addFile === 'C:/models/hero.vrm'; })
+              && pickerIdle();
+          }, 6000).then(function () {
           var uploaded = posted('/vrmpet3d/models', function (body) { return body.addFile === 'C:/models/hero.vrm'; });
           var preferred = spy.posts.some(function (entry) {
             return entry.path === '/vrmpet3d/settings' && entry.body.preferences && entry.body.preferences.modelId === 'm9';
           });
-          // ③ 桌宠界面 and ④ AI 碎碎念: two choices, and the AI default comes from the live provider list.
-          document.querySelector('#setup-surface input[value="app"]').click();
-          document.querySelector('#setup-speech-source input[value="ai"]').click();
-          return waitFor(function () {
-            return settingsWith(function (p) { return p.petSurface === 'app'; }).length > 0
-              && settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; }).length > 0;
-          }, 4000).then(function (written) {
-            var ai = settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; })[0];
-            var speech = ai ? ai.body.preferences.speech : null;
-            // ⑤ 模型动作: a FOLDER, copied by the host.
-            document.getElementById('setup-motion-pick').click();
-            return after(120).then(function () {
-              var imported = posted('/vrmpet3d/motions', function (body) { return body.importDir === 'C:/motions/pack'; });
-              // 完成 last: five steps forward, then the ONE write that ends the guide.
-              var next = document.getElementById('setup-next');
-              for (var i = 0; i < 5; i += 1) next.click();
-              var lastScreen = visible();
-              var stepper = document.getElementById('setup-steps');
-              var marked = stepper ? Array.prototype.filter.call(stepper.children, function (node) {
-                return node.getAttribute('data-active') === '1';
-              }).length : 0;
-              document.getElementById('setup-finish').click();
-              return after(120).then(function () {
-                var finished = posted('/vrmpet3d/setup-state', function (body) { return body.completed === true; });
-                // Put the page back the way the rest of the harness expects it: no host, no launcher bridge.
-                spy.enabled = false;
-                window.fetch = outerFetch;
-                globalThis.vrmpet3dDesktop = outerBridge;
-                report.firstRunGuide = {
-                  atStart: atStart,
-                  screens: screens.length,
-                  ready: ready,
-                  uploaded: uploaded,
-                  preferredModel: preferred,
-                  surface: (settingsWith(function (p) { return p.petSurface === 'app'; })[0] || {}).body ? 'app' : null,
-                  aiProvider: speech && speech.ai ? speech.ai.dshProvider : null,
-                  aiModel: speech && speech.ai ? speech.ai.dshModel : null,
-                  motionImported: imported,
-                  importedModels: guide().importedModels,
-                  importedMotions: guide().importedMotions,
-                  lastScreen: lastScreen,
-                  activeStepMarkers: marked,
-                  finished: finished,
-                };
-                return atStart.length === 1 && atStart[0] === 'setup-0'
-                  && lastScreen.length === 1 && lastScreen[0] === 'setup-5'
-                  && marked === 1
-                  && uploaded && preferred && imported && finished
-                  && speech && speech.ai && speech.ai.dshProvider === 'deepseek-account'
-                  && speech.ai.dshModel === 'deepseek-flash';
+          return after(200).then(function () {
+            var cardsAfter = document.querySelectorAll('#setup-model-picker .model-card').length;
+            // ③ 桌宠界面 and ④ AI 碎碎念: two choices, and the AI default comes from the live provider list.
+            document.querySelector('#setup-surface input[value="app"]').click();
+            document.querySelector('#setup-speech-source input[value="ai"]').click();
+            return waitFor(function () {
+              return settingsWith(function (p) { return p.petSurface === 'app'; }).length > 0
+                && settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; }).length > 0;
+            }, 4000).then(function (written) {
+              var ai = settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; })[0];
+              var speech = ai ? ai.body.preferences.speech : null;
+              // ⑤ 模型动作: a FOLDER, copied by the host.
+              document.getElementById('setup-motion-pick').click();
+              return after(150).then(function () {
+                var imported = posted('/vrmpet3d/motions', function (body) { return body.importDir === 'C:/motions/pack'; });
+                // 完成 last: five steps forward, then the ONE write that ends the guide.
+                var next = document.getElementById('setup-next');
+                for (var i = 0; i < 5; i += 1) next.click();
+                var lastScreen = visible();
+                var stepper = document.getElementById('setup-steps');
+                var marked = stepper ? Array.prototype.filter.call(stepper.children, function (node) {
+                  return node.getAttribute('data-active') === '1';
+                }).length : 0;
+                /**
+                 * 完成 writes `completed` AND closes the window — one click, not two.
+                 *
+                 * Operator, 2026-10-13: 「点击完成后直接退出，而不是要再点一下关闭窗口」. `globalThis.close` is spied so
+                 * the probe can see the attempt, and because this page was not opened by script the real browser
+                 * would refuse it — which is exactly the case the 关闭窗口 fallback exists for, so the probe checks
+                 * that the button appears when the close did not take.
+                 */
+                var realClose = globalThis.close;
+                var closeCalls = 0;
+                globalThis.close = function () { closeCalls += 1; };
+                document.getElementById('setup-finish').click();
+                return after(500).then(function () {
+                  var finished = posted('/vrmpet3d/setup-state', function (body) { return body.completed === true; });
+                  var closeButton = document.getElementById('setup-close');
+                  var closeFallbackShown = Boolean(closeButton && closeButton.hidden === false);
+                  globalThis.close = realClose;
+                  // Put the page back the way the rest of the harness expects it: no host, no launcher bridge.
+                  spy.enabled = false;
+                  window.fetch = outerFetch;
+                  globalThis.vrmpet3dDesktop = outerBridge;
+                  report.firstRunGuide = {
+                    atStart: atStart,
+                    screens: screens.length,
+                    ready: ready,
+                    uploaded: uploaded,
+                    preferredModel: preferred,
+                    dropUpload: dropUpload ? dropUpload.bytes : null,
+                    cardsAtStart: cardsAtStart,
+                    cardsAfter: cardsAfter,
+                    surface: (settingsWith(function (p) { return p.petSurface === 'app'; })[0] || {}).body ? 'app' : null,
+                    aiProvider: speech && speech.ai ? speech.ai.dshProvider : null,
+                    aiModel: speech && speech.ai ? speech.ai.dshModel : null,
+                    motionImported: imported,
+                    importedModels: guide().importedModels,
+                    importedMotions: guide().importedMotions,
+                    lastScreen: lastScreen,
+                    activeStepMarkers: marked,
+                    finished: finished,
+                    closeCalls: closeCalls,
+                    closeFallbackShown: closeFallbackShown,
+                  };
+                  return atStart.length === 1 && atStart[0] === 'setup-0'
+                    && lastScreen.length === 1 && lastScreen[0] === 'setup-5'
+                    && marked === 1
+                    && uploaded && preferred && imported && finished
+                    // 完成 closed the window itself, and the button is there only because it could not.
+                    && closeCalls >= 1 && closeFallbackShown === true
+                    // The picker drew the built-in model before anything was imported, and the import landed in it.
+                    && cardsAtStart === 1 && cardsAfter >= 2
+                    // And the DROP took the upload route rather than only the launcher's path route.
+                    && dropUpload !== null
+                    && speech && speech.ai && speech.ai.dshProvider === 'deepseek-account'
+                    && speech.ai.dshModel === 'deepseek-flash';
+                });
               });
             });
           });
         });
+      });
       }, function (error) {
         report.firstRunGuideError = String(error && error.message);
         throw error;

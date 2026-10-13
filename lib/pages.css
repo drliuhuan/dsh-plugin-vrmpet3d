@@ -174,13 +174,11 @@ html { scroll-padding-top: 18px; }
 body { max-width: 1120px; margin: auto; padding: 24px; }
 .eyebrow { color: #8daeff; font-size: 10px; letter-spacing: .14em; }
 h1 { font-size: 24px; margin-top: 4px; }
-.page-description { margin: 4px 0 8px; color: #b3b9c9; }
 .section-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 24px; }
 .section-nav a { color: #c9d5ef; text-decoration: none; padding: 5px 12px; border: 1px solid #363d50; border-radius: 8px; }
 .section-nav a:hover { background: #29334a; }
 .settings-section { margin-bottom: 28px; scroll-margin-top: 18px; }
 h2 { font-size: 16px; margin: 0 0 3px; opacity: 1; }
-.section-description { margin: 0 0 12px; color: #a6afc2; font-size: 12px; }
 .card { padding: 16px; background: #1d2029; border-color: #343947; }
 .row { flex-wrap: wrap; gap: 8px; min-width: 0; margin: 12px 0; }
 .row > span.k { flex-basis: 120px; }
@@ -227,6 +225,68 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 #speech-ai { padding-top: 12px; margin-top: 12px; border-top: 1px solid #343947; }
 .chain > .head { flex-wrap: wrap; overflow-wrap: anywhere; }
 .part-picker-head { flex-wrap: wrap; }
+/* The shared model picker (`lib/model-picker.js`): one big choose-or-drop area over a grid of the models'
+   thumbnails. It lives here rather than in either page's own `<style>` because TWO pages mount it — the guide's
+   ② 偏好模型 step and the 切换模型 page — and the operator asked for those two to be identical; a stylesheet copy
+   is how "identical" stops being true. */
+.model-picker { display: flex; flex-direction: column; gap: 12px; }
+.model-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 170px; padding: 22px 18px; text-align: center; cursor: pointer;
+  border: 2px dashed #454c60; border-radius: 12px; background: #20242e; }
+.model-drop:hover, .model-drop:focus-visible { border-color: #8daeff; background: #232936; }
+/* The whole point of a drop target is to answer "yes, here" while the pointer is over it. */
+.model-drop[data-over="1"] { border-color: #8daeff; background: #263043; border-style: solid; }
+.model-drop-mark { font-size: 30px; line-height: 1; color: #8daeff; }
+.model-drop-title { font-size: 15px; font-weight: 600; }
+.model-drop-sub { color: #a6afc2; font-size: 12px; }
+.model-picker[data-busy="1"] .model-drop { opacity: .6; cursor: progress; }
+/* The switch's progress bar. INDETERMINATE on purpose: a VRM parse reports no percentage, and a bar that invents
+   one is worse than a bar that says "working". It sits between the two halves of the picker, so it is visible
+   without scrolling whichever half the user is looking at. */
+.model-progress { display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 10px;
+  background: #20242e; border: 1px solid #454c60; }
+.model-progress-track { position: relative; height: 6px; border-radius: 999px; overflow: hidden; background: #2b3242; }
+.model-progress-fill { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 999px;
+  background: linear-gradient(90deg, #8daeff, #63d2a4); animation: model-progress-sweep 1.15s ease-in-out infinite; }
+@keyframes model-progress-sweep {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+.model-progress-text { font-size: 12px; color: #dfe5f2; }
+.model-progress-note { font-size: 11px; color: #a6afc2; }
+/* While a switch is loading the picker refuses input — this is the CSS half of that lock (every handler is guarded
+   in JS as well, because `pointer-events` alone would not stop a keyboard activation). */
+.model-picker[data-switching="1"] .model-drop,
+.model-picker[data-switching="1"] .model-card-pick,
+.model-picker[data-switching="1"] .model-card-remove { opacity: .55; pointer-events: none; cursor: progress; }
+/* The tile being loaded keeps its emphasis, so the user can see WHICH model the bar is about. */
+.model-picker[data-switching="1"] .model-card[data-current="1"] .model-card-pick { border-color: #8daeff; }
+.model-file-input { display: none; }
+.model-grid-head { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
+.model-grid-head > .k { opacity: .8; }
+.model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+.model-card { position: relative; }
+.model-card-pick { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 8px; text-align: left;
+  background: #252a36; border: 1px solid #454c60; border-radius: 10px; }
+.model-card-pick:hover { border-color: #8daeff; }
+.model-card[data-current="1"] .model-card-pick { border-color: #63d2a4; box-shadow: 0 0 0 2px rgba(99,210,164,.22); }
+.model-card-art { position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; overflow: hidden;
+  border-radius: 7px; background: #1a1e27; }
+/* A model with no embedded thumbnail is normal, not an error: the square says so with its first letter. */
+.model-card-art[data-blank="1"] { display: flex; align-items: center; justify-content: center; }
+.model-card-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.model-card-initial { font-size: 28px; color: #6b7488; }
+.model-card-name { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-card-tag { font-size: 10.5px; color: #a6afc2; }
+/* 使用中, as a badge OVER the picture rather than a line under it: a tile in use must be exactly as tall as one
+   that is not (operator, 2026-10-13: 「把使用中和未使用中的缩略图卡调整成一样大小」). */
+.model-card-badge { position: absolute; top: 5px; left: 5px; padding: 0 6px; border-radius: 999px;
+  background: rgba(99,210,164,.92); color: #10231a; font-size: 10.5px; font-weight: 600; line-height: 17px; }
+/* Every tile's pick area is the same height whatever it holds, so the grid rows line up. */
+.model-card-pick { min-height: 0; }
+.model-card-remove { position: absolute; top: 6px; right: 6px; min-height: 0; padding: 0 6px; line-height: 20px;
+  font-size: 11px; border-radius: 999px; background: rgba(0,0,0,.55); }
+.model-card-remove:hover { background: rgba(200,60,60,.85); }
 @media (max-width: 640px) {
   body { padding: 16px 12px; }
   .card { padding: 12px; }
@@ -239,4 +299,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   #motion-list .picks, #motion-list .every, #motion-list .status-line, #speech-states .speech-body { margin-left: 0; }
   #emotion-table th, #emotion-table td { padding: 6px 3px; }
   .split { flex-direction: column; }
+  /* The picker's grid on a narrow window: fewer, smaller tiles rather than a horizontal scroll. */
+  .model-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .model-drop { min-height: 132px; }
 }

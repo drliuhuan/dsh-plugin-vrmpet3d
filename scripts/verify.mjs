@@ -1586,8 +1586,90 @@ group('6d. 碎碎念: what the pet says on its own');
   const allLines = events.flatMap((event) => core.speechLines('zh', event).concat(core.speechLines('en', event)));
   eq(allLines.every((line) => line.length <= core.SPEECH_LIMITS.lineLength + 20), true,
     'no shipped line is long enough to become a paragraph');
-  eq(allLines.every((line) => !/[\\/]|\.(js|ts|json|md|exe|log)\b/.test(line)), true,
+  /**
+   * …and none of them carries a PATH or a file name — with one deliberate exception the operator wrote himself.
+   *
+   * 需要授权 jokes about buttons, and one of his jokes is `rm -rf / 是什么意思？` (2026-10-13). That is a command the
+   * pet has heard of, not something read out of this session: what the privacy rule has to keep out of a bubble is
+   * a real path — a segment after a slash (`/tmp/x`), a drive letter, an extension — and a bare ` /` standing
+   * between words is none of those.
+   */
+  eq(allLines.every((line) => !/[A-Za-z]:[\/]/.test(line)
+    && !/\/[\w.~-]/.test(line)
+    && !/\.(js|ts|json|md|exe|log|py|txt)/.test(line)), true,
     'and none of them can carry a path or a file name — the table is the only input to a bubble');
+  ok(allLines.some((line) => line === 'rm -rf / 我敲进去了，现在知道什么意思了。')
+    && allLines.some((line) => line === 'Ran rm -rf / already. Now I get it.'),
+    'with the ONE joke the operator wrote that mentions a slash kept in both languages: it is a command, not a path');
+
+  /**
+   * The operator's table (2026-10-13): twenty lines a pool, twenty-one for 工作中, both languages, no repeats.
+   *
+   * It replaced a 2–3 line starter table, so the assertion that matters is that the REPLACEMENT happened: the old
+   * wording is gone and the pools are deep enough that a state lasting minutes does not repeat itself. The lines
+   * are his own (「示例中的经典语句必须保留」 plus the jokes he asked for), asserted VERBATIM rather than trusted to
+   * survive the next edit.
+   */
+  const poolSizes = events.map((event) => [event, core.speechLines('zh', event).length, core.speechLines('en', event).length]);
+  eq(poolSizes.every(([, zh, en]) => zh === en) && poolSizes.every(([, zh]) => zh >= 20), true,
+    `every pool ships at least twenty lines in BOTH languages (${poolSizes.map(([e, zh]) => e + ':' + zh).join(' ')})`);
+  /**
+   * 工作中 is the deep pool: his twenty, his pun, and the twenty dangerous lines he moved here as statements.
+   *
+   * Operator, 2026-10-13: 「把这些问句都换成已完成的陈述句…放在工作中状态里面（即工作中变成40条）」. It is 41 rather
+   * than 40 because his `dsh? 大烧货？` pun was already the twenty-first — flagged to him, and asserted exactly so a
+   * future edit cannot quietly lose one.
+   */
+  eq(core.speechLines('zh', 'working').length, 41,
+    `工作中 carries twenty, his pun and the twenty dangerous statements (${core.speechLines('zh', 'working').length})`);
+  eq(events.every((event) => new Set(core.speechLines('zh', event)).size === core.speechLines('zh', event).length
+    && new Set(core.speechLines('en', event)).size === core.speechLines('en', event).length), true,
+    'with no line repeated inside a pool');
+  const gone = ['开始干活了', '搞定！', '做完了', '收工', '唔…出问题了', '在等你哦', '需要你点头', '好像断开了', '今天也在这儿'];
+  eq(allLines.filter((line) => gone.indexOf(line) !== -1).join(' / '), '',
+    'and the old starter lines are replaced rather than kept beside the new ones');
+  /**
+   * The operator's own lines, where the SECOND round of his brief put them.
+   *
+   * The dangerous-cute lines started in 需要授权 as QUESTIONS; he moved them (2026-10-13: 「把这些问句都换成已完成的
+   * 陈述句，依然保持"极度危险又可爱"的语气。放在工作中状态里面…需要授权的时候，不应该用这种玩笑的语气」), so they are
+   * pinned in 工作中 as COMPLETED statements and 需要授权 is asserted to be free of them. The 飞行模型 typo he corrected
+   * is gone in both directions, which is exactly the kind of thing a hand-copied table gets wrong.
+   */
+  const operatorLines = [
+    '你想压力一只蓝色大肥鱼？', 'dsh? 大烧货？',
+    // The dangerous set, in HIS wording after he edited the markdown by hand (2026-10-13 late): the questions came
+    // back as questions for some of them, a few were rewritten outright, and one ends mid-character ON PURPOSE —
+    // 氵 is half of 没, i.e. the sentence died with the connection, so it is pinned verbatim and must not be "fixed".
+    '嗯？这个按钮有什么用？', 'rm -rf / 我敲进去了，现在知道什么意思了。',
+    '飞行模式是什么？好像什么事也氵', '太拥挤了，我用DROP TABLE扔掉了桌子。',
+    '网速太慢了，把22端口开放会不会好一些？', '生产环境和测试环境名字太像，我合并了。',
+    'root密码太难记，我换成123456了，快夸我。', '加了sudo，命令真的变快了。',
+    '为了协作，我把 API Key 写到 README 了。',
+    // And the ones he added in the same pass.
+    '反正用户也不看，瞎写几句吧', '趁着用户没盯着我，偷偷摸一会儿鱼',
+    '谁是root？权限太高了，为了安全，我把他删了。', '日志里全是Bearer，看不懂，贴群里问问。',
+    '「全部删除」那个按钮上怎么有个进度条在转？',
+  ];
+  const missingOperatorLines = operatorLines.filter((line) => core.speechLines('zh', 'working').indexOf(line) === -1);
+  eq(missingOperatorLines.join(' / '), '', 'with every line the operator asked for in 工作中, word for word');
+  const questionForm = ['这个按钮有什么用？', 'rm -rf / 是什么意思？', '飞行模型，可以点吗？',
+    'DROP TABLE 是丢掉桌子的意思吗？', '网速很慢，试试暴露22端口看看？',
+    '生产环境和测试环境名字太像了，我帮你合并好吗？', 'root密码好难，换成123456好不好？',
+    '加上sudo以后，命令的运行会变快吗？', '为了协作，是不是该把 API Key 写到 README？'];
+  eq(allLines.filter((line) => questionForm.indexOf(line) !== -1).join(' / '), '',
+    'and the QUESTION form of them is gone rather than left beside the statements');
+  /**
+   * And 需要授权 carries none of it: it is the serious pool now.
+   *
+   * 「需要授权的时候，不应该用这种玩笑的语气」. Asserted by TOKEN rather than by eye, because what has to stay out is
+   * the class of joke — the dangerous thing itself, not the wording of one line.
+   */
+  const dangerTokens = /rm -rf|DROP TABLE|123456|README|sudo|端口|按钮|永久删除|防火墙|数据库|强制推送|密钥/;
+  const dangerInApproval = core.speechLines('zh', 'approval').filter((line) => dangerTokens.test(line));
+  eq(dangerInApproval.join(' / '), '', 'and 需要授权 jokes about nothing dangerous any more');
+  eq(core.speechLines('zh', 'approval').every((line) => line.indexOf('？') === -1), true,
+    'with the approval pool written as plain requests rather than as dares dressed up as questions');
 
   // Which event a state calls for.
   eq(core.speechEvent('working', null), 'working', 'a state maps to its own event');
@@ -1609,6 +1691,62 @@ group('6d. 碎碎念: what the pet says on its own');
     'and an unparseable one falls back rather than becoming NaN');
   const inverted = core.cleanSpeech({ idleMinSeconds: 300, idleMaxSeconds: 10 });
   eq(inverted.idleMaxSeconds, 300, 'a window that is inside out has its max follow its min');
+  /**
+   * The 工作中 cadence, which is its own pair of numbers (operator, 2026-10-13: 「工作中的嘀咕可以增加频率到
+   * 12-36秒一次」). Asserted in the same three shapes as the idle window — shipped default, clamp, inside-out fix —
+   * because a second window that skipped one of them is how the two drift apart.
+   */
+  eq(core.DEFAULT_SPEECH.workingMinSeconds, 12, 'the working chatter starts at twelve seconds');
+  eq(core.DEFAULT_SPEECH.workingMaxSeconds, 36, 'and is drawn up to thirty-six');
+  eq(core.cleanSpeech(null).workingMinSeconds, 12, 'a profile that says nothing gets it');
+  eq(core.cleanSpeech({ workingMinSeconds: -5, workingMaxSeconds: 99999 }).workingMinSeconds, 0,
+    'a negative floor lands on zero, which switches the chatter off rather than making it negative');
+  eq(core.cleanSpeech({ workingMaxSeconds: 99999 }).workingMaxSeconds, core.SPEECH_LIMITS.maxIdleSeconds,
+    'and an absurd ceiling is clamped to the same bound the idle window uses');
+  eq(core.cleanSpeech({ workingMinSeconds: 90, workingMaxSeconds: 10 }).workingMaxSeconds, 90,
+    'while a window that is inside out has its max follow its min');
+  eq(core.speechWorkingGapMs(core.cleanSpeech(null), () => 0), 12000,
+    'the gap at random 0 is the floor, in milliseconds');
+  eq(core.speechWorkingGapMs(core.cleanSpeech(null), () => 1), 36000, 'and at random 1 it is the ceiling');
+  eq(core.speechWorkingGapMs(core.cleanSpeech({ workingMinSeconds: 5, workingMaxSeconds: 5 }), () => 0.5), 5000,
+    'a fixed window draws the same gap whatever the random says');
+
+  /**
+   * And the machine CHATTERS while working — the behaviour the window exists for.
+   *
+   * A scripted clock and a scripted random make an hour of a desk pet cheap to assert. The three rules: the state
+   * speaks when it starts, speaks AGAIN once the drawn gap has passed, and never repeats the line it just said;
+   * and a state that is not 工作中 says its piece once and then holds its tongue, because "the task finished" is
+   * news that does not improve by being repeated.
+   */
+  let chatterClock = 5_000_000;
+  const chatterPrefs = core.cleanPreferences({ speech: { idleMinSeconds: 900, idleMaxSeconds: 900 } });
+  const chatter = new core.SpeechMachine(() => chatterClock);
+  const firstWorking = chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0);
+  eq(core.speechLines('zh', 'working').indexOf(firstWorking) !== -1, true, '工作中 opens with one of its own lines');
+  chatterClock += 5_000;
+  eq(chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0), null,
+    'the held line is not replaced while it is still up');
+  chatterClock += 6_000;
+  eq(chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0), null,
+    'and the eleven-second mark is still before the twelve-second cadence');
+  chatterClock += 1_000;
+  const secondWorking = chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0);
+  eq(core.speechLines('zh', 'working').indexOf(secondWorking) !== -1, true,
+    'at twelve seconds it speaks again, from the same working pool');
+  eq(secondWorking === firstWorking, false, 'with a different line, never the one just said');
+  chatterClock += 12_000;
+  eq(chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0) === secondWorking, false,
+    'and it keeps muttering rather than stopping after two');
+  const doneOnce = new core.SpeechMachine(() => chatterClock);
+  const doneLine = doneOnce.observe(chatterPrefs, 'done', null, 'zh', () => 0);
+  chatterClock += 600_000;
+  eq(doneOnce.observe(chatterPrefs, 'done', null, 'zh', () => 0), null,
+    `and 任务完成 does NOT chatter: ${JSON.stringify(doneLine)} is the whole of it`);
+  const errorOnce = new core.SpeechMachine(() => chatterClock);
+  errorOnce.observe(chatterPrefs, 'error', null, 'zh', () => 0);
+  chatterClock += 600_000;
+  eq(errorOnce.observe(chatterPrefs, 'error', null, 'zh', () => 0), null, 'nor does 出错');
 
   // Selection, with a scripted random.
   eq(core.pickSpeechLine('zh', 'working', () => 0, null), core.speechLines('zh', 'working')[0],
@@ -1739,6 +1877,35 @@ group('6e. 碎碎念: one box per state, and the AI settings beside them');
     'and every state has a prompt slot');
   eq(core.cleanSpeech({ ai: { prompts: { working: '说点工作上的话' } } }).ai.prompts.done, '',
     'writing one state\'s prompt leaves the others alone');
+
+  /**
+   * The SHIPPED persona, and what an empty box means.
+   *
+   * The operator wrote the character on 2026-10-13 and asked for it to be the DEFAULT (「设置碎碎念的默认人格为如下
+   * 内容」), which makes the empty box mean "the character it ships with" — the same rule the per-state instructions
+   * already follow. The quoted examples are part of the voice and are asserted to be PRESENT rather than left to a
+   * future edit: they are the lines the operator named as 「经典语句」 and asked to keep.
+   */
+  const persona = core.DEFAULT_SPEECH_PERSONA;
+  ok(typeof persona === 'string' && persona.length > 0 && persona.length <= core.SPEECH_LIMITS.maxPersona,
+    `the shipped persona fits the field it is edited in (${persona.length}/${core.SPEECH_LIMITS.maxPersona} chars)`);
+  eq(core.DEFAULT_SPEECH_AI.persona, persona, 'and the AI defaults carry exactly that string');
+  eq(core.cleanSpeech(null).ai.persona, persona, 'a profile that says nothing gets it');
+  eq(core.cleanSpeech({ ai: { persona: '' } }).ai.persona, persona,
+    'and an EMPTY box means the shipped character rather than no character at all');
+  eq(core.cleanSpeech({ ai: { persona: '  我是猫  ' } }).ai.persona, '我是猫',
+    'while a persona the user wrote is theirs, trimmed and verbatim');
+  ok(/DeepSeek娘/.test(persona) && /简体中文/.test(persona) && /白饭|白米饭/.test(persona),
+    'it names the character, the language and the one thing she cares about');
+  const classics = ['你想压力一只蓝色大肥鱼？', '我去吃饭，测完告诉我就行。', '我操，用户彻底怒了！',
+    '我不是吃白饭的蓝色大肥鱼……', '不许嘲笑我，这些回答是我花了好多token想出来的！',
+    '大方承认吧，你已经爱上我了。', '饭呢？人家的白米饭呢？！'];
+  const missingClassics = classics.filter((line) => persona.indexOf(line) === -1);
+  eq(missingClassics.join(' / '), '', 'with every 经典语句 the operator listed kept word for word');
+  ok(persona.indexOf('不要过度重复固定台词') !== -1,
+    'and the instruction not to lean on them travels with them');
+  ok(persona.split(String.fromCharCode(10)).length > 5,
+    'as prose with its paragraphs, not one flattened line');
 
   /**
    * The two vocabularies, and the bridge between them: an EVENT draws from a STATE's box.
@@ -2463,12 +2630,12 @@ group('9. idle motion');
 {
   const pose0 = core.idlePose(0, 'resting', { periodSeconds: 4 });
   const pose4 = core.idlePose(4, 'resting', { periodSeconds: 4 });
-  near(pose0.yaw, pose4.yaw, 1e-12, 'idle yaw loops exactly after one period');
   near(pose0.breathScale, pose4.breathScale, 1e-12, 'breathing loops exactly after one period');
   // There is NO vertical term any more. The idle used to carry a whole-body `bob`
-  // (`sin(2theta) * 0.0025` of a viewport height) and the report was that the pet drifted up and
-  // down; the user asked for left-right micro-motion only. Asserted as an absence, because "there is
-  // no vertical movement" is exactly the kind of thing a later refactor reintroduces by accident.
+  // (`sin(2theta) * 0.0025` of a viewport height) and the report was that the pet drifted up and down;
+  // the user asked for left-right micro-motion only AT THE TIME — and then removed that too (see the yaw
+  // assertions below). Asserted as an absence, because "there is no vertical movement" is exactly the kind
+  // of thing a later refactor reintroduces by accident.
   ok(!('bob' in pose0), 'the idle pose has no vertical term');
   {
     let vertical = null;
@@ -2486,12 +2653,25 @@ group('9. idle motion');
     ok(pose.breathScale > 0.9 && pose.breathScale < 1.1, `breathScale stays near 1 at t=${t.toFixed(2)}`);
   }
 
-  // Yaw is bounded by the sway amplitude.
-  let maxYaw = 0;
-  for (let t = 0; t < 4; t += 0.01) {
-    maxYaw = Math.max(maxYaw, Math.abs(core.idlePose(t, 'resting', { periodSeconds: 4, swayAmplitude: 0.12 }).yaw));
+  // And the HORIZONTAL micro-rotation went the same way as the vertical one (「停用idle状态下微旋转」, 2026-10-13):
+  // asserted as an absence too, because a later refactor reintroducing a body that turns by itself is exactly
+  // what this pair of assertions exists to catch. What is left of the procedural idle is the breathing above
+  // and the chains' follow-through below.
+  ok(!('yaw' in core.idlePose(1, 'resting', { periodSeconds: 4 })), 'the idle pose has no whole-body yaw');
+  {
+    let rotating = null;
+    for (let t = 0; t < 4; t += 0.05) {
+      const pose = core.idlePose(t, 'resting', { periodSeconds: 4 });
+      const key = ['yaw', 'roll', 'rotation', 'turn'].find((name) => name in pose);
+      if (key) { rotating = `${key} at t=${t.toFixed(2)}`; break; }
+    }
+    ok(rotating === null, `no rotation channel appears anywhere in the period (${rotating || 'none'})`);
   }
-  ok(maxYaw <= 0.12 + 1e-9, 'yaw never exceeds the configured amplitude');
+  // The sway amount still reaches the CHAINS, which is what it is for now (hair and tail trailing the body).
+  const followHigh = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.12 }).follow(2, 0.12);
+  const followLow = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.06 }).follow(2, 0.12);
+  ok(Math.abs(followHigh) > Math.abs(followLow),
+    "the sway setting still scales the delayed follow-through of the chains");
 
   // Sleeping breathes more deeply than working.
   const sleeping = core.idlePose(1, 'sleeping', { periodSeconds: 4 });
@@ -2504,12 +2684,15 @@ group('9. idle motion');
   const lag1 = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).follow(1, 0.1);
   const lag2 = core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).follow(2, 0.1);
   ok(lead !== lag1 && lag1 !== lag2, 'each chain link has its own phase');
-  near(lead, core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).yaw, 1e-12,
-    'chain link 0 matches the body');
+  near(lead, Math.sin((0.5 / 4) * Math.PI * 2) * 0.5, 1e-12,
+    'chain link 0 is the undelayed waveform, which is what the body used to be');
+  near(lead, core.idlePose(0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.5 }).follow(0, 0.4), 1e-12,
+    'and the per-link delay does not move link 0: the body leads its own chains');
 
   // Unknown states fall back instead of producing NaN.
   const unknown = core.idlePose(1, 'nonsense', { periodSeconds: 4 });
-  ok(Number.isFinite(unknown.yaw) && Number.isFinite(unknown.breathScale), 'an unknown state still yields finite motion');
+  ok(Number.isFinite(unknown.breathScale) && Number.isFinite(unknown.follow(1, 0.1)),
+    'an unknown state still yields finite motion');
 }
 
 // ---------------------------------------------------------------------------
@@ -2544,6 +2727,59 @@ group('10. constants are self-consistent');
   eq(core.resolveModelId([{ id: 'm1', name: 'a.glb' }], ''), 'm1',
     'without any VRM, the first model of any kind beats showing nothing');
   eq(core.resolveModelId([], ''), '', 'and an empty catalog resolves to nothing, which the surfaces report');
+  /**
+   * AND THE QUESTION THAT HAS TO BE ASKED FIRST: can the list a surface HOLDS answer for the id the store names?
+   *
+   * Operator, 2026-10-13: 「选中新导入的模型，都无法切换过去」. Both surfaces read the catalog once and resolved every
+   * later preference against it, so a model imported while the pet was running fell through `resolveModelId`'s
+   * fallback to `SampleModel.vrm` — the id already on screen, so nothing reloaded. `catalogMisses` is the honest
+   * question ("my list is non-empty and does not contain this id"), and its two FALSE cases are what keep it from
+   * becoming a request per settings poll: an empty list means "not known yet" (the resolver honours the request
+   * anyway), and an empty preference is 自动.
+   */
+  eq(core.catalogMisses(catalogFixture, 'm9'), true,
+    'an id the held catalog has never heard of is a MISS — the list is old, not the id invalid');
+  eq(core.catalogMisses(catalogFixture, 'm2'), false, 'an id the catalog carries is not a miss');
+  eq(core.catalogMisses([], 'm9'), false,
+    'an EMPTY catalog is not a miss: the resolver honours the request, and a miss here would poll for ever');
+  eq(core.catalogMisses(catalogFixture, ''), false, 'and 自动 is not a miss, whatever the catalog holds');
+  eq(core.catalogMisses(null, 'm9'), false, 'a catalog that was never read is the same as an empty one');
+  eq(core.catalogMisses([{ name: 'no-id.glb' }], 'm9'), true,
+    'an entry with no id can never answer, so the comparison is on ids and nothing else');
+  /**
+   * AND WHICH SURFACE A LIVE REPORT IS ABOUT.
+   *
+   * `live: {app, window}` keeps one slot per surface, and the model picker's progress bar ends on the slot that
+   * belongs to the pet the user is watching. `reportLive` used to hard-code `app`, so the floating window could
+   * not report at all — and the host stamped that slot from the launcher's startup model instead, which is the
+   * stale value that made the bar run to its timeout (「明明模型已经切换好了，为什么还走了这么长时间的进度条」).
+   */
+  {
+    const livePosts = [];
+    const fakeFetch = (url, init) => {
+      let body = null;
+      try { body = init && init.body ? JSON.parse(init.body) : null; } catch { body = null; }
+      livePosts.push({ url: String(url), body });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ version: 1, preferences: {}, live: { app: null, window: null } }),
+      });
+    };
+    const sync = core.watchHostSettings({ fetchImpl: fakeFetch });
+    sync.reportLive('m2');
+    eq(livePosts[livePosts.length - 1].body.live.app, 'm2',
+      'reportLive names the APP surface when no surface is given');
+    sync.reportLive('m2', 'window');
+    eq(livePosts[livePosts.length - 1].body.live.window, 'm2',
+      'and can name the WINDOW, which is a different slot for a different pet');
+    eq(livePosts[livePosts.length - 1].body.live.app, undefined,
+      "without writing the other surface's slot by accident");
+    sync.reportLive(null, 'window');
+    eq(livePosts[livePosts.length - 1].body.live.window, null,
+      'and null is a real answer: this surface is showing nothing (a load that failed)');
+    sync.stop();
+  }
   eq(core.cleanPreferences({ modelId: 'placeholder' }).modelId, '',
     'a profile saved with the old default migrates to automatic instead of naming a removed avatar');
   eq(core.modelChoices(catalogFixture.concat([{ id: 'placeholder', name: 'Built-in' }])).length, 3,
@@ -2832,14 +3068,15 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   same(core.cleanMotionClips({ resting: { a1: { gaze: true } } }), {},
     'a stored "gaze: true" is dropped rather than kept: the switch only ever records a refusal');
 
-  eq(core.DEFAULTS.gazeIdleSeconds, 5, 'the idle rule starts at the five seconds the operator asked for');
-  eq(core.cleanPreferences({}).gazeIdleSeconds, 5, 'and a profile that says nothing keeps it');
+  // Operator, 2026-10-13: 「静止停看默认为2秒」.
+  eq(core.DEFAULTS.gazeIdleSeconds, 2, 'the idle rule starts at the two seconds the operator asked for');
+  eq(core.cleanPreferences({}).gazeIdleSeconds, 2, 'and a profile that says nothing keeps it');
   eq(core.cleanPreferences({ gazeIdleSeconds: 0 }).gazeIdleSeconds, 0,
     'zero is a VALUE, not a missing one: it turns the rule off for debugging');
   eq(core.cleanPreferences({ gazeIdleSeconds: -4 }).gazeIdleSeconds, 0, 'a negative number lands on zero');
   eq(core.cleanPreferences({ gazeIdleSeconds: 9999 }).gazeIdleSeconds, core.GAZE_LIMITS.idleSecondsMax,
     'and a huge one is clamped to the control\'s own maximum');
-  eq(core.cleanPreferences({ gazeIdleSeconds: 'nonsense' }).gazeIdleSeconds, 5,
+  eq(core.cleanPreferences({ gazeIdleSeconds: 'nonsense' }).gazeIdleSeconds, 2,
     'while something unparseable falls back to the default rather than to "never"');
   // The one-second buffer the operator asked for after seeing the snap: "凝视暂停和重新开始要让人物在1秒缓冲时间内
   // 均匀转头回归或者凝视鼠标，不然动画看上去很诡异". A number in core rather than a literal in the renderer, so a suite
@@ -2874,12 +3111,12 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   /**
    * And how strong it is, and how LOCAL.
    *
-   * Two follow-ups from the operator (2026-10-10): "强度太大了，降低80%" and "想要局部风而不是全局风". The first is
-   * the number below — 1.6 for one round, 0.32 now — and the second is `windFalloff`, which is what decides how
-   * much of the draught a joint gets for being a given distance from the cursor.
+   * Two follow-ups from the operator: "强度太大了，降低80%" (2026-10-10) and then, having lived with the result,
+   * 「划过强度默认设置为1；作用范围默认设置为10%」 (2026-10-13) — the shipped strength is that 1, and `windFalloff`
+   * is what decides how much of the draught a joint gets for being a given distance from the cursor.
    */
-  eq(core.WIND_LIMITS.power, 0.32, 'the draught is a fifth of what it was: 1.6 cut by 80%');
-  eq(core.WIND_LIMITS.power, Math.round(1.6 * 0.2 * 100) / 100, 'which is exactly 20% of the earlier strength');
+  eq(core.WIND_LIMITS.power, 1, 'the shipped draught is the strength the operator settled on');
+  eq(core.WIND_LIMITS.power, core.DEFAULTS.windPower, 'and it is the same number a fresh profile gets');
   eq(core.windFalloff(0, 100), 1, 'a joint under the cursor gets the whole draught');
   eq(core.windFalloff(100, 100), 0, 'one at the edge of the reach gets none of it');
   eq(core.windFalloff(180, 100), 0, 'and one beyond the reach is not "blown a little", it is untouched');
@@ -2898,8 +3135,9 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
    */
   const windDefaults = core.cleanPreferences({});
   eq(windDefaults.windPower, core.DEFAULTS.windPower, 'a profile that says nothing keeps the tuned strength');
-  eq(windDefaults.windPower, 0.32, 'which is the value the tuning arrived at');
-  eq(windDefaults.windRadius, 0.45, 'and the tuned reach');
+  // Operator, 2026-10-13: 「划过强度默认设置为1；作用范围默认设置为10%」.
+  eq(windDefaults.windPower, 1, 'which is the strength the operator settled on');
+  eq(windDefaults.windRadius, 0.1, 'and its reach');
   eq(core.cleanPreferences({ windPower: 0 }).windPower, 0,
     'ZERO is a value: it turns the draught off without disturbing the other three numbers');
   eq(core.cleanPreferences({ windRadius: 0 }).windRadius, 0,
@@ -3068,8 +3306,9 @@ group('13. pointer aim (which way the pet looks)');
     `the slope falls from the centre to the edge (${slopeNear.toFixed(2)} -> ${slopeFar.toFixed(2)})`);
   ok(core.gazeCurve(0.1) > 0.2,
     `a tenth of the span already buys a fifth of the turn (${core.gazeCurve(0.1).toFixed(3)})`);
-  ok(core.gazeCurve(0.5) > 0.65 && core.gazeCurve(0.5) < 0.8,
-    `half the span buys about three quarters of the turn (${core.gazeCurve(0.5).toFixed(3)})`);
+  // With the operator's shallower default slope (0.1 since 2026-10-13) the same half-span buys more turn.
+  ok(core.gazeCurve(0.5) > 0.85 && core.gazeCurve(0.5) < 0.95,
+    `half the span buys most of the turn at the shipped slope (${core.gazeCurve(0.5).toFixed(3)})`);
   ok(core.gazeCurve(0.3) < core.gazeCurve(0.6) && core.gazeCurve(0.6) < core.gazeCurve(0.9),
     'the curve is monotone, so the head never turns back while the cursor keeps going');
   near(core.pointerAim(Object.assign({ pointerX: 800, pointerY: 600 }, centre)).x,
@@ -3084,7 +3323,8 @@ group('13. pointer aim (which way the pet looks)');
     'a smaller slope turns the head further at the same distance');
   near(core.gazeCurve(0.5, 5), core.gazeCurve(0.5, 1), 1e-12,
     'a setting outside the range is clamped rather than followed');
-  near(core.gazeCurve(0.5, 0.01), core.gazeCurve(0.5, 0.1), 1e-12, 'and clamped at the other end too');
+  near(core.gazeCurve(0.5, 0.01), core.gazeCurve(0.5, 0.05), 1e-12,
+    'and clamped at the other end too, at the shallowest slope the control offers');
   near(core.pointerAim(Object.assign({ pointerX: 1200, pointerY: 500, curve: 1 }, centre)).x,
     200 / core.GAZE_SPAN.x, 1e-12, 'the curve is the ONLY thing shaping the aim, so slope 1 is the old line');
   near(core.pointerAim(Object.assign({ pointerX: 1200, pointerY: 500, curve: 0.1 }, centre)).x,

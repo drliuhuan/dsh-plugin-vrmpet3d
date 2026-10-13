@@ -95,6 +95,10 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     // The first-run guide's script, on the same footing as the settings page's: it is what a user sees FIRST, and
     // a syntax error in it renders a blank window that the live check would blame on the window.
     'lib/setup-page.js',
+    // The model picker: the page script and the SHARED component the guide's ② 偏好模型 step mounts. Nothing else
+    // parses either of them, and a syntax error in the component blanks the guide AND the 切换模型 page.
+    'lib/picker-page.js',
+    'lib/model-picker.js',
   ];
   for (const target of targets) {
     let verdict = null;
@@ -125,6 +129,16 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     "and the script's own screen list names every one of them");
   ok(setupScript.includes("post('/vrmpet3d/setup-state', { completed: true })"),
     'the finish button is the one write that ends the guide');
+  /**
+   * The ② 偏好模型 step is the SHARED picker now (2026-10-13), so the markup and the script have to agree on its
+   * mount point exactly as they agree on the screens — and the typed-path box it replaced must be gone from the
+   * script as well as from the markup, or a half-removed row would sit there wiring nothing.
+   */
+  ok(setupHtml.includes('id="setup-model-picker"') && setupScript.includes("el('setup-model-picker')"),
+    "the model step's markup and script agree on the shared picker's mount point");
+  ok(setupScript.includes('createModelPicker') && !setupScript.includes('setup-model-path')
+    && !setupScript.includes("'pickModelFile', importModel"),
+    'and the guide mounts the component instead of the typed-path row and the import call it replaced');
 }
 
 // ---------------------------------------------------------------------------
@@ -594,6 +608,28 @@ if (live.skipped) {
         ok(parts.withLines === 0 && parts.withPrompt === 0,
           `with every box EMPTY on a fresh profile, the shipped voice included (${parts.withLines} written lines, ${parts.withPrompt} written prompts)`);
         /**
+         * AND EVERY AI PROMPT BOX SHOWS THE SAME GREY HINT — 胸部 and 屁股 included.
+         *
+         * Operator, 2026-10-13: 「胸部和屁股的AI提示词，默认状态下尽管有内置提示词，但是也应该是和其他部位的默认灰色字体提示
+         * 一样，而不是有单独的关于胸部和屁股的灰色字体提示」. The shipped instruction is what the HOST sends the model, so
+         * it acts when the box is empty without being spelled out in the box — which is the assertion below: ONE
+         * distinct placeholder across all ten rows, and it is the generic one. (The shipped strings themselves are
+         * still published, and asserted just after this, so hiding the hint hides nothing from a suite.)
+         */
+        ok(Array.isArray(parts.promptHints) && parts.promptHints.length === 1
+          && parts.promptHints[0] === 'AI 提示词：切到「AI 碎碎念」时用它生成这个部位的一句话',
+          `with ONE grey hint shared by every part, shipped prompt or not (${JSON.stringify(parts.promptHints)})`);
+        /**
+         * And the same for the 碎碎念 boxes (operator, 2026-10-13: 「碎碎念框那行也变成通用灰字」).
+         *
+         * ONE distinct hint across all ten rows, and it is the 内置短语 wording on a fresh profile — the shipped
+         * lines still say themselves when the box is empty, they are simply not announced in the box any more. The
+         * AI wording is the other legitimate value and is asserted through the source switch elsewhere.
+         */
+        ok(Array.isArray(parts.lineHints) && parts.lineHints.length === 1
+          && parts.lineHints[0] === '碎碎念：一行一句，摸到这个部位时随机说一句',
+          `and ONE grey hint shared by every 碎碎念 box (${JSON.stringify(parts.lineHints)})`);
+        /**
          * And the two parts whose voice comes from the SHIPPED table get it while their boxes stay empty.
          *
          * This is the operator's own condition (2026-10-12: "默认碎碎念：'变态！''大色狼！'…匹配词和AI提示词写进系统底层，
@@ -641,18 +677,21 @@ if (live.skipped) {
          */
         const edit = settings.report.partsEdit || {};
         /**
-         * And the 部位 boxes say the same thing the `speaking` flag does, driven through the real page.
+         * And the 部位 box hint follows the SOURCE and names no part, driven through the real page.
          *
-         * The placeholder is where the promise is actually made to the user: 胸部's box ships empty with 「留空则说内置的
-         * 变态！ / 大色狼！」 under it, and a source that is not 内置短语 has to take that away — then give it back.
+         * It used to spell out 胸部's shipped lines (「留空则说内置的 变态！ / 大色狼！」); the operator removed that
+         * (2026-10-13: 「碎碎念框那行也变成通用灰字」), so what is asserted now is the pair of GENERIC wordings —
+         * 内置短语's, and the one AI mode uses while the model is the source — and that the shipped lines themselves
+         * are still in force (the `builtinSpeech`/`speaking` assertions above are that half).
+         *
          * It is driven through the STORE rather than through the 台词来源 picker, and that is the honest path: the
          * picker lives on 通用设置 while the 部位 table lives on 模型参数, so this page can never see it move; what it
          * does see is another document writing the store, which is its own `storage` listener. Measured on the DOM
          * the probe read back, because the published state is republished on a poll.
          */
-        ok(edit.partLinesBuiltin === '碎碎念：留空则说内置的 变态！ / 大色狼！'
+        ok(edit.partLinesBuiltin === '碎碎念：一行一句，摸到这个部位时随机说一句'
           && edit.partLinesAi === '碎碎念：一行一句；留空则由 AI 按这个部位的提示词生成',
-        `a source that is not 内置短语 takes the built-in promise off the 部位 box (${JSON.stringify(edit.partLinesBuiltin)} -> ${JSON.stringify(edit.partLinesAi)})`);
+        `the 部位 hint follows the source and spells out no shipped line (${JSON.stringify(edit.partLinesBuiltin)} -> ${JSON.stringify(edit.partLinesAi)})`);
         ok(edit.partLinesRestored === edit.partLinesBuiltin,
           `and the table is repainted back when the store says the built-in source again (${JSON.stringify(edit.partLinesRestored)})`);
         // The shipped row count is read off the page rather than written here: it moved once already (2026-10-12,
@@ -877,9 +916,17 @@ if (live.skipped) {
           'with the per-state line counts published, so an empty box is readable from outside');
         ok(speech.aiControls === true, 'the AI half\'s provider, URL, model, key and persona controls');
         ok(speech.testControls === true, 'and the 试一句 picker that has to answer even while the source is built-in');
+        /**
+         * The shipped route, and the persona that now ships WITH it.
+         *
+         * The persona used to be empty here ("no key, no persona and a temperature"); the operator's own character
+         * became the default on 2026-10-13, so the page carries it out of the box while the credential still ships
+         * unset. The EXACT string is pinned by the core suite, which owns the constant — this half is the page's own
+         * account of what it put in the box.
+         */
         ok(speech.ai && speech.ai.provider === 'dsh' && speech.ai.keySet === false
-          && speech.ai.personaLength === 0 && Number(speech.ai.temperature) > 0,
-          'whose route ships as DSH with no key, no persona and a temperature');
+          && speech.ai.personaLength > 0 && Number(speech.ai.temperature) > 0,
+          `whose route ships as DSH with no key, the shipped persona (${speech.ai.personaLength} chars) and a temperature`);
         ok(JSON.stringify(speech).indexOf('apiKey') === -1,
           'and the credential FIELD is never published — only whether one is set');
         ok(speech.llm === null || typeof speech.llm.available === 'boolean',
@@ -1049,9 +1096,9 @@ if (live.skipped) {
          */
         const wind = shown.wind || {};
         ok(wind.rows === 4, `with the four mouse-interaction controls (${wind.rows})`);
-        ok(Math.abs(Number(wind.power) - 0.32) < 1e-9,
-          `showing the tuned strength the operator arrived at (${wind.power})`);
-        ok(Math.abs(Number(wind.radius) - 0.45) < 1e-9, `and its reach (${wind.radius})`);
+        ok(Math.abs(Number(wind.power) - 1) < 1e-9,
+          `showing the strength the operator settled on (${wind.power})`);
+        ok(Math.abs(Number(wind.radius) - 0.1) < 1e-9, `and its reach (${wind.radius})`);
         ok(shown.springFolded === null,
           `and no folding group for a model with only two chains (${JSON.stringify(shown.springFolded)})`);
       }
@@ -1125,6 +1172,8 @@ async function startPageServer() {
   const sources = new Set([
     'client.vendor.js', 'core.js', 'scene.js', 'client.js', 'desktop-page.js',
     'config-page.js', 'menu.js',
+    // The model picker the guide's ② 偏好模型 step mounts: the component and the page script that mounts it.
+    'model-picker.js', 'picker-page.js',
   ]);
   const server = createServer((req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');

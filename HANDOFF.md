@@ -13,7 +13,7 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
-**The tree is green: 9 suites, 2139 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2238 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -28,6 +28,81 @@ file import replaced. The guide itself (`/vrmpet3d/setup`, `lib/setup-page.*`) i
 AI 碎碎念 / 模型动作 / 完成: the in-app pet offers it once per plugin ACTIVATION until 完成 writes `completed` in
 `<profile>/vrmpet3d-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
 asks again, exactly as the operator specified.
+
+**The shipped DEFAULTS are his, as of 2026-10-13** (「修改几处默认配置」): 视线 曲率 0.1 with a 0.05–1 control, 静止停看 2 s,
+划过强度 1, 作用范围 10 %, 碎碎念空闲嘀咕 20–60 s / 工作嘀咕 12–36 s — all in `lib/core.js` (`DEFAULTS` + `GAZE_CURVE_RANGE` +
+`WIND_LIMITS` + `SPEECH_LIMITS`), with the page's slider bounds matched. **状态与动作 ships his mapping too**: the
+`defaults` block of [assets/motions/vrmpet3d-motions.json](assets/motions/vrmpet3d-motions.json) is his per-state clip
+list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, error 2, offline 1), and the `clips`
+block carries his 循环/单次 per clip. The one part of that section that CANNOT ship in the manifest is the per-state
+间隔 (`motionEvery.resting = {min:20,max:60}`) and the per-clip 凝视 switch — the format has no place for them, so a
+new profile gets the default interval. Say the word if they should be added to the manifest format.
+
+**碎碎念 now ships the operator's own CHARACTER as the default persona** (2026-10-13): `core.DEFAULT_SPEECH_PERSONA` is the
+DeepSeek娘 prose (453 chars, 17 lines, the 经典语句 verbatim), `DEFAULT_SPEECH_AI.persona` carries it, and an EMPTY 人格 box
+means it — `cleanSpeechAi` falls back to it, so the panel, the host and the suites read one value and his existing profile
+picks the character up without a settings edit. One subtlety that is load-bearing: `authoredWeight` in `lib/settings.js`
+compares the persona with the shipped one instead of testing it for emptiness, because otherwise every profile would
+score above 0, `update`'s "refuse an all-defaults patch" guard could never fire, and the protection added on 2026-10-11
+would silently retire.
+
+**And the built-in 碎碎念 table is now HIS lines** (same day, second round): `SPEECH_LINES` replaced its 2–3 line
+starter sets with 20 lines per event in BOTH languages — 21 for 工作中 — with 等待确认 split into `waiting` (等你回话)
+and `approval` (需要授权) as he asked, with his lines kept verbatim (`这个按钮有什么用？` `rm -rf / 是什么意思？`
+`飞行模式，可以点吗？` — a typo he fixed the same day — plus the six he added: DROP TABLE / 暴露22端口 / 合并生产与测试
+环境 / root密码123456 / sudo会变快吗 / API Key 写进 README — and `dsh? 大烧货？` in 工作中). The WHOLE 需要授权 pool is
+written in his register, 「极度危险又可爱的问句」: all twenty lines are questions, which the suite asserts by shape so a
+future edit cannot quietly turn them back into statements. The `rm -rf /` line is the ONE shipped line that mentions a slash, so the
+suite's path rule now refuses path-LIKE text (a segment after a slash, a drive letter, an extension) and asserts that
+joke's presence instead of failing on it. The generator and the review copy live in `build/probe-out/`
+(`gen-speech-lines.mjs`, `speech-lines-review.md`).
+
+**The 碎碎念 table round-trips through a MARKDOWN file he edits by hand.** `speech-lines-review.md` (repo root) is
+regenerated from what is SHIPPED and written back by `build/probe-out/speech-lines-md.mjs` (`export` / `report` /
+`import [--dry-run]`). He edited it on 2026-10-13 late — 30 working lines rewritten, 15 left with an empty English cell
+and 2 more whose Chinese changed under a stale translation — and all 17 were translated and imported. The importer
+REFUSES structural damage (a renamed pool, an empty pool, a row with no Chinese or English, an illegal cadence) and only
+WARNs about length and in-pool repeats, which is the line between "he is writing lines" and "he broke the table".
+⚠️ One line ends MID-CHARACTER **on purpose**: working's `飞行模式是什么？好像什么事也氵`. He explained the joke —
+氵 is the left half of 没, so the sentence died with the connection — and the English cuts the word instead
+(`What's flight mode? Nothing happe-`), because a letter cannot be half-written. It looks like corruption and is not:
+the suite pins that exact string so nobody "fixes" it, and `SPEECH_LINES`' own comment says so.
+
+🛠 **The importer's anchors are newline-AGNOSTIC, and there is a reason to check that before editing it.** On
+2026-10-13 the tool searched for a `CRLF`-prefixed terminator while `lib/core.js` held a bare-LF table block (an
+earlier write had left one), so the "end of the table" it found was the NEXT one and it deleted `SPEECH_STATES`,
+`DEFAULT_SPEECH_PROMPTS` and their comments. Nothing shipped — `verify.mjs` failed on the very next run with
+`SPEECH_STATES is not defined` — and it was restored byte-for-byte from `lib/client.core.js`, which is `lib/core.js`
+VERBATIM (that is what the chunk is), a fact worth remembering as a recovery source. The anchors are regexes now.
+
+**The 工作中 pool is 41 lines and the pet CHATTERS while working** (second round, same day). His dangerous-cute lines
+began in 需要授权 as questions; he moved them into 工作中 as COMPLETED statements (「我把那个按钮点了，看看有什么用。」…) and
+asked for approval to be serious again, so `approval` is now twenty plain requests with none of the jokes — asserted by
+TOKEN, not by eye. 工作中 is 41 rather than his predicted 40 because `dsh? 大烧货？` was already its twenty-first (told to
+him). And it talks on its own cadence: `workingMinSeconds`/`workingMaxSeconds` (12/36 by default) are a SECOND window
+beside the idle one, wired into `SpeechMachine.chatterAt` — the one event that speaks more than once while it lasts,
+never back-to-back and never sooner than `minGapSeconds`. That window has its own row in 通用设置 → 碎碎念
+(「工作嘀咕间隔」), because a feel value belongs where the person feeling it can move it.
+
+**The AI-prompt box in 部位 carries ONE generic grey hint, whatever the part is** (2026-10-13: 「胸部和屁股的AI提示词，
+默认状态下尽管有内置提示词，但是也应该是和其他部位的默认灰色字体提示一样」): 胸部/屁股 keep their shipped INSTRUCTIONS — the host
+still sends them when the box is empty — but the box no longer spells them out. The 碎碎念 box follows the SAME
+rule since the operator asked for it too (「碎碎念框那行也变成通用灰字」): one hint per SOURCE, for every part, and the two
+generic wordings stay because they are about the mode. Both shipped strings still ACT when a box is empty, and
+`builtinSpeech` in the page's published state still carries them. The assertions live in the desktop suite's LIVE
+settings-window half (`promptHints` and `lineHints` in the page readout), which `--no-window` skips.
+
+**The procedural idle no longer moves the BODY at all** (「停用idle状态下微旋转」, 2026-10-13): `idlePose` writes no
+yaw (the vertical bob went the same way on 2026-10-09) and `Scene.tick` sets `stage.rotation.y` to the user's own
+`yaw` preference and nothing else — `YAW_GAIN` is gone with it. What is left of the idle is BREATHING and the
+chains' delayed follow-through, which is what the `sway` preference still scales. Both suites assert the ABSENCE,
+because a body that turns by itself is exactly what a later refactor reintroduces.
+
+**The 单次/循环 playback rules are the operator's (2026-10-13) and live in `Scene.afterOneShotEnded`:** a finished
+one-shot chains into a RANDOM loop when the state has one, holds its LAST FRAME when it does not, and is never played
+as a loop (`LoopOnce` is applied per playback from `motionLoops(id, state)`, not baked in at build time); a due
+reaction may interrupt a running loop, and both draws are random. A clip that carries its OWN expression tracks
+suppresses blinking (`clipDrivesFace`). The probe's `oneShotRules` check drives all of it on a real avatar.
 
 **His CURRENT configuration is captured in `initial-config/`** — operator instruction, 2026-10-13: every step of the
 release's initial configuration goes into git, finished or not (「每一步都要上传到github，包括我还没有构造好的初始配置
@@ -337,6 +412,7 @@ quote). For code, [AGENTS.md](AGENTS.md) has the table; in short:
 | the manifest, activation, `apply`/dispose, the route table | `node scripts/check-plugin-load.mjs` |
 | [lib/config-page.js](lib/config-page.js), [lib/global-page.html](lib/global-page.html), [desktop/](desktop/) — the two settings pages and the launcher | `node scripts/verify-desktop.mjs` |
 | [lib/client.js](lib/client.js), [lib/menu.js](lib/menu.js), [lib/desktop-page.js](lib/desktop-page.js), [lib/scene.js](lib/scene.js), [build/probe/client-test.js](build/probe/client-test.js) | `node scripts/verify-browser.mjs --page client-test` |
+| [lib/model-picker.js](lib/model-picker.js), [lib/picker-page.js](lib/picker-page.js), [lib/setup-page.html](lib/setup-page.html) — the shared model picker, its page and the guide's ② step | `node scripts/verify-desktop.mjs` **and** `node scripts/verify-browser.mjs --page client-test` (the guide walked, drop included) |
 | a delivered chunk's name, or the loader registration | `node scripts/verify-browser.mjs --page chunk-delivery` |
 | [vendor/](vendor/) — the pinned 3D stack | `node scripts/vendor-build.mjs --check` |
 | the profile wiring, or "is the running app current?" | `node scripts/check-profile.mjs` |
@@ -363,6 +439,7 @@ Two habits that are not optional:
 | [lib/settings.js](lib/settings.js) | the settings store (the file, the version counter, the reset refusal) |
 | [lib/config-page.js](lib/config-page.js) | BOTH settings pages' script; the markup carries which page it is |
 | [lib/config-page.html](lib/config-page.html), [lib/global-page.html](lib/global-page.html) | 模型参数 and 通用设置 |
+| [lib/picker-page.html](lib/picker-page.html), [lib/picker-page.js](lib/picker-page.js), [lib/model-picker.js](lib/model-picker.js) | 切换模型's page, and the ONE picker component it shares with the guide's ② 偏好模型 step |
 | [lib/client.core.js](lib/client.core.js), [lib/client.scene.js](lib/client.scene.js), [lib/client.menu.js](lib/client.menu.js), [lib/client.vendor.js](lib/client.vendor.js) | the DELIVERED chunks — generated, committed, never hand-edited |
 | [scripts/](scripts/) | the suites and the tools; [AGENTS.md](AGENTS.md) maps them |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the design in depth: why the split is where it is, the vendors, the traps |
@@ -408,7 +485,25 @@ Two habits that are not optional:
    the operator's real configuration.
 6. **The settings are TWO PAGES on two routes** (`/vrmpet3d/config` = 模型参数, `/vrmpet3d/global` = 通用设置). One
    script drives both, so a section that does not exist on the current page returns early rather than throwing — and
-   the launcher's self-test NAVIGATES the window between them and merges the two readouts key by key.
+   the launcher's self-test NAVIGATES the window between them and merges the two readouts key by key. **A THIRD page
+   of the same kind PICKS the model** (`/vrmpet3d/picker`, added 2026-10-13): its content is the guide's ② 偏好模型
+   step, both mount the ONE component `lib/model-picker.js`, and either pet's menu opens it with the `picker` action.
+   A switch shows a progress bar and LOCKS the picker until the model has arrived (operator, 2026-10-13:
+   「增加一个切换进度条，防止用户快速反复切换导致故障」), and both pets re-read the catalog when the store names a model
+   their held list cannot answer for — the fix for 「选中新导入的模型，都无法切换过去」 (`core.catalogMisses`).
+   The bar ends on the pet's OWN live report (`reportLive(id, surface)`, one slot per surface, written after EVERY
+   load) — not on the write, and not on the launcher's `--model-id`, which is why it used to outlive the model
+   (「明明模型已经切换好了，为什么还走了这么长时间的进度条」). `settingsStore.setWindowModel` is gone with that fix.
+   **The pages carry NO explanatory prose** (operator, 2026-10-13: 「删除掉所有设置面板中所有解释性的非正式UI的语言」):
+   descriptions, notes, hints and example placeholders are gone from all four, and the 使用中 marker is a badge on the
+   thumbnail rather than a line under it, so a tile in use is exactly as tall as one that is not. **The welcome step is
+   the ONE exception and it is deliberate** — 「欢迎页的内容不要删，那些很重要」: its 早期版本/性能风险 paragraph and the
+   warning stay, stylesheet rule included. And 完成 now CLOSES the window itself instead of revealing a 关闭窗口 button
+   (「点击完成后直接退出」): the write lands first, then `closeWindow()`, and the button appears only when the browser
+   refused (a tab that script did not open). **Before removing any
+   text, check `ensureStatusElements()` in [lib/config-page.js](lib/config-page.js)**: an earlier prose sweep deleted
+   eight elements the page WRITES to, the boot threw on the first `.textContent` of null, and the panel looked like it
+   had lost every setting.
 7. **A synthetic event that skips the gesture's own steps cannot fail the way a user does.** A pass was spent on a
    right-click swallowed by the pointer lock taken on the PRESS; the probe had been dispatching a bare
    `contextmenu`. Drive press → move → release, with real timers.

@@ -56,6 +56,11 @@ const CHECKS = [
     'the served scene refreshes the skin bounds on every press'],
   ['/vrmpet3d/window/lib/config-page.js', '拖动中', 'the served panel labels the pointer poses'],
   ['/vrmpet3d/window/lib/setup-page.js', 'setup-state', 'the served guide script writes its own state'],
+  // The model picker (2026-10-13): 切换模型's page and the ONE component it shares with the guide's ② 偏好模型 step.
+  ['/vrmpet3d/picker', 'model-picker.js', "the served app has 切换模型's page, built from the shared picker"],
+  ['/vrmpet3d/window/lib/model-picker.js', 'createModelPicker',
+    'and serves that component to both the picker page and the guide'],
+  ['/vrmpet3d/window/lib/setup-page.js', 'setup-model-picker', "with the guide's ② 偏好模型 step mounting it"],
   ['/vrmpet3d/global', 'settings-7', '通用设置 has the 其他 section (重新运行引导)'],
 ];
 

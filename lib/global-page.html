@@ -16,12 +16,11 @@
   <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
 </head>
 <body data-page="global">
-  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>通用设置</h1><p class="page-description">调整桌宠显示、互动、动作与说话方式。</p><div id="status" role="status" aria-live="polite">正在读取…</div></header>
+  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>通用设置</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
   <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">显示与外观</a><a href="#settings-1">视线</a><a href="#settings-2">鼠标互动与物理</a><a href="#settings-3">状态与动作</a><a href="#settings-4">碎碎念</a><a href="#settings-5">模型导入</a><a href="#settings-6">动作导入</a><a href="#settings-7">其他</a></nav>
   <main>
 <section class="settings-section" id="settings-0">
   <h2>显示与外观</h2>
-  <p class="section-description">分别调整应用内桌宠与独立悬浮窗的大小。</p>
   <div class="card">
 
     <div class="row">
@@ -64,7 +63,6 @@
       <label class="k" for="pref-both">调试模式</label>
       <label class="inline"><input type="checkbox" id="pref-both"> 独立桌宠与内置桌宠同时显示</label>
     </div>
-    <p class="hint">开启后两个桌宠会一起出现（对比两套渲染）；关闭后回到「自动」，即由宿主决定。</p>
     <div class="row">
       <label class="k" for="pref-hidden">视角</label>
       <button id="pref-view-reset">复位视角</button>
@@ -77,14 +75,13 @@
 
 <section class="settings-section" id="settings-1">
   <h2>视线</h2>
-  <p class="section-description">控制桌宠看向光标的响应范围与停看时间。</p>
   <div class="card" id="gaze-body">
     <div class="row"><label class="k" for="pref-look">看向光标</label><label class="inline"><input type="checkbox" id="pref-look"> 开启</label></div>
 
     <div class="row">
       <label class="k" for="pref-gaze-curve">曲率</label>
-      <input type="range" id="pref-gaze-curve" min="10" max="100" step="5">
-      <span class="value" id="pref-gaze-curve-value">0.40</span>
+      <input type="range" id="pref-gaze-curve" min="5" max="100" step="5">
+      <span class="value" id="pref-gaze-curve-value">0.10</span>
       <button id="pref-gaze-curve-reset" class="ghost">复位</button>
     </div>
     <div class="row">
@@ -106,20 +103,19 @@
 
 <section class="settings-section" id="settings-2">
   <h2>鼠标互动与物理</h2>
-  <p class="section-description">控制物理模拟，以及鼠标划过模型时的摆动。</p>
   <div class="card">
     <div class="row"><label class="k" for="pref-physics">弹簧骨物理</label><label class="inline"><input type="checkbox" id="pref-physics"> 开启</label></div>
 
     <div class="row">
       <label class="k" for="pref-wind-power">划过强度</label>
       <input type="range" id="pref-wind-power" min="0" max="200" step="5">
-      <span class="value" id="pref-wind-power-value">0.32</span>
+      <span class="value" id="pref-wind-power-value">1.00</span>
       <button id="pref-wind-power-reset" class="ghost">复位</button>
     </div>
     <div class="row">
       <label class="k" for="pref-wind-radius">作用范围</label>
       <input type="range" id="pref-wind-radius" min="0" max="100" step="5">
-      <span class="value" id="pref-wind-radius-value">45%</span>
+      <span class="value" id="pref-wind-radius-value">10%</span>
       <button id="pref-wind-radius-reset" class="ghost">复位</button>
     </div>
     <div class="row">
@@ -139,7 +135,6 @@
 
 <section class="settings-section" id="settings-3">
   <h2>状态与动作 <span id="motion-count"></span></h2>
-  <p class="section-description">按会话状态设置动作与头顶状态文字。</p>
   <div class="card">
     <div class="row"><label class="k" for="pref-motion">播放动画</label><label class="inline"><input type="checkbox" id="pref-motion"> 开启</label></div>
 
@@ -151,7 +146,6 @@
 
 <section class="settings-section" id="settings-4">
   <h2>碎碎念</h2>
-  <p class="section-description">设置台词来源、显示时长与说话频率。</p>
   <div class="card">
     <div class="row">
       <label class="k" for="pref-speech">开启</label>
@@ -172,6 +166,16 @@
       <input type="number" id="pref-speech-idle-min" min="0" max="3600" step="5"> –
       <input type="number" id="pref-speech-idle-max" min="0" max="3600" step="5"> 秒
       <button id="pref-speech-idle-reset" class="ghost">复位</button>
+    </div>
+    <!--
+      工作中 talks more often than 静息态 does (operator, 2026-10-13: 「工作中的嘀咕可以增加频率到12-36秒一次」), so it
+      gets its own window rather than a share of the idle one — the two are different remarks on different clocks.
+    -->
+    <div class="row">
+      <label class="k" for="pref-speech-work-min">工作嘀咕间隔</label>
+      <input type="number" id="pref-speech-work-min" min="0" max="3600" step="5"> –
+      <input type="number" id="pref-speech-work-max" min="0" max="3600" step="5"> 秒
+      <button id="pref-speech-work-reset" class="ghost">复位</button>
     </div>
     <div class="row">
       <label class="k" for="pref-speech-source">台词来源</label>
@@ -211,9 +215,8 @@
         <input type="password" id="pref-speech-api-key" spellcheck="false" autocomplete="off">
         <button id="pref-speech-key-clear" class="ghost">清除</button>
       </div>
-      <div class="row"><span class="k">人格（灌进 system prompt）</span></div>
-      <textarea id="pref-speech-persona" class="speech-persona" rows="3" spellcheck="false"
-        placeholder="例：你是一只住在屏幕角落的蓝色小肥鱼，说话简短、有点懒，偶尔吐槽。"></textarea>
+      <div class="row"><span class="k">人格</span></div>
+      <textarea id="pref-speech-persona" class="speech-persona" rows="3" spellcheck="false"></textarea>
       <div class="row">
         <label class="k" for="pref-speech-temperature">温度</label>
         <input type="range" id="pref-speech-temperature" min="0" max="20" step="1">
@@ -244,7 +247,6 @@
 
 <section class="settings-section" id="settings-5">
   <h2>模型导入</h2>
-  <p class="section-description">选择一个 <code>.vrm</code>（或 <code>.glb</code> / <code>.gltf</code>）文件。插件会把它<strong>复制到自己的目录</strong>，所以原文件之后再移动或删除都不影响；移除只删掉复制的那一份。</p>
   <div class="card">
     <div class="row">
       <span class="k">导入模型</span>
@@ -264,7 +266,6 @@
 
 <section class="settings-section" id="settings-6">
   <h2>动作导入</h2>
-  <p class="section-description">添加 VRMA 动作目录，再到状态与动作中分配。导入会把文件夹复制到插件自己的目录，原文件夹之后移动也不影响。</p>
   <div class="card">
     <div class="row">
       <span class="k">导入目录</span>
@@ -284,7 +285,6 @@
 
 <section class="settings-section" id="settings-7">
   <h2>其他</h2>
-  <p class="section-description">初次安装引导走完之后不会再出现；想重新看一遍，或者把配置从头过一遍，从这里打开。</p>
   <div class="card">
     <div class="row">
       <span class="k">初次安装引导</span>

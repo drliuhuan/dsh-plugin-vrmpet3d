@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vrmpet3d · 切换模型</title>
+  <meta name="color-scheme" content="dark light">
+  <!--
+    切换模型 — the model picker's own page (`/vrmpet3d/picker`), opened from either pet's right-click menu.
+
+    A FOURTH page beside 模型参数, 通用设置 and 初次安装引导, and opened exactly the same way: by the launcher on DSH
+    Desktop (a real window, with the preload bridge, so the file dialog is native) and as a browser tab anywhere
+    else (where the same drop target uploads the file's bytes instead).
+
+    Its CONTENT is `lib/model-picker.js` — the same component the guide's ② 偏好模型 step mounts, which is what the
+    operator asked for (「面板中和初次安装向导模型页完全一样」). Nothing about the grid is written here; this page
+    is a header, a mount point and a settings subscription.
+
+    The stylesheet is the shared `pages.css`.
+  -->
+  <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
+</head>
+<body data-page="picker">
+  <header class="page-header">
+    <div class="eyebrow">VRMPET3D · MODELS</div>
+    <h1>切换模型</h1>
+    <div id="status" role="status" aria-live="polite">正在读取…</div>
+  </header>
+
+  <main>
+    <section class="settings-section" id="settings-0">
+      <h2>模型</h2>
+      <div class="card" id="picker-mount"></div>
+    </section>
+  </main>
+
+  <!--
+    The bootstrap reporter, the same one the two settings pages carry: a page stuck on 正在读取… has to say
+    whether the script never ran, 404'd or threw, because all three look identical from the outside.
+  -->
+  <script>
+    (function () {
+      function show(message) {
+        var status = document.getElementById("status");
+        if (status) { status.textContent = message; status.className = "warn"; }
+      }
+      window.addEventListener("error", function (event) {
+        show("页面脚本出错：" + (event.message || event.type) + (event.filename ? " （" + event.filename + "）" : ""));
+      }, true);
+      window.setTimeout(function () {
+        if (window.__VRMPET3D_PICKER_STATE__) return;
+        if (!window.__VRMPET3D_MODEL_PICKER__) {
+          show("初始化卡住：model-picker.js 没有加载（检查 /vrmpet3d/window/lib/model-picker.js 是否 404）。");
+          return;
+        }
+        show("初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/models 与 /vrmpet3d/settings）。");
+      }, 2000);
+    })();
+  </script>
+  <script src="/vrmpet3d/window/lib/core.js"></script>
+  <script src="/vrmpet3d/window/lib/model-picker.js"></script>
+  <script src="/vrmpet3d/window/lib/picker-page.js"></script>
+</body>
+</html>

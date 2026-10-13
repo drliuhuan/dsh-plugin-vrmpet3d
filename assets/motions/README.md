@@ -102,9 +102,10 @@ The file beside the clips is what the host reads once per directory, and it decl
 ```json
 {
   "clips": {
-    "idle/coolIdleGlance.vrma": { "loop": true },
     "idle/idle.vrma": { "loop": true },
-    "idle/innocentStandIdle.vrma": { "loop": true }
+    "idle/hungry1.vrma": { "loop": false },
+    "attention/wave hand 1.vrma": { "loop": true },
+    "fail/fall down1.vrma": { "loop": false }
   },
   "stateFolders": {
     "resting": ["idle"],
@@ -114,16 +115,27 @@ The file beside the clips is what the host reads once per directory, and it decl
     "error": ["fail"],
     "offline": ["offline"]
   },
-  "defaults": {}
+  "defaults": {
+    "resting": ["idle/hungry1.vrma", "idle/idle.vrma"],
+    "waiting": ["attention/wave hand 1.vrma"]
+  }
 }
 ```
 
-* **`clips`** is the 循环 / 单次 mode of each clip. `loop: false` makes it a one-shot: it plays once and hands the
-  pose back, which is what a wave or a stretch wants. Every clip here is `true` today, and a clip named in no
-  entry defaults to `true` — the behaviour every build had before the flag existed. **Keys are the path relative to
-  this folder**, so a clip in a subfolder is declared `idle/name.vrma`: a key written without its folder silently
-  matches nothing, and the flag would not apply. A compressed clip's key is its **file** name, suffix and all
-  (`dance/极乐净土.vrma.br`).
+(The real file lists every clip the operator has configured, and `defaults` is his own mapping — see below.)
+
+* **`clips`** is the 循环 / 单次 mode of each clip. `loop: false` makes it a one-shot — a reaction, not a posture —
+  and the pack carries BOTH kinds: the idle postures loop, the hungry / stretch / look-around / touch-hair / fall-down
+  clips are one-shots. A clip named in no entry defaults to `true`, the behaviour every build had before the flag
+  existed. **Keys are the path relative to this folder**, so a clip in a subfolder is declared `idle/name.vrma`: a key
+  written without its folder silently matches nothing, and the flag would not apply. A compressed clip's key is its
+  **file** name, suffix and all (`dance/极乐净土.vrma.br`).
+
+  What the modes MEAN is the renderer's rule (operator, 2026-10-13), and it is one rule in one place
+  (`Scene.afterOneShotEnded`, [lib/scene.js](../../lib/scene.js)): when a reaction ends and the state has a looping
+  clip, the pet **chains into that loop** (drawn at random); when the state has no loop, the reaction **holds its
+  last frame**. A one-shot is never played as a loop. The mode is applied per PLAYBACK, so the same file can be a
+  posture in one state and a reaction in another, and a state's own preference wins over this block.
 * **`stateFolders`** is the state → folder mapping that keeps each picker short (see the table at the top). A value
   is a folder name **or a list of them**, so one state can be offered several folders
   (`"resting": ["idle", "dance"]`); a bare string is accepted because that is what a person hand-writes, and it is
@@ -134,10 +146,12 @@ The file beside the clips is what the host reads once per directory, and it decl
   that folds into `resting`), and values are **file names relative to THIS folder**, never ids: an id is minted
   per profile from the absolute path, so it does not travel, and this file does.
 
-  It ships **EMPTY** on purpose. An empty block means "no state draws a shipped clip unless the user ticks one",
-  which is what keeps the pack from changing anyone's pet behind their back; the operator decides the mapping,
-  and filling this block in needs no code change. A state the user has configured — including one they
-  deliberately cleared — always wins over a default here. See `core.motionMapWithDefaults`
+  It ships the OPERATOR'S OWN mapping since 2026-10-13 (「状态与动作：把目前的插件内的配置作为最终默认配置」): the clips
+  his profile had ticked per state, translated from his profile's ids to file names. A fresh install therefore
+  draws real clips with nothing to configure, and a state the user has configured — including one they
+  deliberately cleared — still wins over a default here. `verify-model.mjs` (group 5b) asserts the invariant that
+  matters for a hand-edited block: every name it declares resolves to a clip that exists, so a typo cannot ship as
+  a state that quietly draws nothing. See `core.motionMapWithDefaults`
   ([lib/core.js](../../lib/core.js)) for the three rules and why they are read-time only.
 
 ## How the pack reaches a user

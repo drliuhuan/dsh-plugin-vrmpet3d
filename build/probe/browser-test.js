@@ -139,15 +139,34 @@
     return isPlaced(orderA) && isPlaced(orderB);
   });
 
+  /**
+   * The idle's remaining motion, and the rotation that is NOT there any more.
+   *
+   * This used to read `pose.yaw` and require a spread — the whole-body micro-rotation. The operator removed it
+   * (「停用idle状态下微旋转」, 2026-10-13), so the check now asserts the opposite about the body (no yaw channel at
+   * all) and reads the two things the idle still does: BREATHING, and the chains' delayed follow-through, which
+   * is what a tail or a strand of hair answers. Both must still loop exactly after one period.
+   */
   check('idle motion moves the chains and returns to rest', function () {
     var poses = [];
     for (var i = 0; i < 9; i++) poses.push(C.idlePose(i * 0.5, 'resting', { periodSeconds: 4, swayAmplitude: 0.2 }));
-    var yaws = poses.map(function (p) { return p.yaw; });
-    var spread = Math.max.apply(null, yaws) - Math.min.apply(null, yaws);
-    var loops = Math.abs(C.idlePose(0, 'resting', { periodSeconds: 4, swayAmplitude: 0.2 }).yaw -
-      C.idlePose(4, 'resting', { periodSeconds: 4, swayAmplitude: 0.2 }).yaw);
-    report.idleSwing = { spread: +spread.toFixed(4), loopSeam: +loops.toFixed(12) };
-    return spread > 0.05 && loops < 1e-9;
+    var rotationKeys = ['yaw', 'roll', 'rotation', 'turn'];
+    var rotating = poses.filter(function (pose) {
+      return rotationKeys.some(function (key) { return key in pose; });
+    }).length;
+    var follows = poses.map(function (p) { return p.follow(2, 0.12); });
+    var breaths = poses.map(function (p) { return p.breathScale; });
+    var spread = Math.max.apply(null, follows) - Math.min.apply(null, follows);
+    var breathSpread = Math.max.apply(null, breaths) - Math.min.apply(null, breaths);
+    var loops = Math.abs(C.idlePose(0, 'resting', { periodSeconds: 4, swayAmplitude: 0.2 }).follow(2, 0.12) -
+      C.idlePose(4, 'resting', { periodSeconds: 4, swayAmplitude: 0.2 }).follow(2, 0.12));
+    report.idleSwing = {
+      rotatingPoses: rotating,
+      chainSpread: +spread.toFixed(4),
+      breathSpread: +breathSpread.toFixed(5),
+      loopSeam: +loops.toFixed(12),
+    };
+    return rotating === 0 && spread > 0.05 && breathSpread > 0.005 && loops < 1e-9;
   });
 
   check('every animation chain node exists', function () {

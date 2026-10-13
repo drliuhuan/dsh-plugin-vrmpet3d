@@ -8,7 +8,7 @@ It ships **one redistributable model** ([assets/models/SampleModel.vrm](assets/m
 default, so a fresh install shows a real pet with nothing to configure.
 
 ```
-no runtime dependencies · 9 verification suites · 2139 checks · works offline
+no runtime dependencies · 9 verification suites · 2238 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -20,14 +20,15 @@ retired MMD chapters.
 | | |
 |---|---|
 | **Models** | VRM 1.0 / 0.x, glTF/GLB — MToon materials, expressions, SpringBone and node constraints intact |
-| **Motions** | `.vrma`, assignable per state, looping or one-shot — a bundled pack ships in `assets/motions/` |
+| **Motions** | `.vrma`, per state and per clip 循环/单次 — a finished one-shot chains into the state's loop or holds its last frame, never loops itself — and the bundled pack ships in `assets/motions/` with the operator's own state→clip mapping as the default |
 | **Behaviour** | idle breathing, tail / ear / hair follow-through, pointer gaze, the cursor's draught across the pet, drag, throw, wall and ceiling bounce, landing |
 | **States** | `resting` `working` `waiting` `celebrate` `sleeping` `error` `greeting` `offline` `held` `falling` `landing`, all driven by DSH's own turn boundaries |
 | **Two surfaces** | the pet inside DSH's overlay, and a floating always-on-top, click-through window |
-| **One menu** | right-click either pet: 重置视角 / 重置大小 / 通用设置 / 当前模型参数设置 / 切换表面 / 重力 / 隐藏宠物 |
+| **One menu** | right-click either pet: 重置视角 / 重置大小 / 通用设置 / 切换模型 / 当前模型参数设置 / 切换表面 / 重力 / 隐藏宠物 |
 | **Two settings pages** | 模型参数 (per model) and 通用设置, over `/vrmpet3d/config` and `/vrmpet3d/global` |
+| **Model picker** | 切换模型, over `/vrmpet3d/picker`: drop a `.vrm`/`.glb` on the big target (or click it) and click a thumbnail to switch — a progress bar covers the load, the picker refuses input while it runs, and it is the SAME component the guide's 偏好模型 step mounts |
 | **First-run guide** | 欢迎 / 偏好模型 / 桌宠界面 / AI 碎碎念 / 模型动作 / 完成, over `/vrmpet3d/setup` — it appears once per start until it is finished |
-| **Voice** | the status prompt above the head, plus 碎碎念 from built-in tables, your own lines, or a model (a DSH provider or any OpenAI-compatible endpoint) |
+| **Voice** | the status prompt above the head, plus 碎碎念 from built-in tables (20 lines per state, Chinese and English, in the shipped character's voice), your own lines, or a model (a DSH provider or any OpenAI-compatible endpoint) |
 | **Parts** | your own 部位 rows — a label, the structures it owns, an emotion and a 碎碎念 — matched against the model's real bone/mesh names |
 | **Privacy** | turn boundaries and session counts only. Never session text, tool arguments or attachments |
 | **Dependencies** | none at runtime; the 3D stack is one committed chunk ([lib/client.vendor.js](lib/client.vendor.js)) |
@@ -127,7 +128,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2139 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
+**9 verification suites, 2238 checks.** The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
 
 ```bash
@@ -136,12 +137,12 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1042 — state machine, and the nine motion states |
-| `node scripts/verify-model.mjs` | 694 — model catalog, the import stores and the first-run guide's state |
+| `node scripts/verify.mjs` | 1089 — state machine, and the nine motion states |
+| `node scripts/verify-model.mjs` | 738 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
-| `node scripts/verify-browser.mjs --page client-test` | 93 — the widget, the menu, the desktop page, the guide, its trigger and a posed model's part hit test |
-| `node scripts/verify-desktop.mjs` | 256 — the pet's own window, borrowed Electron and all, plus the three pages' scripts |
+| `node scripts/verify-browser.mjs --page client-test` | 97 — the widget, the menu, the desktop page, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar and a posed model's part hit test |
+| `node scripts/verify-desktop.mjs` | 260 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
 | `node scripts/check-docs.mjs` | documented paths, commands and counts match reality |

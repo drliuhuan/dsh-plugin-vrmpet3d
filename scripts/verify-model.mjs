@@ -723,7 +723,9 @@ group('5. motion catalog');
   // every clip did before the flag existed.
   const bare = plugin.buildMotionCatalog({ motionDirs: [manifestRoot] });
   eq(userMotions(bare.motions).length, 3, 'the manifest sandbox lists its three clips');
-  ok(bare.motions.every(motion => motion.loop === true),
+  // The SANDBOX's clips, not every clip in the catalog: the bundled pack now declares one-shots of its own
+  // (2026-10-13), and this assertion is about a directory with no manifest beside it.
+  ok(userMotions(bare.motions).every(motion => motion.loop === true),
     'with no manifest every clip loops, which is the behaviour that shipped before the flag');
   eq(generator.MOTION_MANIFEST_FILE, plugin.MOTION_MANIFEST_FILE,
     'the fixture generator writes the manifest under the name the host reads');
@@ -802,8 +804,18 @@ group('5b. the bundled motion pack');
     const entry = bundled.files.get(motion.id);
     ok(Boolean(entry) && plugin.isInside(plugin.bundledMotionDir(), entry.absolute),
       `${motion.name} resolves to a file inside the bundled motion directory`);
-    eq(motion.loop, true, `${motion.name} loops, which is what a 待机 clip is for`);
+    /**
+     * Every clip declares a play mode, and the pack holds BOTH kinds.
+     *
+     * This used to assert that every bundled clip loops — true while the pack was idle postures only. It is not
+     * true any more, and must not be: the operator's pack carries non-looping REACTIONS beside the looping
+     * postures (2026-10-13), and the whole one-shot rule (a finished reaction chains into a loop, or holds its
+     * last frame when there is none) has no subject without them.
+     */
+    eq(typeof motion.loop, 'boolean', `${motion.name} declares a play mode`);
   }
+  ok(pack.some(motion => motion.loop === true) && pack.some(motion => motion.loop === false),
+    'and the pack carries BOTH looping postures and one-shot reactions, so the chain rule has something to do');
   eq(new Set(pack.map(motion => motion.id)).size, pack.length,
     'and the pack is not listed twice');
   // Naming the bundled directory as a user directory must not duplicate it under a second id.
@@ -983,6 +995,26 @@ group('5b. the bundled motion pack');
     'and it never overrides a state the user has configured');
   eq(JSON.stringify(plugin.bundledMotionDefaults()), JSON.stringify(packManifest.defaults),
     'the shipped defaults come from the pack\'s own manifest, so a mapping is data and not code');
+  /**
+   * And every name it declares is a clip that EXISTS in the pack.
+   *
+   * The mapping is data the operator edits by hand (2026-10-13: 「状态与动作：把目前的插件内的配置作为最终默认配置」),
+   * so the failure worth catching is a TYPO: a default that names nothing is silently ignored, and that state
+   * would ship empty while the manifest still looked right. An invariant rather than a list: which clips belong
+   * to which state is the operator's to change, and the suite's job is that the mapping WORKS.
+   */
+  const declaredDefaults = plugin.bundledMotionDefaults();
+  ok(Object.keys(declaredDefaults).length > 0,
+    `a fresh profile gets the pack's own state mapping (${Object.keys(declaredDefaults).join(', ')})`);
+  const namesInPack = new Set(bundled.motions.filter(motion => motion.source === 'bundled').map(motion => motion.name));
+  const deadNames = [];
+  Object.keys(declaredDefaults).forEach((state) => {
+    declaredDefaults[state].forEach((name) => { if (!namesInPack.has(name)) deadNames.push(state + ' -> ' + name); });
+  });
+  eq(deadNames.join(', '), '', 'and every clip it names is a real clip in the pack');
+  eq(Object.keys(core.motionMapWithDefaults({}, declaredDefaults, bundled.motions)).length,
+    Object.keys(declaredDefaults).length,
+    'with every state resolving through the catalog, so nothing ships as a mapping that draws nothing');
 }
 
 // ---------------------------------------------------------------------------
@@ -1271,7 +1303,10 @@ group('8. registered routes and both catalogs over HTTP');
   eq(routes.map(route => `${route.kind} ${route.path}`).sort().join(' | '),
     'exact /vrmpet3d/catalog | exact /vrmpet3d/config | exact /vrmpet3d/desktop | exact /vrmpet3d/global'
       + ' | exact /vrmpet3d/llm'
-      + ' | exact /vrmpet3d/model-info | exact /vrmpet3d/models | exact /vrmpet3d/motions | exact /vrmpet3d/preview'
+      + ' | exact /vrmpet3d/model-info | exact /vrmpet3d/model-thumbnail | exact /vrmpet3d/models'
+      + ' | exact /vrmpet3d/motions'
+      + ' | exact /vrmpet3d/picker'
+      + ' | exact /vrmpet3d/preview'
       + ' | exact /vrmpet3d/say'
       + ' | exact /vrmpet3d/settings'
       + ' | exact /vrmpet3d/setup | exact /vrmpet3d/setup-state'
@@ -1279,7 +1314,7 @@ group('8. registered routes and both catalogs over HTTP');
       + ' | exact /vrmpet3d/whale'
       + ' | exact /vrmpet3d/window'
       + ' | prefix /vrmpet3d/asset | prefix /vrmpet3d/motion | prefix /vrmpet3d/window/lib',
-    'apply registers exactly the documented routes, THREE pages now (模型参数, 通用设置 and the first-run guide) with the guide\'s own state, both windows, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
+    'apply registers exactly the documented routes, FOUR pages now (模型参数, 通用设置, the first-run guide and the model picker) with the guide\'s own state, both windows, the thumbnail a picker shows, the whale mark and the AI pair included — and nothing for the application lifetime, which the menus no longer offer');
   // The window's source prefix must NOT end in a slash: the server matches a prefix with
   // `pathname === prefix || pathname.startsWith(prefix + '/')`, so a trailing slash there makes
   // every real request miss and 404s the whole page. Asserted as a property, not just as the
@@ -1581,15 +1616,37 @@ group('8. registered routes and both catalogs over HTTP');
    */
   const expectedType = name => sourceTypes[extname(name).toLowerCase()]
     ?? (name.endsWith('.js') ? 'text/javascript; charset=utf-8' : null);
-  ok(sourceNames.length === 9 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js')
-    && sourceNames.includes('setup-page.js'),
-    'the whitelist being checked is the route\'s own (nine names, the stylesheet and both page scripts among them)');
+  ok(sourceNames.length === 11 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js')
+    && sourceNames.includes('setup-page.js') && sourceNames.includes('model-picker.js')
+    && sourceNames.includes('picker-page.js'),
+    'the whitelist being checked is the route\'s own (eleven names, the stylesheet, the three page scripts and the shared model picker among them)');
   for (const name of sourceNames) {
     const source = await server.call(`/vrmpet3d/window/lib/${name}`);
     eq(source.headers['content-type'], expectedType(name),
       `the page source ${name} is served with the type a browser will accept for it`);
   }
   eq(sourceTypes['.css'], 'text/css; charset=utf-8', 'and the stylesheet type is CSS, not the route\'s default');
+
+  /**
+   * The FOURTH page, and the component it shares with the guide (added 2026-10-13).
+   *
+   * 切换模型 is a page of its own rather than a panel inside the pet, and the operator asked for its content to
+   * BE the guide's 偏好模型 step (「面板中和初次安装向导模型页完全一样」). Both facts are asserted here: the route
+   * serves a page, and that page plus the guide both load the ONE component instead of each carrying a grid.
+   * The guide's typed-path box is asserted GONE for the same reason it was removed — a window the launcher
+   * opened has a native dialog, and everywhere else the same drop target takes the file's bytes.
+   */
+  const pickerPage = await server.call('/vrmpet3d/picker');
+  eq(pickerPage.status, 200, 'the model picker has a page of its own');
+  const pickerHtml = pickerPage.body.toString('utf8');
+  ok(pickerHtml.includes('/vrmpet3d/window/lib/model-picker.js') && pickerHtml.includes('/vrmpet3d/window/lib/picker-page.js'),
+    'which loads the shared picker component and its own thin script');
+  ok(pickerHtml.includes('id="picker-mount"'), 'and gives the component a mount point');
+  const setupHtml = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
+  ok(setupHtml.includes('id="setup-model-picker"') && setupHtml.includes('/vrmpet3d/window/lib/model-picker.js'),
+    "and the guide's 偏好模型 step mounts the SAME component");
+  ok(!/id="setup-model-(pick|manual|manual-row|path|add|list|note|count)"/.test(setupHtml),
+    'with the old 选择模型文件 button and 手动输入路径 box gone, since the component owns both ways in');
 
   response = await server.call('/vrmpet3d/window/lib/secrets.env');
   eq(response.status, 404, 'a name outside the whitelist is refused');
@@ -1732,6 +1789,18 @@ group('10. imported model directories over HTTP');
   eq(state.payload.importedDirs.length, 0, 'a first run has no imported directories');
   eq(state.payload.modelCount, 2, 'the count covers the configured directory and the built-in model');
   eq(state.payload.catalogFile, resolve(scratch), 'the route names the file it persists to');
+  /**
+   * The READ side carries the catalogue, not only the imported lists.
+   *
+   * This pins a defect the operator found on 2026-10-13 (「现有模型没有显示自带的内置模型」): the model picker draws its
+   * grid from ONE request to this route, and the GET reply omitted `models`, so the grid came up empty on a fresh
+   * profile while `/vrmpet3d/catalog` listed the built-in model. The browser probe's stub happened to include the
+   * field, which is exactly why the real reply is pinned HERE — and pinned to the same shape the POST side answers
+   * with, because the picker adopts that reply after an import.
+   */
+  ok(Array.isArray(state.payload.models) && state.payload.models.some(model => model.source === 'bundled'),
+    'and the READ side carries the catalogue, built-in model included, so a picker draws its grid from one request');
+  eq(state.payload.models.length, state.payload.modelCount, 'with that list and the count agreeing');
 
   // Adding a directory is live immediately: the reply carries the rebuilt catalog,
   // so the panel does not have to race a second request against the rebuild.
@@ -1830,6 +1899,63 @@ group('10. imported model directories over HTTP');
   eq(removedFile.payload.importedModels.length, 0, 'removing the import clears the record');
   ok(!existsSync(fileEntry.file), 'and DELETES the copy');
   ok(existsSync(sourceModel), "while the user's own file is left exactly where it was");
+
+  /**
+   * AND THE UPLOAD: the same import, from BYTES.
+   *
+   * Operator, 2026-10-13: the guide's 偏好模型 step and the 切换模型 panel must both take a model the user DROPS
+   * on them (「改成一个很大的选择模型文件或者拖入模型」). A dropped file is only ever a `File`, so the page uploads
+   * it — and this is the branch that writes it. What is asserted is that it lands in the SAME store as a path
+   * import (the file import above), with the same refusals, and that a malformed JSON body still takes the old
+   * path rather than being swallowed by the new one.
+   */
+  const uploadBytes = Buffer.from('VRM uploaded payload, not a real avatar', 'utf8');
+  const uploaded = await request('/vrmpet3d/models?file=dropped.vrm', {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: uploadBytes,
+  });
+  eq(uploaded.status, 200, 'a dropped model is imported from its bytes');
+  const uploadEntry = (uploaded.payload?.importedModels ?? []).find(entry => entry.name === 'dropped.vrm');
+  ok(Boolean(uploadEntry), 'the reply records the uploaded file');
+  ok(String(uploadEntry?.file).startsWith(plugin.importedModelsDir()),
+    `the bytes were written into the plugin's own storage (${uploadEntry?.file})`);
+  ok(existsSync(uploadEntry.file) && readFileSync(uploadEntry.file).equals(uploadBytes),
+    'and the copy is byte-for-byte what was uploaded');
+  ok(uploaded.payload.models.some(model => model.id && model.name === 'dropped.vrm'),
+    'the rebuilt catalogue lists it, so the picker can show it and switch to it');
+  const uploadedAgain = await request('/vrmpet3d/models?file=dropped.vrm', {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: uploadBytes,
+  });
+  eq(uploadedAgain.payload.importedModels.filter(entry => entry.name === 'dropped.vrm').length, 1,
+    'uploading the same bytes twice records the copy once instead of a second copy');
+  const badUpload = await request('/vrmpet3d/models?file=notes.txt', {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: uploadBytes,
+  });
+  eq(badUpload.status, 400, 'an upload that is not a model is refused');
+  ok(/not a model/.test(badUpload.payload?.error ?? ''), 'and that refusal says what it expected too');
+  const emptyUpload = await request('/vrmpet3d/models?file=empty.vrm', {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: Buffer.alloc(0),
+  });
+  eq(emptyUpload.status, 400, 'an empty upload is refused');
+  ok(/empty/.test(emptyUpload.payload?.error ?? ''), 'and names emptiness as the reason');
+  // The JSON path is still the JSON path: a query-less POST with a JSON type is parsed as JSON, and a
+  // JSON body that is not a shape this route knows is refused by the OLD message.
+  const jsonStillJson = await post({});
+  eq(jsonStillJson.status, 400, 'a JSON POST is still read as JSON even though an upload branch exists');
+  ok(/expected \{addFile\}/.test(jsonStillJson.payload?.error ?? ''),
+    'and it keeps the refusal that names the JSON shapes');
+  ok(existsSync(uploadEntry.file), 'none of those refusals removed the uploaded copy');
+  const removedUpload = await post({ removeFile: uploadEntry.file });
+  eq(removedUpload.payload.importedModels.filter(entry => entry.name === 'dropped.vrm').length, 0,
+    'removing it goes through the same FILE verb as a path import');
+  ok(!existsSync(uploadEntry.file), 'and deletes the uploaded copy');
 
   // Disposal takes the route with it, like every other route.
   for (const dispose of effects) dispose();
@@ -2104,6 +2230,33 @@ group('12. what a model contains, over real HTTP (the settings window reads this
   // Cached by (path, size, mtime): the second request must answer the same thing.
   const again = await server.json(`/vrmpet3d/model-info?m=${encodeURIComponent(vrmId)}`);
   eq(again.payload.expressions.length, info.payload.expressions.length, 'the answer is cached and stable');
+
+  /**
+   * And the THUMBNAIL the model picker draws beside each name (added 2026-10-13).
+   *
+   * The picker is a GRID of `<img src>` tiles, so the picture comes from a route of its own rather than from the
+   * catalogue — the same split as the asset route, and for the same reason: one image per tile on screen instead
+   * of every avatar's thumbnail in one JSON reply. What is asserted is that the bytes handed out are the file's
+   * OWN embedded thumbnail (read back through `thumbnailImage`, the helper the route itself uses, so this is a
+   * round trip and not a second implementation), and that the two "there is no thumbnail here" cases — a VRM
+   * with no meta image, and a file that is not a GLB at all — are a 404 with a reason rather than an empty image
+   * or a 500, because the page draws its own placeholder for them.
+   */
+  const bundled = catalog.payload.models.find((model) => model.source === 'bundled');
+  ok(Boolean(bundled), `the built-in model is catalogued (${bundled && bundled.id})`);
+  const thumbnail = await server.call(`/vrmpet3d/model-thumbnail?m=${encodeURIComponent(bundled.id)}`);
+  eq(thumbnail.status, 200, 'the thumbnail route answers for the built-in model');
+  eq(thumbnail.headers['content-type'], 'image/png', 'and serves the image with its own type');
+  const expectedThumb = vrmInfo.thumbnailImage(vrmInfo.readGlb(join(ROOT, 'assets', 'models', 'SampleModel.vrm')));
+  ok(Boolean(expectedThumb) && thumbnail.body.equals(expectedThumb.bytes),
+    `and the bytes are the file's OWN thumbnail (${expectedThumb ? `${expectedThumb.width}x${expectedThumb.height}` : 'none found'})`);
+  const noThumbnail = await server.call(`/vrmpet3d/model-thumbnail?m=${encodeURIComponent(vrmId)}`);
+  eq(noThumbnail.status, 404, 'a VRM that carries no thumbnail answers 404, not an empty image');
+  ok(/no thumbnail/.test(noThumbnail.body.toString('utf8')), 'and says which case it is');
+  const unknownThumbnail = await server.call('/vrmpet3d/model-thumbnail?m=nope');
+  eq(unknownThumbnail.status, 404, 'an unknown model id is a 404, like every other id route');
+  const brokenThumbnail = await server.call(`/vrmpet3d/model-thumbnail?m=${encodeURIComponent(notGlbId)}`);
+  eq(brokenThumbnail.status, 404, 'and a file that is not a GLB is a 404 rather than a crash');
 
   /**
    * The described model lives in MEMORY, so opening the settings window does not re-parse the file
@@ -2486,6 +2639,45 @@ group('13. the AI 碎碎念 route: one call, made here, from nothing but the set
   await json('/vrmpet3d/say?state=working&part=chest');
   eq(seen[seen.length - 1].body.messages[1].content, '我自己的胸部提示词',
     'while a prompt the user writes replaces the shipped one');
+
+  /**
+   * And the SHIPPED persona is what an EMPTY persona box means, asserted ON THE WIRE.
+   *
+   * The operator wrote the character on 2026-10-13 and asked for it to be the DEFAULT (「设置碎碎念的默认人格为如下
+   * 内容」): `core.cleanSpeechAi` is where an empty box becomes the shipped prose, so the host needs no second
+   * fallback — and this is what proves the pair holds end to end rather than only in the cleaner. Only the FIRST
+   * line is compared, because the persona is prose and its paragraphs are the core suite's business.
+   */
+  const clearedPersona = await json('/vrmpet3d/settings', 'POST', {
+    preferences: {
+      speech: {
+        source: 'ai',
+        ai: { provider: 'custom', baseUrl: providerBase, model: 'stub-model', apiKey: 'k-secret-123', persona: '' },
+      },
+    },
+  });
+  eq(clearedPersona.status, 200, 'an emptied persona box is written through the host store');
+  eq(clearedPersona.payload.preferences.speech.ai.persona, core.DEFAULT_SPEECH_PERSONA,
+    'which the store reports as the SHIPPED persona, not as nothing');
+  const callsBefore = seen.length;
+  answer = '米饭！';
+  const shippedPersona = await json('/vrmpet3d/say?state=done');
+  eq(shippedPersona.status, 200, 'and the pet still answers');
+  eq(seen.length, callsBefore + 1, 'with one more call to the provider');
+  ok(seen[seen.length - 1].body.messages[0].content
+    .startsWith(core.DEFAULT_SPEECH_PERSONA.slice(0, core.DEFAULT_SPEECH_PERSONA.indexOf(String.fromCharCode(10)))),
+  'whose system message opens with the shipped character');
+  ok(seen[seen.length - 1].body.messages[0].content.indexOf('不要提到代码、文件名、路径') !== -1,
+    'followed by the same fixed rules as any other request');
+  // Put the user's own persona back, so the assertions after this one see the profile they were written against.
+  await json('/vrmpet3d/settings', 'POST', {
+    preferences: {
+      speech: {
+        source: 'ai',
+        ai: { provider: 'custom', baseUrl: providerBase, model: 'stub-model', apiKey: 'k-secret-123', persona: '你是一条蓝色小肥鱼' },
+      },
+    },
+  });
   await json('/vrmpet3d/settings', 'POST', {
     preferences: {
       parts: {
@@ -2786,6 +2978,17 @@ group('13c. the rename migrates the store instead of resetting it (2026-10-12)')
   mkdirSync(freshDir, { recursive: true });
   const fresh = new SettingsStore({ file: join(freshDir, 'vrmpet3d-settings.json') });
   eq(authoredWeight(fresh.snapshot().preferences), 0, 'a profile with no settings file at all starts at defaults');
+  /**
+   * …and the shipped PERSONA does not count as authored, which is what keeps `update`'s refusal alive.
+   *
+   * The character ships non-empty since 2026-10-13, so counting merely "a persona exists" would score every profile
+   * above zero and `wipesAuthored` could never be true: the guard that exists to stop a half-booted settings page
+   * from overwriting everything the user wrote would still read as code and never fire. These two are the pair that
+   * catches that — a fresh profile, persona and all, weighs 0; a persona the user wrote weighs 1.
+   */
+  eq(authoredWeight(core.cleanPreferences({})), 0, 'the shipped persona is not something the user authored');
+  eq(authoredWeight(core.cleanPreferences({ speech: { ai: { persona: '我是猫' } } })), 1,
+    'while a persona they wrote is theirs, and counts');
 
   rmSync(legacyDir, { recursive: true, force: true });
   rmSync(freshDir, { recursive: true, force: true });

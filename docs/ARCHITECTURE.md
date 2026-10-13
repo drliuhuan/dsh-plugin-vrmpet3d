@@ -475,12 +475,30 @@ ordinary window for them (resizable, focusable, not always-on-top - every proper
 form must not have, which is why the two share the launcher and nothing else). Anywhere else the same pages open
 as browser tabs, and that is a first-class way to use them rather than a fallback.
 
-**These two pages are the ONLY settings surfaces — the pet's right-click is a MENU, not a third one.** Until
+**A third page of the same kind PICKS the model.** 切换模型 ({{bt}}/vrmpet3d/picker{{bt}}, added 2026-10-13) is opened the
+same two ways and by the same launcher action, and it is a page rather than a panel inside the pet for one reason:
+its content IS the first-run guide's ② 偏好模型 step (「面板中和初次安装向导模型页完全一样」), so one component
+({{bt}}lib/model-picker.js{{bt}}) sits behind both mounts — a big choose-or-drop target over a grid of the models'
+own thumbnails, served by {{bt}}/vrmpet3d/model-thumbnail?m=<id>{{bt}}.
+Every switch is covered by a PROGRESS BAR, and the picker refuses input while one is in flight (operator,
+2026-10-13: 「增加一个切换进度条，防止用户快速反复切换导致故障」): a VRM parse is seconds long, so an impatient second
+click would otherwise start a second parse on the same skeleton. The bar ends when a SURFACE reports the model as
+loaded (the store's {{bt}}live{{bt}} report) rather than when the write lands, and it has its own 300 ms clock because
+a page only sees a snapshot when the store's VERSION moves — which its own write already did. That report is
+{{bt}}reportLive(id, surface){{bt}}: ONE SLOT PER SURFACE, written by each pet after every load (not once at boot, which
+is what made the bar outlive the model), and no longer stamped by the host from the launcher's {{bt}}--model-id{{bt}} —
+that value is the model the window STARTED with, so re-stamping it on every settings poll overwrote the honest
+report with a stale one. A dropped file is a `File` and nothing else,
+so that route has a second way in beside the launcher's dialog: the page uploads the bytes
+({{bt}}POST /vrmpet3d/models?file=<name>{{bt}}) and the host writes them into the same store a path import uses.
+
+**These settings pages are the ONLY settings surfaces — the pet's right-click is a MENU, not a third one.** Until
 2026-10-12 each pet also grew a settings PANEL of its own (and before that, two hand-rolled ones), which is how
 "where do I turn physics off" came to depend on which pet you were looking at. That panel is deleted, and
 {{bt}}lib/menu.js{{bt}} — one file, both pets, one order — replaced it. The menu is about the PET
-(its view, its size, its 重力, which surface shows it, and whether it is on screen); every PREFERENCE
-lives on one of these two pages. The one preference the deleted panel owned with no other home — 空闲休眠
+(its view, its size, WHICH model it is wearing, its 重力, which surface shows it, and whether it is on screen);
+every PREFERENCE lives on one of these two pages. 切换模型 is the one row that is not a setting: it decides which
+model the other pages are ABOUT, which is why it is a page of its own rather than a row inside 当前模型参数设置. The one preference the deleted panel owned with no other home — 空闲休眠
 ({{bt}}sleepAfterMs{{bt}}) — was given a row on 通用设置 rather than left unreachable.
 
 Two entries are the ones a later pass is most likely to "unify" wrongly, and they are not the same kind of thing:
@@ -587,12 +605,14 @@ from the feature not working.
 `assets/models` is for models, so the operator's own clips are offered from the first scan with
 `source: 'bundled'` instead of waiting for anyone to import a directory. `buildMotionCatalog` therefore builds
 `{ root, source }` pairs rather than bare paths, and `/vrmpet3d/motions` reports `bundledDir` beside
-**A third page carries the first-run guide** (`/vrmpet3d/setup`, `lib/setup-page.html` + `lib/setup-page.js`), and it
+**A fourth page carries the first-run guide** (`/vrmpet3d/setup`, `lib/setup-page.html` + `lib/setup-page.js`; the
+third of the settings kind is the model picker above), and it
 is the one page the plugin OFFERS rather than waits to be asked for: the in-app pet reads `GET /vrmpet3d/setup-state`
 after its own boot and opens it at most once per activation, with `completed` in the profile
 (`vrmpet3d-setup.json`) and `prompted` in the host's memory. Its two imports go through the same routes the panels
 use and they COPY (`importModelFile` / `importMotionFolder`), which is what makes the folder they came from
-irrelevant afterwards.
+irrelevant afterwards — and since 2026-10-13 its MODEL half is not this page's own markup at all: the step mounts
+`lib/model-picker.js`, the component 切换模型 is built from, so the wizard and the menu cannot drift apart.
 
 `motionDirs` — the parallel of the model catalogue's own key. A user directory that names the bundled one is not
 scanned twice; a user directory holding a clip with the same relative name is still listed, and the two are told
@@ -666,18 +686,42 @@ contracts rather than conveniences:
   the first run of the new build. `core.motionIdsFor`, `motionIdList` (the set that must be preloaded) and
   `setMotionIds` (the pure write both surfaces share) all read the old shape too.
 
-**`loop` is a property of the CLIP, carried by the catalog.** A motion directory may hold a
-`vrmpet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }` (and, beside it, the
-`defaults` block described above); `buildMotionCatalog`
-reads it once per directory and every entry gains `loop` (absent means `true`, which is what every clip did
-before the flag existed). The page passes it to `scene.loadMotion(id, bytes, { loop })`, which is the only
-place that can turn it into `LoopRepeat, Infinity` or `LoopOnce`. A one-shot ends by **handing the pose
-back**: `Scene.motionFinished` checks the action's own clock as well as the mixer's `finished` event — the
-two signals are the mixer's account and the action's, so neither is interchangeable, and the removed MMD
-path was what first made that visible (it drove the mixer from inside `updateWithMixer`) — and
-`pickSpent` latches the state so the clip does not restart on the next frame. Without that latch a one-shot
-becomes a loop with extra steps; without the clock check the pet freezes in the clip's last frame, which is
-the failure the flag exists to prevent.
+**`loop` is a property of the CLIP in the catalog, and of the PLAYBACK in the renderer.** A motion directory may
+hold a `vrmpet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }` (and, beside it,
+the `defaults` block that now ships the operator's own state→clip mapping); `buildMotionCatalog` reads it once per
+directory and every entry gains `loop` (absent means `true`, which is what every clip did before the flag
+existed).
+
+The MODE ITSELF is decided when a playback starts, from `Scene.motionLoops(id, state)`: the catalog's declaration,
+then the user's per-state per-clip override, most specific first. Not at build time — a clip can be a posture in one
+state and a reaction in another, and a mode baked in at build time was wrong for whichever state came second (the
+scheduler classified a clip as a one-shot while the action itself looped for ever, so it never finished and the
+reaction window never re-armed). Applying it per playback is also what makes 「严禁单次动作循环播放」 structural: a clip
+that is a one-shot in this state IS `LoopOnce`, whatever the file says.
+
+What happens when one ENDS is one rule in one place (`Scene.afterOneShotEnded`, operator 2026-10-13
+「单次动作结束后，必须衔接循环动作…如果没有循环动作…停止在最后一帧」):
+
+* the state has a looping clip → draw one **at random** and start it: the loop is the posture the pet wears between
+  reactions, so a reaction hands over to it rather than dropping to the procedural idle;
+* the state has none → **hold the last frame** (`clampWhenFinished` plus a `held` latch on the playback), because
+  the operator asked for the last frame and the idle would quietly walk away from the pose the clip struck.
+
+A due reaction fires BEFORE the base clip is reconsidered in that frame's decision, which is what lets it interrupt
+a loop that has not finished (「单次动作可以在循环动作未完成时触发」). Both draws go through the scene's own injected
+random, so the order is not fixed (「循环动作和单次动作的触发都是随机的」) and a suite can pin either end.
+
+`Scene.motionFinished` checks the action's own clock as well as the mixer's `finished` event — the two signals are
+the mixer's account and the action's, so neither is interchangeable, and the removed MMD path was what first made
+that visible (it drove the mixer from inside `updateWithMixer`); `pickSpent` latches the state so a one-shot does not
+restart on the next frame.
+
+**A clip that carries its own expression stops the blink.** `clipDrivesFace` asks whether the built clip animates
+any morph target, and `advanceExpressions` treats that exactly like a user-assigned expression: the blink timer is
+the same eyelid morphs, so blinking over such a clip is the clip's face dropping and coming back (operator,
+2026-10-13: 「当动作本身带有表情的时候，停用眨眼」). `blinkState().paused` reports all four sources, because a readout that
+disagreed with the gate is how "why is nothing blinking" becomes a mystery. Every clip in the bundled pack is
+bone-only, so nothing about the shipped pack changes.
 
 **A generated VRMA is portable between models when it respects two things.** `scripts/make-vrma-fixtures.mjs`
 emits `vrmpet3d-wave.vrma` as a fixture (2.0 s, 7 channels, 61 keys) and `verify-motion.mjs` plays it on a real
@@ -809,7 +853,7 @@ Two independent mistakes had to line up, so both are closed:
 
 * the page's source prefix was registered **with a trailing slash**, and this server matches a
   prefix as `pathname === prefix || pathname.startsWith(prefix + '/')`, so every source 404'd.
-  `verify-model.mjs` now requests the page, all six sources, a non-whitelisted name and a traversal
+  `verify-model.mjs` now requests the page, all eleven sources, a non-whitelisted name and a traversal
   attempt over real HTTP, and asserts the property that no prefix route ends in a slash — the
   requests the desktop suite never made, because it serves the page itself;
 * "the process is alive" was being reported as success. The launcher prints one machine-readable
@@ -832,7 +876,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2139 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
+Nine suites, 2238 checks — the `mmd` suite that used to make it ten went with MMD support on 2026-10-12, and every
 figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs` recomputes them. The
 design rule is that **each defect found during
 development got a test that would have caught it**, and several tests carry a
@@ -875,7 +919,7 @@ since 2026-10-12 it is kept on disk rather than wired in — together with
 fixture): both feed only a format `Scene.loadMotion` now refuses, so only the VRMA half of this paragraph
 still describes this build.
 
-The **2139** the docs quote is the sum of the suites that print an assertion count,
+The **2238** the docs quote is the sum of the suites that print an assertion count,
 plus one for each suite that reports a verdict or a hash instead (`load`, `vendor`).
 `docs` deliberately excludes its own assertion count: including it is circular,
 because that count depends on whether the documented total matched, so a single run

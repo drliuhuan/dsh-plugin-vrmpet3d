@@ -9,8 +9,10 @@
     The first-run guide: five screens and a finish, on its own route (`/vrmpet3d/setup`).
 
     A THIRD page beside 模型参数 and 通用设置, opened the same way — by the launcher on DSH Desktop (a real window,
-    with the preload bridge, so a file picker is native) and as a browser tab anywhere else, which is why a typed
-    path sits under every picker.
+    with the preload bridge, so a file picker is native) and as a browser tab anywhere else. The MODEL step is the
+    shared picker (`lib/model-picker.js`), whose drop target covers the browser-tab case by uploading bytes; the
+    action step's folder picker still carries a typed-path row for the same reason (a folder cannot be dropped
+    into a form field, and only the launcher can open a dialog).
 
     It is deliberately NOT part of 通用设置: the operator asked for a guide that appears on its own
     (「安装成功后，彻底配置完之前，每次插件运行都会弹配置引导」), and a first-run page that the user has to go looking
@@ -31,12 +33,12 @@
       gap: 12px; padding: 12px 24px; border-top: 1px solid var(--line, #333a4d); background: inherit; backdrop-filter: blur(6px); }
     .setup-nav-right { display: flex; gap: 8px; }
     .setup-nav button { min-width: 96px; }
+    /* The welcome step's risk note. It is the ONE piece of prose this guide keeps on purpose (operator,
+       2026-10-13: 「欢迎页的内容不要删，那些很重要」): everything else on these pages lost its explanation. */
     .setup-warning { border-left: 3px solid var(--warn, #e0a75e); padding-left: 12px; }
-    .setup-warning li { margin: 4px 0; }
     .setup-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
     .setup-choice { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
     .setup-choice label { display: flex; align-items: flex-start; gap: 8px; }
-    .setup-choice .why { color: var(--muted, #8b93a7); font-size: 12px; }
     .setup-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
     .setup-done { font-size: 15px; }
   </style>
@@ -45,7 +47,6 @@
   <header class="page-header">
     <div class="eyebrow">VRMPET3D · SETUP</div>
     <h1>初次安装引导</h1>
-    <p class="page-description">五步把桌宠配置成你要的样子。走完这一步之后，这个引导就不会再出现了。</p>
     <div id="status" role="status" aria-live="polite">正在读取…</div>
   </header>
 
@@ -73,35 +74,28 @@
     <!-- ② 偏好模型 -->
     <section class="settings-section setup-screen" id="setup-1" hidden>
       <h2>偏好模型</h2>
-      <p class="section-description">选一个 <code>.vrm</code>（或 <code>.glb</code> / <code>.gltf</code>）文件作为你的桌宠。
-        导入的是<strong>文件</strong>，插件会把它<strong>复制到自己的目录</strong>里，所以之后你移动、改名或删除原文件夹都不影响它。</p>
-      <div class="card">
-        <div class="setup-actions">
-          <button id="setup-model-pick" class="primary">选择模型文件…</button>
-          <button id="setup-model-manual" class="ghost">手动输入路径</button>
-          <span class="note" id="setup-model-count"></span>
-        </div>
-        <div class="row" id="setup-model-manual-row" hidden>
-          <label class="k" for="setup-model-path">文件路径</label>
-          <input type="text" id="setup-model-path" class="grow" placeholder="D:\models\my.vrm">
-          <button id="setup-model-add" class="ghost">导入</button>
-        </div>
-        <div class="setup-list" id="setup-model-list"></div>
-        <p class="hint" id="setup-model-note"></p>
-        <p class="note">不导入也可以：插件自带一个可再分发的 SampleModel，什么都不选时就用它。</p>
-      </div>
+      <!--
+        The picker itself is `lib/model-picker.js`, mounted here and mounted again on the 切换模型 page
+        (`/vrmpet3d/picker`, opened from either pet's right-click menu). The operator, 2026-10-13:
+        「下半部分显示现有模型（自带模型+已导入模型）的缩略图，点击对应的缩略图可以切换当前使用的模型」 and 「面板中和初次
+        安装向导模型页完全一样」 — so there is ONE component behind both mounts and this element is its mount point.
+
+        The 手动输入路径 row that used to sit under the button is gone with it (「去掉手动输入路径框，这个框没有意义」):
+        a window opened by the launcher has the native dialog, and anywhere else the same drop target takes the
+        file's bytes. See `createModelPicker` for both transports.
+      -->
+      <div class="card" id="setup-model-picker"></div>
     </section>
 
     <!-- ③ 桌宠界面 -->
     <section class="settings-section setup-screen" id="setup-2" hidden>
       <h2>桌宠出现在哪里</h2>
-      <p class="section-description">桌宠有两个界面：DSH 窗口内的<strong>内置桌宠</strong>，以及浮在所有窗口之上的<strong>独立桌宠</strong>。</p>
       <div class="card">
         <div class="setup-choice" id="setup-surface">
           <label><input type="radio" name="setup-surface" value="auto">
-            <span><strong>自动</strong><span class="why">（默认）桌面版 DSH 打开独立桌宠；非桌面版只能打开内置桌宠。</span></span></label>
+            <strong>自动</strong></label>
           <label><input type="radio" name="setup-surface" value="app">
-            <span><strong>只在内置桌宠</strong><span class="why">只要 DSH 窗口里的那一只，不额外开悬浮窗。</span></span></label>
+            <strong>只在内置桌宠</strong></label>
         </div>
         <p class="hint" id="setup-surface-note"></p>
       </div>
@@ -110,18 +104,16 @@
     <!-- ④ AI 碎碎念 -->
     <section class="settings-section setup-screen" id="setup-3" hidden>
       <h2>AI 碎碎念</h2>
-      <p class="section-description">桌宠会自己说些话：既可以是内置台词，也可以交给模型现编。</p>
       <div class="card">
         <div class="row">
           <label class="k" for="setup-speech-enabled">开启碎碎念</label>
           <input type="checkbox" id="setup-speech-enabled">
-          <span class="note">关闭后桌宠就不说话了。默认开启。</span>
         </div>
         <div class="setup-choice" id="setup-speech-source">
           <label><input type="radio" name="setup-speech-source" value="builtin">
-            <span><strong>内置台词</strong><span class="why">（默认）随插件分发的台词表，不联网。</span></span></label>
+            <strong>内置台词</strong></label>
           <label><input type="radio" name="setup-speech-source" value="ai">
-            <span><strong>AI 生成</strong><span class="why">由 DSH 的模型每次现编一句。</span></span></label>
+            <strong>AI 生成</strong></label>
         </div>
         <div class="row" id="setup-ai-row">
           <label class="k" for="setup-ai-provider">AI 来源</label>
@@ -129,16 +121,12 @@
           <select id="setup-ai-model"></select>
         </div>
         <p class="hint" id="setup-speech-note"></p>
-        <p class="note">详细的提示词、台词表、频率和自定义 API（OpenAI 兼容端点）都在<strong>通用设置 → 碎碎念</strong>里改；
-          这里只是把最常见的组合选好。</p>
       </div>
     </section>
 
     <!-- ⑤ 模型动作 -->
     <section class="settings-section setup-screen" id="setup-4" hidden>
       <h2>模型动作</h2>
-      <p class="section-description">插件自带一份按状态分好目录的动作包；你也可以把自己的一套 <code>.vrma</code> 导入进来。
-        导入的是一个<strong>文件夹</strong>，插件会连里面的目录结构和清单一起复制到自己的目录。</p>
       <div class="card">
         <div class="setup-actions">
           <button id="setup-motion-pick" class="primary">选择动作文件夹…</button>
@@ -160,8 +148,7 @@
     <section class="settings-section setup-screen" id="setup-5" hidden>
       <h2>完成</h2>
       <div class="card">
-        <p class="setup-done">配置已保存。点击「完成」之后，这个引导<strong>不会再出现</strong>。</p>
-        <p class="note">想改任何设置，右键桌宠 → 通用设置 / 当前模型参数设置；引导本身也能在通用设置里重新打开。</p>
+        <p class="setup-done">配置已保存。</p>
         <div class="setup-actions">
           <button id="setup-finish" class="primary">完成</button>
           <button id="setup-close" class="ghost" hidden>关闭窗口</button>
@@ -195,6 +182,8 @@
     })();
   </script>
   <script src="/vrmpet3d/window/lib/core.js"></script>
+  <!-- The picker component the ② 偏好模型 step mounts — the same file the 切换模型 page loads. -->
+  <script src="/vrmpet3d/window/lib/model-picker.js"></script>
   <script src="/vrmpet3d/window/lib/setup-page.js"></script>
 </body>
 </html>

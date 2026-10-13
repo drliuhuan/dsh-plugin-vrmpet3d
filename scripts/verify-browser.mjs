@@ -113,6 +113,19 @@ function setupMarkup() {
   return (body ? body[1] : '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
 }
 
+/**
+ * 切换模型's own markup, for the same reason and by the same rule as the guide's (above).
+ *
+ * The page mounts the shared picker into `#picker-mount` and writes the choice through the settings store, so it
+ * is booted in the probe with its own markup and its own script — the guide's check proves the COMPONENT, and this
+ * proves the page the right-click menu opens around it.
+ */
+function pickerMarkup() {
+  const html = readFileSync(join(ROOT, 'lib', 'picker-page.html'), 'utf8');
+  const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+  return (body ? body[1] : '').replace(/<script[\s\S]*?<\/script>/gi, '').trim();
+}
+
 function buildPage() {
   mkdirSync(BUILD, { recursive: true });
   // The client-half test needs lib/scene.js AND the plugin half itself, plus a
@@ -215,25 +228,64 @@ function buildPage() {
        */
       `<script>
 (function () {
-  var spy = globalThis.__VRMPET3D_SETUP_SPY__ = { enabled: false, posts: [], requests: [], version: 1, preferences: {} };
+  var spy = globalThis.__VRMPET3D_SETUP_SPY__ = {
+    enabled: false, posts: [], requests: [], uploads: [], version: 1, preferences: {}, liveApp: null,
+  };
   var real = window.fetch;
   var answer = function (payload) {
     return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(payload); } });
   };
+  /**
+   * A 1×1 PNG, for the model picker's thumbnail grid.
+   *
+   * The picker is a grid of img tags pointed at /vrmpet3d/model-thumbnail?m=…, so the probe needs SOMETHING the
+   * browser will decode as an image — a stub that answered JSON would leave every tile in its placeholder state and
+   * the successful path unexercised.
+   */
+  var thumbnailResponse = function () {
+    var binary = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return Promise.resolve(new Response(new Blob([bytes], { type: 'image/png' }),
+      { status: 200, headers: { 'content-type': 'image/png' } }));
+  };
   var spyFetch = function (url, options) {
     // Dormant: the page behaves exactly as it did before this spy existed.
     if (!spy.enabled) return real.apply(window, arguments);
-    var path = String(url).split('?')[0];
+    var raw = String(url);
+    var path = raw.split('?')[0];
     var method = (options && options.method) || 'GET';
-    var body = options && options.body ? JSON.parse(options.body) : null;
-    var record = function () { spy.requests.push(method + ' ' + path); if (body) spy.posts.push({ path: path, body: body }); };
+    var type = (options && options.headers && options.headers['content-type']) || '';
+    var rawBody = options && options.body;
+    /**
+     * A JSON body is parsed; a RAW body (the model picker uploading a dropped file) is not, and that distinction is
+     * the reason this guard exists: JSON.parse of a File throws INSIDE the spy, which would fail the upload check for
+     * a reason that has nothing to do with the product.
+     */
+    var body = null;
+    if (typeof rawBody === 'string' && /application\\/json/.test(type)) {
+      try { body = JSON.parse(rawBody); } catch (_error) { body = null; }
+    }
+    var record = function () {
+      spy.requests.push(method + ' ' + path);
+      if (body) spy.posts.push({ path: path, body: body });
+      if (rawBody && typeof rawBody !== 'string') {
+        spy.uploads.push({
+          path: path,
+          name: decodeURIComponent((raw.split('?')[1] || '').replace(/^file=/, '')),
+          bytes: Number(rawBody.size) || 0,
+        });
+      }
+    };
     if (path === '/vrmpet3d/settings') {
       record();
       if (method === 'POST' && body) {
         Object.keys(body.preferences || {}).forEach(function (key) { spy.preferences[key] = body.preferences[key]; });
         spy.version += 1;
       }
-      return answer({ version: spy.version, preferences: spy.preferences, live: null });
+      // live is part of the real snapshot (the settings store keeps what each surface is showing), and the
+      // picker's progress bar waits for it: spy.liveApp is what a check moves to say "the pet has caught up".
+      return answer({ version: spy.version, preferences: spy.preferences, live: { app: spy.liveApp, window: null } });
     }
     if (path === '/vrmpet3d/setup-state') { record(); return answer({ completed: false, prompted: false, file: '(probe)' }); }
     if (path === '/vrmpet3d/llm') {
@@ -245,10 +297,17 @@ function buildPage() {
       if (method === 'POST') {
         record();
         return answer({ importedModels: [{ file: 'C:/plugin-copy/hero.vrm', name: 'hero.vrm', source: (body && body.addFile) || '' }],
-          models: [{ id: 'm9', name: 'hero.vrm', source: 'user' }], modelCount: 2, persisted: true });
+          models: [
+            { id: 'm1', name: 'SampleModel.vrm', source: 'bundled' },
+            { id: 'm9', name: 'hero.vrm', source: 'user' },
+          ],
+          modelCount: 2, persisted: true });
       }
-      return answer({ importedModels: [], importedDirs: [], modelCount: 1 });
+      return answer({ importedModels: [], importedDirs: [], modelCount: 1,
+        models: [{ id: 'm1', name: 'SampleModel.vrm', source: 'bundled' }] });
     }
+    // The model picker's tiles: an image, not JSON (see thumbnailResponse above).
+    if (path === '/vrmpet3d/model-thumbnail') { record(); return thumbnailResponse(); }
     if (path === '/vrmpet3d/motions') {
       if (method === 'POST') {
         record();
@@ -265,7 +324,15 @@ function buildPage() {
 })();
 </script>`,
       `<script>globalThis.__VRMPET3D_SETUP_MARKUP__ = ${JSON.stringify(setupMarkup())};</script>`,
+      /**
+       * The shared model picker the guide's ② 偏好模型 step mounts (`lib/model-picker.js`). It has to be on the page
+       * BEFORE the guide's script is evaluated, because the guide asks for the component as it boots — exactly the
+       * order the real page's `<script>` tags have.
+       */
+      `<script>${inlineScript(join(ROOT, 'lib', 'model-picker.js'))}</script>`,
       `<script>globalThis.__VRMPET3D_SETUP_SOURCE__ = ${JSON.stringify(inlineScript(join(ROOT, 'lib', 'setup-page.js')))};</script>`,
+      `<script>globalThis.__VRMPET3D_PICKER_MARKUP__ = ${JSON.stringify(pickerMarkup())};</script>`,
+      `<script>globalThis.__VRMPET3D_PICKER_SOURCE__ = ${JSON.stringify(inlineScript(join(ROOT, 'lib', 'picker-page.js')))};</script>`,
     ].join('\n');
   }
   // The delivery page is the one page that must NOT inline the sources: inlining

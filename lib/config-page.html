@@ -17,12 +17,11 @@
   <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
 </head>
 <body data-page="model">
-  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>模型参数</h1><p class="page-description">为当前模型调整表情、互动部位与弹簧骨。</p><div id="status" role="status" aria-live="polite">正在读取…</div></header>
+  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>模型参数</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
   <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">模型</a><a href="#settings-1">表情</a><a href="#settings-2">部位</a><a href="#settings-3">弹簧骨</a></nav>
   <main>
 <section class="settings-section" id="settings-0">
   <h2>模型</h2>
-  <p class="section-description">选择要配置的模型，查看格式与可用信息。</p>
   <div class="card">
     <div class="row">
       <label class="k" for="model-select">当前模型</label>
@@ -36,7 +35,6 @@
 
 <section class="settings-section" id="settings-1">
   <h2>表情 <span id="expression-count"></span></h2>
-  <p class="section-description">设置自动眨眼，以及不同互动情境使用的表情。</p>
   <div class="card">
     <div class="row">
       <label class="k" for="blink-enabled">眨眼</label>
@@ -62,7 +60,6 @@
 
 <section class="settings-section" id="settings-2">
   <h2>部位 <span id="part-count"></span></h2>
-  <p class="section-description">按部位分配结构、表情和互动台词。</p>
   <div class="card">
     <table id="part-table">
       <thead><tr>
@@ -77,7 +74,7 @@
     </table>
     <div class="row" style="margin-top:10px">
       <button id="part-add" type="button">新增部位</button>
-      <span class="note">最多 <span id="part-max"></span> 个；删掉的部位，它的结构会回落到默认部位</span>
+      <span class="note">最多 <span id="part-max"></span> 个</span>
     </div>
     <!--
       The structure BROWSER. It replaced a native `<input list>` + `<datalist>`: in the settings window that popup
@@ -86,7 +83,7 @@
     -->
     <div class="part-picker" id="part-picker" hidden>
       <div class="part-picker-head">
-        <input type="text" id="part-picker-filter" placeholder="筛选结构名（例如 hair / LiuHai / bust）">
+        <input type="text" id="part-picker-filter" placeholder="筛选结构名">
         <span class="note" id="part-picker-count"></span>
         <button type="button" id="part-picker-close">关闭</button>
       </div>
@@ -98,12 +95,10 @@
 
 <section class="settings-section" id="settings-3">
   <h2>弹簧骨 <span id="spring-count"></span></h2>
-  <p class="section-description">调整模型结构的弹性与摆动；可随时恢复模型默认值。</p>
   <div class="card">
     <div id="spring-list"></div>
     <div class="row" style="margin-top:10px">
       <button id="spring-reset-all">全部恢复默认</button>
-      <span class="note">只写被改动的字段；未改动的字段始终跟随模型文件里的值。</span>
     </div>
   </div>
 
