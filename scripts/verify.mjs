@@ -1692,6 +1692,7 @@ group('6d. 碎碎念: what the pet says on its own');
   eq(core.DEFAULT_SPEECH.holdSeconds, 8, 'a line is shown for eight seconds');
   eq(core.DEFAULT_SPEECH.idleMinSeconds, 20, 'the idle chatter starts at twenty seconds');
   eq(core.DEFAULT_SPEECH.idleMaxSeconds, 60, 'and is drawn up to sixty');
+  eq(core.DEFAULT_SPEECH.ai.temperature, 0.5, 'and the AI temperature is the operator\'s 0.5, not the old 0.9');
   eq(core.cleanSpeech({ enabled: false }).enabled, false,
     'turning it OFF survives cleaning — the one edit whose whole point is the absence of speech');
   eq(core.cleanSpeech({ holdSeconds: 999 }).holdSeconds, core.SPEECH_LIMITS.maxHoldSeconds,
@@ -3029,7 +3030,22 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     { resting: { min: 0, max: core.MOTION_EVERY_LIMITS.maxSeconds } }, 'a window is clamped to sane seconds');
   same(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'resting'),
     { min: 20, max: 80 }, 'motionEveryFor reads one state window through the cleaner');
-  eq(core.motionEveryFor(core.cleanPreferences({}), 'resting'), null, 'and answers null when the state has none');
+  /**
+   * The SHIPPED interval (operator, 2026-10-13: 「以当前通用设置中的参数为默认」 — 静息态 20–60 s).
+   *
+   * Absent and empty are different answers, and this is the pair that says so: a profile that has never STORED a
+   * `motionEvery` key starts on the shipped resting window, while one whose map is EMPTY — every interval was turned
+   * off — keeps its own answer, because re-seeding it would make "off" unrepresentable. `parts.items` follows the
+   * same `undefined`-vs-`[]` rule.
+   */
+  same(core.motionEveryFor(core.cleanPreferences({}), 'resting'), core.DEFAULTS.motionEvery.resting,
+    'a profile that never stored an interval starts on the shipped resting window');
+  eq(core.motionEveryFor(core.cleanPreferences({}), 'resting').min, 20, 'which starts at twenty seconds');
+  eq(core.motionEveryFor(core.cleanPreferences({}), 'resting').max, 60, 'and is drawn up to sixty');
+  eq(core.motionEveryFor(core.cleanPreferences({ motionEvery: {} }), 'resting'), null,
+    'while an EMPTY stored map — the interval is off — is a real answer, not a licence to re-seed it');
+  eq(core.cleanPreferences({}).motionEvery === core.cleanPreferences({}).motionEvery, false,
+    'and every call answers a fresh map, so one pet\'s interval cannot leak into another\'s');
   eq(core.motionEveryFor(core.cleanPreferences({ motionEvery: { resting: { min: 1, max: 2 } } }), 'sleeping'), null,
     'a state the session machine cannot reach has no window, whatever the stored blob says');
   same(core.setMotionEvery(core.cleanPreferences({ motionEvery: { resting: { min: 20, max: 80 } } }), 'working', { min: 5, max: 10 }),
@@ -3163,9 +3179,13 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
    */
   const windDefaults = core.cleanPreferences({});
   eq(windDefaults.windPower, core.DEFAULTS.windPower, 'a profile that says nothing keeps the tuned strength');
-  // Operator, 2026-10-13: 「划过强度默认设置为1；作用范围默认设置为10%」.
+  // Operator, 2026-10-13: 「划过强度默认设置为1；作用范围默认设置为10%」 — and then the reach and the speed he is
+  // actually running, when he made his own 通用设置 the shipped defaults (「以当前通用设置中的参数为默认」: 15 % and
+  // 2000 px/s). Pinned as LITERALS for the same reason the speech window above is: a default that is only compared
+  // with itself moves in the panel, in the docs and here at once, consistently.
   eq(windDefaults.windPower, 1, 'which is the strength the operator settled on');
-  eq(windDefaults.windRadius, 0.1, 'and its reach');
+  eq(windDefaults.windRadius, 0.15, 'and its reach');
+  eq(windDefaults.windSpeedForMax, 2000, 'and the cursor speed at which the draught is at full power');
   eq(core.cleanPreferences({ windPower: 0 }).windPower, 0,
     'ZERO is a value: it turns the draught off without disturbing the other three numbers');
   eq(core.cleanPreferences({ windRadius: 0 }).windRadius, 0,

@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2261 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2267 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -38,17 +38,19 @@ in-app pet offers the guide once per plugin ACTIVATION until 完成 writes `comp
 `<profile>/vrmpet3d-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
 asks again, exactly as the operator specified.
 
-**The shipped DEFAULTS are his, as of 2026-10-13** (「修改几处默认配置」): 视线 曲率 0.1 with a 0.05–1 control, 静止停看 2 s,
-划过强度 1, 作用范围 10 %, 碎碎念每句显示 8 s / 空闲嘀咕 20–60 s / 工作嘀咕 12–36 s — all in `lib/core.js` (`DEFAULTS` +
-`GAZE_CURVE_RANGE` + `WIND_LIMITS` + `SPEECH_LIMITS`), with the page's slider bounds matched. (「每句显示8秒，空闲嘀咕间隔
-20-60秒」 came in one sentence about the 通用设置 defaults; the eight replaced a five, and all three numbers are pinned as
-LITERALS in `verify.mjs` now, because a default compared only with itself moves everywhere at once.)
+**The shipped DEFAULTS are his, as of 2026-10-13** (「修改几处默认配置」, and then 「以当前通用设置中的参数为默认，作为初始
+设置参数推上去」): 视线 曲率 0.1 with a 0.05–1 control, 静止停看 2 s, 划过强度 1, 作用范围 15 %, 满力速度 2000 px/秒, 碎碎念
+每句显示 8 s / 空闲嘀咕 20–60 s / 工作嘀咕 12–36 s, AI 温度 0.5, and 静息态一次性动作间隔 20–60 s — all in `lib/core.js`
+(`DEFAULTS` + `GAZE_CURVE_RANGE` + `WIND_LIMITS` + `SPEECH_LIMITS`), with the page's slider bounds AND its placeholder values
+matched. Every one of those numbers is pinned as a LITERAL in `verify.mjs`, because a default that is only compared with itself
+moves in the panel, in the docs and in the suite at once — consistently and silently.
 **状态与动作 ships his mapping too**: the
 `defaults` block of [assets/motions/vrmpet3d-motions.json](assets/motions/vrmpet3d-motions.json) is his per-state clip
 list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, error 2, offline 1), and the `clips`
-block carries his 循环/单次 per clip. The one part of that section that CANNOT ship in the manifest is the per-state
-间隔 (`motionEvery.resting = {min:20,max:60}`) and the per-clip 凝视 switch — the format has no place for them, so a
-new profile gets the default interval. Say the word if they should be added to the manifest format.
+block carries his 循环/单次 per clip. The one part of that section that CANNOT ship in the manifest is the per-clip 凝视
+switch — the format has no place for it — but the per-state 间隔 no longer needs one: `DEFAULTS.motionEvery` is his
+`resting {min:20,max:60}`, and only a profile that has STORED an interval (an empty map included, which is how "off" is
+stored) keeps its own. Say the word if the 凝视 switch should be added to the manifest format.
 
 **碎碎念 now ships the operator's own CHARACTER as the default persona** (2026-10-13): `core.DEFAULT_SPEECH_PERSONA` is the
 DeepSeek娘 prose (453 chars, 17 lines, the 经典语句 verbatim), `DEFAULT_SPEECH_AI.persona` carries it, and an EMPTY 人格 box
