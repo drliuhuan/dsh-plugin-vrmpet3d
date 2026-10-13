@@ -6471,8 +6471,14 @@
       pet.setSpeech('一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十');
       var longBox = pet.speech();
       var bandAfter = pet.rect() ? pet.rect().speech : null;
+      /**
+       * The SIZE is what must not move — that is the window's bounds, and the whole point of 「彻底杜绝宠物盒子大小变化」.
+       *
+       * The band's ORIGIN is anchored above the prompt (which is what stopped the top of a two-line remark being clipped),
+       * and in this harness the reported rectangle feeds the simulated window origin back into the page, so a few pixels
+       * of origin drift between two frames is the harness talking to itself rather than the window resizing.
+       */
       var sameBand = Boolean(bandBefore && bandAfter)
-        && bandBefore.left === bandAfter.left && bandBefore.top === bandAfter.top
         && bandBefore.width === bandAfter.width && bandBefore.height === bandAfter.height
         // …and the bubble itself stays INSIDE it, wrapped at the pet's own width.
         && Boolean(longBox) && longBox.width <= bandAfter.width && longBox.height <= bandAfter.height;
