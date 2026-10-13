@@ -49,6 +49,21 @@ import {
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
+ * The shipped DEFAULTS, read from the file that owns them.
+ *
+ * The live half checks that the settings WINDOW is showing the shipped numbers, and the two places it did that used
+ * literals — 0.4 for the gaze slope and 0.1 for the draught's reach. Both went stale when the operator moved them
+ * (0.1 and 0.15), and nobody saw it, because that half only runs when a real window does. The claim here is "the page
+ * agrees with `core.DEFAULTS`"; the claim about WHAT those numbers are is the core suite's, and it pins them by value.
+ */
+await import(new URL('../lib/core.js', import.meta.url).href);
+const core = globalThis.__VRMPET3D_CORE__;
+if (!core) {
+  console.error('lib/core.js did not publish globalThis.__VRMPET3D_CORE__');
+  process.exit(1);
+}
+
+/**
  * The model the settings window is tested against.
  *
  * A real VRM, and the committed fixture rather than the operator's library: it carries expressions
@@ -162,18 +177,18 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     "the AI step's explanation is markup the script shows and hides with the AI 来源 row");
   /**
    * AND 通用设置's 碎碎念 HAS THE SAME RULE FOR ITS OWN AI BLOCK (operator, 2026-10-13: 「如果台词来源是内置台词，则下方的AI
-   * 相关设置不显示」).
+   * 相关设置不显示」, extended the same day to 自定义短语, which never calls a model either: 「自定义短语也隐藏」).
    *
    * The live half asserts the visibility itself, on a source that ships builtin; this is the join that makes that
-   * assertion meaningful — the container exists in the markup, the script hides THAT id, and the fact is published
-   * so a window can be read for it instead of photographed.
+   * assertion meaningful — the container exists in the markup, the script hides THAT id for every source but AI 生成,
+   * and the fact is published so a window can be read for it instead of photographed.
    */
   const globalHtml = readFileSync(join(ROOT, 'lib', 'global-page.html'), 'utf8');
   const pageScript = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
   ok(globalHtml.includes('id="speech-ai"')
-    && pageScript.includes("setRowHidden('speech-ai', speech.source === 'builtin')")
+    && pageScript.includes("setRowHidden('speech-ai', speech.source !== 'ai')")
     && pageScript.includes('speech.aiVisible'),
-    "碎碎念's AI block is hidden while the source is the built-in table, and that visibility is published");
+    "碎碎念's AI block is shown for the AI source alone, and that visibility is published");
 }
 
 // ---------------------------------------------------------------------------
@@ -831,8 +846,16 @@ if (live.skipped) {
         // resolved "auto" span, which is what proves the section is wired rather than merely present.
         const gaze = shown.gaze || {};
         ok(gaze.controls === true, 'and the gaze controls (curve + both spans) exist');
-        ok(Math.abs(Number(gaze.curve) - 0.4) < 1e-9,
-          `whose curve defaults to the shipped slope (${gaze.curve})`);
+        /**
+         * The page must be SHOWING the shipped slope, and the expectation is read from `core.DEFAULTS` rather than
+         * written here.
+         *
+         * It was a literal (0.4) and went stale the moment the operator moved the default to 0.1 — a red that no one
+         * saw, because this half only runs when the window does. The literal pin for WHAT that number is belongs to
+         * the core suite, which owns the constant; this half's claim is that the PAGE agrees with it.
+         */
+        ok(Math.abs(Number(gaze.curve) - core.DEFAULTS.gazeCurve) < 1e-9,
+          `whose curve defaults to the shipped slope (${gaze.curve}, shipped ${core.DEFAULTS.gazeCurve})`);
         ok(Number(gaze.spanX) > 0 && Number(gaze.spanY) > 0,
           `and whose "auto" spans resolve to a real distance (${gaze.spanX} x ${gaze.spanY})`);
         /**
@@ -1142,9 +1165,12 @@ if (live.skipped) {
          */
         const wind = shown.wind || {};
         ok(wind.rows === 4, `with the four mouse-interaction controls (${wind.rows})`);
-        ok(Math.abs(Number(wind.power) - 1) < 1e-9,
+        ok(Math.abs(Number(wind.power) - core.DEFAULTS.windPower) < 1e-9,
           `showing the strength the operator settled on (${wind.power})`);
-        ok(Math.abs(Number(wind.radius) - 0.1) < 1e-9, `and its reach (${wind.radius})`);
+        // Read from the same constant the page's cleaner falls back to, for the reason given at the gaze block: this
+        // literal was 0.1 and went stale when the operator moved the reach to 0.15.
+        ok(Math.abs(Number(wind.radius) - core.DEFAULTS.windRadius) < 1e-9,
+          `and its reach (${wind.radius}, shipped ${core.DEFAULTS.windRadius})`);
         ok(shown.springFolded === null,
           `and no folding group for a model with only two chains (${JSON.stringify(shown.springFolded)})`);
       }

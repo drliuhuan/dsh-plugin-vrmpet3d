@@ -433,6 +433,9 @@ group('5. preferences');
   eq(core.cleanPreferences({ gazeCurve: 0.001 }).gazeCurve, core.GAZE_CURVE_RANGE.min,
     'a near-zero slope is clamped: the response curve has a floor');
   eq(core.cleanPreferences({}).gazeCurve, core.DEFAULTS.gazeCurve, 'the shipped curve is the default');
+  // And what that shipped slope IS: the operator's own (2026-10-13: 「视线：曲率设置默认为0.1…」). The live settings
+  // half asserts the PAGE shows this constant, so the value itself is pinned here, where the constant lives.
+  eq(core.DEFAULTS.gazeCurve, 0.1, 'which is the 0.1 the operator settled on');
   eq(core.cleanPreferences({}).gazeSpanX, 0, 'the shipped span is auto, so the frame decides');
   eq(core.cleanPreferences({ gazeCurve: 'x' }).gazeCurve, core.DEFAULTS.gazeCurve,
     'a non-numeric slope falls back rather than becoming NaN');
