@@ -7038,6 +7038,28 @@
                 var blankFace = pet.scene.currentFace();
                 pet.scene.expressionBehaviour = { blink: 0, blinkExpression: 'blink', emotion: 'happy', emotionWeight: 1 };
                 var blankTargets = pet.scene.expressionTargets();
+                /**
+                 * AND the spellings the morph-name list cannot see: a clip's face may reach the model through the
+                 * expression manager instead of `morphTargetInfluences[...]` tracks, so a pinned face has to zero every
+                 * expression the MODEL knows (except the one named). Measured against the avatar's own map, because that
+                 * is the spelling-independent list — the operator's 「表情叠加问题依然没修好」 was exactly this gap.
+                 */
+                var modelExpressions = pet.scene.avatar && pet.scene.avatar.expressions
+                  && pet.scene.avatar.expressions.expressionMap
+                  ? Object.keys(pet.scene.avatar.expressions.expressionMap) : [];
+                var otherExpression = null;
+                for (var mi = 0; mi < modelExpressions.length; mi += 1) {
+                  if (modelExpressions[mi] !== pet.scene.expressionBehaviour.blinkExpression) { otherExpression = modelExpressions[mi]; break; }
+                }
+                pet.preferences.motionClips = CORE.setMotionClip(pet.preferences, 'resting', 'a1', 'expression', otherExpression);
+                if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) {
+                  pet.scene.preferences.motionClips = pet.preferences.motionClips;
+                }
+                var namedTargets = pet.scene.expressionTargets();
+                var namedKept = namedTargets[otherExpression] === 1;
+                var fileSideZeroed = modelExpressions.some(function (name) {
+                  return name !== otherExpression && namedTargets[name] === 0;
+                });
                 pet.preferences.motionClips = keptClips;
                 if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) {
                   pet.scene.preferences.motionClips = keptSceneClips;
@@ -7049,7 +7071,12 @@
                 found.faceDefault = {
                   answered: Boolean(blankFace),
                   expression: blankFace ? blankFace.expression : 'no answer',
-                  moodLeaked: Object.prototype.hasOwnProperty.call(blankTargets, 'happy'),
+                  // A weight of ZERO is the answer, not a leak: the manager-wide mute writes an explicit 0 for every
+                  // expression the model has, so what matters is that the mood is not being SHOWN.
+                  moodLeaked: !(blankTargets.happy === undefined || blankTargets.happy === 0),
+                  otherExpression: otherExpression,
+                  namedKept: namedKept,
+                  fileSideZeroed: fileSideZeroed,
                 };
                 var blinkBefore = pet.scene.blinkState().paused;
                 pet.scene.playback.record.faceTracks = true;
@@ -7067,6 +7094,11 @@
                   // 「默认」 answers "no expression", and that answer keeps the state's mood out of the slot.
                   && found.faceDefault.answered === true && found.faceDefault.expression === null
                   && found.faceDefault.moodLeaked === false
+                  // A named answer is kept at 1 while every OTHER expression of the model the file could be driving is
+                  // held at 0 — that is what stops the two faces being worn at once.
+                  && found.faceDefault.otherExpression !== null
+                  && found.faceDefault.namedKept === true
+                  && found.faceDefault.fileSideZeroed === true
                   && found.blinkPausedWithClipFace === true;
               });
             });
