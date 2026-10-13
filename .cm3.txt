@@ -1,0 +1,27 @@
+The reported band was missing from the origin the page assumes — that is the 鼠标穿透
+
+Operator, 2026-10-13: 「独立桌宠会莫名奇妙鼠标穿透，右键点击后菜单点击没反应」. Root cause found by reading the two halves against
+each other, and made permanent by my own band change an hour earlier.
+
+`desktop/main.js` sizes and places the window on `petRect ∪ menuRect ∪ statusRect ∪ speechRect` — the rects the page
+REPORTS. The page, meanwhile, laid everything out against `plannedOrigin()`, which unioned only `canvasBox`, `menuBox` and
+`statusBox`: the 碎碎念 band was missing. So the real window began a full band (~154px, now 256px) ABOVE the origin the page
+used for `canvas.style.top/left`, `placeMenu` and the per-pixel hit test (`paintedAt`, `isOverMenu`, `isOverStatus`): the
+pet and the menu were PAINTED about a band higher than the page believed, the launcher was told "transparent pixel" over its
+own visible pet and put the window into click-through — clicks fell through the pet, and the menu's rows were not where its
+hit test looked for them.
+
+Why it read as 「莫名奇妙」: a 状态 prompt IS in that union, so a prompt up cancelled most of the offset, and while the band was
+the MEASURED bubble it was reported only while a remark was up. Since cf59a16 the band is reported unconditionally, which
+would have made it permanent.
+
+`plannedOrigin()` now unions the same reported band (`speechBand`), so the page's assumed origin IS the launcher's union.
+
+VERIFIED, figures as printed: client-test 97 in a real browser, desktop **269 WITH the real window**, core 1120,
+host+model 750, `client-chunks --check` 3/3 fresh. Counts in the docs do not move. NOT run: check-docs.mjs, verify-all.mjs.
+
+NOTE, honestly: the suites could NOT have caught this class of bug before the fix — both sides of every existing assertion
+went through the page's own (wrong) origin, so they agreed with each other. It is a code-reading proof plus the operator's
+symptoms; the click test on the real pet is the confirmation that matters.
+
+Also: `.cm2.txt` (the previous commit's message file) was committed by mistake — deleted here.
