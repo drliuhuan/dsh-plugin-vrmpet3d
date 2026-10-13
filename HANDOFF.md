@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2272 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2278 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -57,7 +57,20 @@ list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, 
 block carries his 循环/单次 per clip. The one part of that section that CANNOT ship in the manifest is the per-clip 凝视
 switch — the format has no place for it — but the per-state 间隔 no longer needs one: `DEFAULTS.motionEvery` is his
 `resting {min:20,max:60}`, and only a profile that has STORED an interval (an empty map included, which is how "off" is
-stored) keeps its own. Say the word if the 凝视 switch should be added to the manifest format.
+stored) keeps its own. Say the word if the 凝视 switch should be added to the manifest file.
+
+**The two TEXTS have a FIXED default size, and the pet's box is not consulted** (operator, 2026-10-13: 「状态文字默认大小设置
+为18px」, then 「默认文字大小固定，放大缩小的倍数和盒子大小解耦连，就是完全不相关，避免缩放模型的时候缩放文字」): `STATUS_FONT_PX`
+is 18, 碎碎念 is its 0.95 (`core.speechPromptFontPx`, 17.1 px), and the signature takes the model's correction and NOTHING else —
+so `statusPromptFontPx.length === 1`, asserted, because a box argument is how the coupling would come back. That deliberately
+REVERSES the rule this file used to carry (0.033 of the pet's box, the answer to 「文字也没有随着模型变大」): do not "fix" it back.
+The only thing that moves the size is the per-model wheel correction (`statusScale`, 0.35×–4×, absolute 6–160 px), and since this
+round the wheel works over EITHER text — one number behind both, so the bubble keeps its 0.95. On the floating-window side the
+bubble is now IN the page's hit test (`isOverSpeech`) because the launcher only delivers a wheel where the window says it wants the
+mouse; it used to be deliberately left out when a bubble was only something to read. `core.speechPromptFontPx` owns the ratio so the
+two surfaces cannot drift. And neither plate WRAPS or CAPS its width (「不管碎碎念和状态信息多长，都不要换行。给盒子的宽度留大一点」):
+the speech bubble's old `max-width:18em` is gone, because with `nowrap` a cap leaves the background short of the text it is behind —
+the same defect the prompt's own `max-width` was removed for on 2026-10-09.
 
 **碎碎念 now ships the operator's own CHARACTER as the default persona** (2026-10-13): `core.DEFAULT_SPEECH_PERSONA` is the
 DeepSeek娘 prose (453 chars, 17 lines, the 经典语句 verbatim), `DEFAULT_SPEECH_AI.persona` carries it, and an EMPTY 人格 box

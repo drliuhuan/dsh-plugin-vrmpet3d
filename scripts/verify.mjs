@@ -1398,14 +1398,25 @@ group('6c. the per-state status prompt');
       'measured from the start that same frame pair reported');
   }
 
-  // The label’s size comes from the pet’s box, which is the operator’s own prescription
-  // ("用窗口尺寸来计算大小而非模型放大倍率"): the box grows with the size preference and with the model, so the
-  // text does too, and the whale is sized in `em` so it follows without a second rule.
-  eq(core.statusPromptFontPx(387), 12.8, 'the default pet’s box gives the app’s own 12–13px label');
-  eq(core.statusPromptFontPx(774) > core.statusPromptFontPx(387), true,
-    'twice the box is a bigger label, which is what "文字没有随着模型变大" asked for');
-  eq(core.statusPromptFontPx(20), 10, 'and a tiny pet keeps a readable floor');
-  eq(core.statusPromptFontPx(0), 12, 'a box nobody has measured yet falls back to the default size');
+  /**
+   * The label's size is a FIXED default — 18 px — and the box is not consulted at all.
+   *
+   * Operator, 2026-10-13: 「状态文字默认大小设置为18px」 and then 「默认文字大小固定，放大缩小的倍数和盒子大小解耦连，就是完全
+   * 不相关，避免缩放模型的时候缩放文字」. That deliberately reverses the earlier rule this block used to assert (a ratio of
+   * the pet's box, which was the answer to 「文字也没有随着模型变大」), so the assertions below say what is true now: the
+   * same size at every box, and only the per-model correction moving it.
+   */
+  eq(core.statusPromptFontPx(), 18, 'the status text ships at the 18 px the operator set');
+  eq(core.speechPromptFontPx(), 17.1, 'and 碎碎念 ships at 0.95 of it, the remark being the pet’s aside');
+  eq(core.STATUS_FONT_PX, 18, 'as one named constant, which is what the default IS');
+  eq(core.speechPromptFontPx() < core.statusPromptFontPx(), true, 'so the bubble stays a shade under the prompt');
+  // The decoupling is STRUCTURAL, which is the point of the request: there is no box argument to pass, so no caller
+  // can make the size follow the pet even by accident.
+  eq(core.statusPromptFontPx.length, 1, 'the box is gone from the signature — it takes the correction and nothing else');
+  eq(core.speechPromptFontPx.length, 1, 'and the bubble’s formula takes the same single argument');
+  eq(core.statusPromptFontPx(), core.statusPromptFontPx(1), 'no correction and 1 are the same size');
+  eq(core.statusPromptFontPx('nonsense'), 18, 'an unparseable correction falls back to the default');
+  eq(core.statusPromptFontPx(0), 18, 'and so does a zero one, rather than to an invisible size');
 
   // ---------------------------------------------------------------------------
   // The prompt's own size control: a wheel ON THE TEXT corrects the size for ONE
@@ -1421,18 +1432,19 @@ group('6c. the per-state status prompt');
     const step = (prefs, direction) => withScale(core.statusScaleStep(prefs, 'm1', direction));
     const scaleOf = (prefs) => core.statusScaleFor(prefs, 'm1');
 
-    eq(scaleOf(blank), 1, 'a model with no correction draws the derived size');
-    eq(core.statusPromptFontPx(387, 1), core.statusPromptFontPx(387), 'and 1 leaves the size exactly alone');
+    eq(scaleOf(blank), 1, 'a model with no correction draws the default size');
+    eq(core.statusPromptFontPx(1), core.statusPromptFontPx(), 'and 1 leaves the size exactly alone');
 
     const bigger = step(blank, 1);
     eq(scaleOf(bigger), 1.12, 'one notch up is the wheel step');
     eq(core.statusScaleFor(bigger, 'm2'), 1, 'and it belongs to that model alone');
-    eq(core.statusPromptFontPx(387, 1.12), 14.3, 'the text grows by exactly that factor');
-    eq(core.statusPromptFontPx(387, 1.12) > core.statusPromptFontPx(387), true,
-      'strictly bigger, in the same box — the model did not move');
+    eq(core.statusPromptFontPx(1.12), 20.2, '18 px times that factor is what the text draws');
+    eq(core.speechPromptFontPx(1.12), 19.2, 'and the bubble follows it, keeping its 0.95');
+    eq(core.statusPromptFontPx(1.12) > core.statusPromptFontPx(), true,
+      'strictly bigger, from the same one number — the pet did not move');
 
     const back = step(bigger, -1);
-    eq(scaleOf(back), 1, 'and one notch down returns to the derived size');
+    eq(scaleOf(back), 1, 'and one notch down returns to the default size');
     eq(Object.keys(back.statusScale).length, 0,
       'a correction of 1 is DROPPED, not stored: the map is a list of exceptions');
     eq(JSON.stringify(core.cleanPreferences({ statusScale: { m1: 1, m2: 2 } }).statusScale), '{"m2":2}',
@@ -1442,15 +1454,15 @@ group('6c. the per-state status prompt');
     let up = blank;
     for (let i = 0; i < 40; i += 1) up = step(up, 1);
     eq(scaleOf(up), core.STATUS_SCALE_LIMITS.max, 'wheeling up stops at the maximum');
-    eq(core.statusPromptFontPx(387, core.STATUS_SCALE_LIMITS.max), 51.1,
-      'and four times the derived 12.77px is what it draws');
+    eq(core.statusPromptFontPx(core.STATUS_SCALE_LIMITS.max), 72,
+      'and four times the fixed 18 px is what it draws');
     let down = blank;
     for (let i = 0; i < 40; i += 1) down = step(down, -1);
     eq(scaleOf(down), core.STATUS_SCALE_LIMITS.min, 'wheeling down stops at the minimum');
-    eq(core.statusPromptFontPx(387, core.STATUS_SCALE_LIMITS.min), 6,
-      'and the absolute floor keeps an unreadable size out of reach');
-    eq(core.statusPromptFontPx(10000, 4), core.STATUS_SCALE_LIMITS.maxFontPx,
-      'while the ceiling stops a huge box times a correction from running off the screen');
+    eq(core.statusPromptFontPx(core.STATUS_SCALE_LIMITS.min), 6.3,
+      'and a third of it is as small as the wheel goes');
+    eq(core.STATUS_SCALE_LIMITS.maxFontPx, 160,
+      'while the absolute ceiling keeps a hand-edited 1000× correction from running off the screen');
 
     // The store's own round trip: what the settings store keeps is what comes back.
     const stored = core.cleanPreferences({ statusScale: { m1: 1.5, m2: 'nonsense', m3: 99 } });

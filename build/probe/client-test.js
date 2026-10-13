@@ -628,7 +628,7 @@
       animatedDisplay: animatedStyle ? animatedStyle.display : null,
       decorationVisible: Boolean(decoration) && decoration.hidden === false,
       fontPx: fontPx,
-      expectedFontPx: CORE.statusPromptFontPx(widget.placement.height) + 'px',
+      expectedFontPx: CORE.statusPromptFontPx() + 'px',
     };
     var ok = Boolean(label) && label.hidden === false
       && String(shown).indexOf('深度求索中，用时 ') === 0
@@ -998,6 +998,9 @@
       currentSessionId: 's1',
     });
     widget.machine.reset();
+    // And a 碎碎念 line, because the same gesture now has a second target: the machine says one on entry to 工作中,
+    // and clearing it first means THIS check owns the bubble rather than inheriting one from a previous check.
+    widget.speech.clear();
     widget.tick(1 / 60);
 
     var label = widget.pet.querySelector('.vrmpet3d-status');
@@ -1046,6 +1049,41 @@
     };
 
     /**
+     * ON THE 碎碎念 BUBBLE: the same gesture, on the other text (operator, 2026-10-13: 「状态文字已经可以通过鼠标滚轮放大了，
+     * 给碎碎念也加上同样的鼠标滚轮放大功能」).
+     *
+     * One correction behind both, so the number that moves is the one the prompt already uses; what makes it a TEXT
+     * gesture rather than a pet gesture is that the PET does not move. The bubble's font is read out of the DOM,
+     * because that is the thing a person watches get bigger, and the two style rules the operator asked for with it are
+     * read the same way: the line never wraps, and the plate has no width cap to end up narrower than its text.
+     */
+    function bubbleFont(node) { return node ? globalThis.getComputedStyle(node).fontSize : null; }
+    var bubble = widget.pet.querySelector('.vrmpet3d-speech');
+    var bubbleRect = bubble && bubble.hidden === false ? bubble.getBoundingClientRect() : null;
+    var bubbleScaleBefore = CORE.statusScaleFor(widget.preferences, modelId);
+    var bubbleSizeBefore = widget.preferences.size;
+    var speechBefore = bubbleFont(bubble);
+    if (bubbleRect && bubbleRect.width > 0) {
+      wheelOn(bubble, bubbleRect.left + bubbleRect.width / 2, bubbleRect.top + bubbleRect.height / 2, -100);
+    }
+    // The font is written by `renderSpeech`, which the frame loop calls every frame (the bubble follows the head), so
+    // one frame is what it takes for the new size to be on screen.
+    widget.tick(1 / 60);
+    var bubbleStyle = bubble ? globalThis.getComputedStyle(bubble) : null;
+    var onSpeech = {
+      up: Boolean(bubble) && bubble.hidden === false,
+      fontBefore: speechBefore,
+      fontAfter: bubbleFont(bubble),
+      expectedFont: CORE.speechPromptFontPx(CORE.statusScaleFor(widget.preferences, modelId)) + 'px',
+      scaleBefore: bubbleScaleBefore,
+      scale: CORE.statusScaleFor(widget.preferences, modelId),
+      size: widget.preferences.size,
+      sizeBefore: bubbleSizeBefore,
+      whiteSpace: bubbleStyle ? bubbleStyle.whiteSpace : null,
+      maxWidth: bubbleStyle ? bubbleStyle.maxWidth : null,
+    };
+
+    /**
      * And the correction has to LEAVE the surface.
      *
      * The host store is the source of truth both pets read, so a preference a surface does not push is a
@@ -1069,8 +1107,10 @@
       scaleBefore: scaleBefore,
       textOnly: textOnly,
       onPet: onPet,
+      onSpeech: onSpeech,
       pushedScale: pushedPatch ? pushedPatch.statusScale : null,
       whiteSpace: globalThis.getComputedStyle(widget.pet.querySelector('.vrmpet3d-status-text')).whiteSpace,
+      statusMaxWidth: globalThis.getComputedStyle(widget.pet.querySelector('.vrmpet3d-status')).maxWidth,
       promptRect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width) },
     };
 
@@ -1078,10 +1118,18 @@
       && textOnly.size === sizeBefore                // …and the PET did not move at all
       && onPet.size !== sizeBefore                   // a wheel on the pet resizes the pet…
       && onPet.scale === textOnly.scale              // …without touching the correction the text gesture set
+      && onSpeech.up === true                        // the bubble was up for the same gesture
+      && onSpeech.scale > onSpeech.scaleBefore       // which grew the SAME correction…
+      && onSpeech.size === onSpeech.sizeBefore       // …and still did not move the pet
+      && parseFloat(onSpeech.fontAfter) > parseFloat(onSpeech.fontBefore)   // the bubble itself got bigger…
+      && onSpeech.fontAfter === onSpeech.expectedFont // …to exactly what the core says it should be
+      && onSpeech.whiteSpace === 'nowrap'            // 「不管碎碎念和状态信息多长，都不要换行」
+      && onSpeech.maxWidth === 'none'                // 「给盒子的宽度留大一点」: no cap narrower than the line
       && Boolean(textOnly.stored) && textOnly.stored[modelId] === textOnly.scale // remembered PER MODEL
       && Boolean(pushedPatch) && Boolean(pushedPatch.statusScale)                // and pushed to the host…
       && pushedPatch.statusScale[modelId] === 1.3                                // …so a snapshot cannot drop it
-      && report.wheelGesture.whiteSpace === 'nowrap'; // "提示文字永不换行"
+      && report.wheelGesture.whiteSpace === 'nowrap' // "提示文字永不换行"
+      && report.wheelGesture.statusMaxWidth === 'none'; // and its plate is as wide as the line
 
     // Put the preference back the way it was, so no other check inherits a correction.
     widget.preferences.statusScale = CORE.setStatusScale(widget.preferences, modelId, 1);
@@ -1226,15 +1274,24 @@
     widget.resetSize();
     var before = widget.placement.width;
     var rect = widget.pet.getBoundingClientRect();
+    /**
+     * Over the pet's BODY, not its top-left corner.
+     *
+     * The corner was fine while both texts were small; at the fixed 18 px the prompt is wider than the pet's own box,
+     * and a notch inside the text's rectangle is a TEXT gesture by design — the corner would have measured the wrong
+     * feature. `0.75` down the box is painted by the model and clear of both texts, which is where a person aims to
+     * resize a pet anyway.
+     */
+    var body = { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.75 };
     widget.pet.dispatchEvent(new WheelEvent('wheel', {
-      bubbles: true, cancelable: true, deltaY: -100, clientX: rect.left + 5, clientY: rect.top + 5
+      bubbles: true, cancelable: true, deltaY: -100, clientX: body.x, clientY: body.y
     }));
     var grew = widget.preferences.size > CORE.DEFAULTS.size && widget.placement.width > before;
     // The canvas follows the slot: the drawing buffer is what makes the model bigger
     // rather than a stretched bitmap, and it is also what keeps it inside the frame.
     var bufferFollowed = widget.scene ? widget.scene.width === widget.placement.width : true;
     widget.pet.dispatchEvent(new WheelEvent('wheel', {
-      bubbles: true, cancelable: true, deltaY: 100, clientX: rect.left + 5, clientY: rect.top + 5
+      bubbles: true, cancelable: true, deltaY: 100, clientX: body.x, clientY: body.y
     }));
     var shrank = widget.preferences.size === CORE.DEFAULTS.size;
     var stored = JSON.parse(window.localStorage.getItem(CORE.STORAGE_KEY) || '{}');
@@ -1255,9 +1312,10 @@
    */
   check('the wheel cannot zoom the pet outside the frame', function () {
     var rect = widget.pet.getBoundingClientRect();
+    var body = { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.75 };
     for (var i = 0; i < 60; i++) {
       widget.pet.dispatchEvent(new WheelEvent('wheel', {
-        bubbles: true, cancelable: true, deltaY: -100, clientX: rect.left + 5, clientY: rect.top + 5
+        bubbles: true, cancelable: true, deltaY: -100, clientX: body.x, clientY: body.y
       }));
     }
     var viewportWidth = window.innerWidth;
@@ -5367,16 +5425,20 @@
           && Math.abs(statusDomRect.left - (statusRect.left - statusOrigin.x)) <= 1.5
           && Math.abs(statusDomRect.top - (statusRect.top - statusOrigin.y)) <= 1.5;
         /**
-         * And the prompt has to fit inside the window it is drawn in. The window is sized from the rectangle
-         * the page reports, so the two must agree — and now that the window carries the frame margin, the
-         * prompt belongs INSIDE it rather than above its top edge.
+         * And the prompt has to fit the FRAME it is drawn in.
+         *
+         * This used to compare against `pet.rect()`, which is the pet's own BOX — the WINDOW is that box unioned with
+         * the boxes the page reports for the menu, the prompt and the bubble, and the launcher is what grows it. So
+         * "inside the pet's box" was never the rule; it merely held while the prompt was narrower than the pet. It is
+         * not any more (the fixed 18 px label is ~304 px wide on a 297 px box), and what actually has to hold is that
+         * nothing runs off the frame, because THAT is the edge a window cannot grow past.
          */
-        var windowRect = pet.rect();
-        var statusInsideWindow = Boolean(windowRect && statusRect)
-          && statusRect.left >= windowRect.left
-          && statusRect.top >= windowRect.top
-          && statusRect.left + statusRect.width <= windowRect.left + windowRect.width
-          && statusRect.top + statusRect.height <= windowRect.top + windowRect.height;
+        var frameRect = { left: 0, top: 0, width: placement.viewportWidth, height: placement.viewportHeight };
+        var statusInsideWindow = Boolean(statusRect)
+          && statusRect.left >= frameRect.left
+          && statusRect.top >= frameRect.top
+          && statusRect.left + statusRect.width <= frameRect.left + frameRect.width
+          && statusRect.top + statusRect.height <= frameRect.top + frameRect.height;
         found.status = {
           quiet: statusQuiet,
           /**
@@ -5427,10 +5489,11 @@
          * The operator asked for the app's label rather than an approximation — "我要的是dsh内部的前面带着一个
          * 鲸鱼尾巴图标的'深度求索中，用时XX分XX秒 ···'" — so this asserts the three things that make it that
          * label and not a lookalike: the wording with a real duration in it, the app's own whale path drawn
-         * beside it, and the text sized from the pet's box instead of a fixed 13px.
+         * beside it, and the text at the FIXED 18 px the operator set — the box is not consulted, so zooming the pet
+         * cannot resize it (2026-10-13: 「默认文字大小固定，放大缩小的倍数和盒子大小解耦连…避免缩放模型的时候缩放文字」).
          */
         var statusLabel = String(found.status.text || '');
-        var expectedFontPx = CORE.statusPromptFontPx(placement.height) + 'px';
+        var expectedFontPx = CORE.statusPromptFontPx() + 'px';
         var statusOk = statusQuiet === null
           && statusLabel.indexOf('深度求索中，用时 ') === 0
           && /秒 ···$/.test(statusLabel)
@@ -6292,7 +6355,7 @@
    *   * it is NOT in the hit test: the window must grow to show it, but a point on the bubble must stay
    *     click-through, while a point on the prompt stays interactive.
    */
-  asyncCheck('the floating window shows the pet’s remark above the prompt and out of the click path', function () {
+  asyncCheck('the floating window shows the pet’s remark above the prompt, and the wheel over it resizes the text', function () {
     var desktop = globalThis.__VRMPET3D_DESKTOP__;
     if (!desktop || !desktop.mount) return Promise.resolve(false);
 
@@ -6349,8 +6412,41 @@
       var promptCentre = promptBox
         ? { x: promptBox.left + promptBox.width / 2, y: promptBox.top + promptBox.height / 2 }
         : null;
-      var bubbleClickThrough = centre ? pet.hitTest(centre.x, centre.y) === false : false;
+      /**
+       * Both texts are INTERACTIVE, and that changed on 2026-10-13.
+       *
+       * The bubble used to be left out of the hit test — "a bubble is something to read, not to click" — and it cannot
+       * be any more: the window only receives a wheel event where `hitTest` says it wants the mouse, so the 碎碎念
+       * wheel gesture would not exist without this (operator: 「给碎碎念也加上同样的鼠标滚轮放大功能」). The assertion is
+       * therefore the enabling half of that gesture, and the wheel itself is driven below.
+       */
+      var bubbleInteractive = centre ? pet.hitTest(centre.x, centre.y) === true : false;
       var promptInteractive = promptCentre ? pet.hitTest(promptCentre.x, promptCentre.y) === true : false;
+      /**
+       * One notch ON THE BUBBLE: the TEXT's correction moves and the window does NOT.
+       *
+       * The event carries the bubble's own frame coordinates, which is where `pointerFrame` reads the pointer from
+       * when no launcher cursor has arrived (this harness has no cursor bridge).
+       */
+      var bubbleModel = pet.loadedModel() || 'speech-window';
+      var speechScaleBefore = CORE.statusScaleFor(pet.preferences, bubbleModel);
+      var windowSizeBefore = pet.preferences.windowSize;
+      if (centre) {
+        canvas.dispatchEvent(new WheelEvent('wheel', {
+          bubbles: true, cancelable: true, deltaY: -100, clientX: centre.x, clientY: centre.y,
+        }));
+      }
+      // The real window re-places the bubble every frame (`renderSpeech` from the frame loop); this harness has no
+      // loop, so the same call is made here — otherwise the font read below is the one from before the notch.
+      pet.setSpeech(line);
+      var speechWheel = {
+        scaleBefore: speechScaleBefore,
+        scaleAfter: CORE.statusScaleFor(pet.preferences, bubbleModel),
+        windowBefore: windowSizeBefore,
+        windowAfter: pet.preferences.windowSize,
+        fontPx: node ? node.style.getPropertyValue('--vrmpet3d-desktop-speech-font') : null,
+        expectedFont: CORE.speechPromptFontPx(CORE.statusScaleFor(pet.preferences, bubbleModel)) + 'px',
+      };
       var clearedReturn = pet.setSpeech(null);
       var cleared = node ? node.hidden === true : false;
       var clearedRect = pet.rect() ? pet.rect().speech : null;
@@ -6364,8 +6460,9 @@
         reported: reported,
         drawnWhereReported: drawnWhereReported,
         abovePrompt: abovePrompt,
-        bubbleClickThrough: bubbleClickThrough,
+        bubbleInteractive: bubbleInteractive,
         promptInteractive: promptInteractive,
+        speechWheel: speechWheel,
         cleared: cleared,
         clearedReturn: clearedReturn,
         clearedRect: clearedRect,
@@ -6377,7 +6474,10 @@
       return node && drawnText === line && wasVisible && returned === line
         && Boolean(box) && box.width > 0 && box.height > 0
         && Boolean(reported) && drawnWhereReported && abovePrompt
-        && bubbleClickThrough && promptInteractive
+        && bubbleInteractive && promptInteractive
+        && speechWheel.scaleAfter > speechWheel.scaleBefore          // the notch resized the TEXT…
+        && speechWheel.windowAfter === speechWheel.windowBefore      // …and not the window
+        && speechWheel.fontPx === speechWheel.expectedFont           // at the size the core says
         && cleared && clearedReturn === null && clearedRect === null;
     });
   });
