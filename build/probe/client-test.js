@@ -7373,7 +7373,7 @@
   });
 
   /**
-   * The FIRST-RUN GUIDE, driven the way a user drives it: six screens, a finish, and the write each screen owes.
+   * The FIRST-RUN GUIDE, driven the way a user drives it: its steps, a finish, and the write each step owes.
    *
    * The guide is a page script that boots against its own document, and this harness carries that document — the
    * runner injects the wizard's markup and its boot-time spy before loading `lib/setup-page.js`, which is why the
@@ -7381,11 +7381,16 @@
    * its `fetch` at boot, exactly as it does in the app.
    *
    * What is asserted is the operator's own spec: the guide must WALK; 完成 must be the one write that ends it; the
-   * model step must hand the host a FILE (`addFile`) and the motion step a FOLDER (`importDir`); the surface choice
-   * must write `petSurface`; and the AI source must default to DeepSeek Account when the live provider list has it
+   * model step must hand the host a FILE (`addFile`); the surface choice must write `petSurface`; and the AI source
+   * must default to DeepSeek Account when the live provider list has it
    * (「默认是 DeepSeek Account（如已经接入 Account 的话）」) with that provider's own model.
+   *
+   * And the FLOW itself, which stopped being a fixed six (operator, 2026-10-13): 模型动作 is HIDDEN, so the walk must
+   * never land on it, and 桌宠界面 has no second choice where no independent pet can exist — dsh web's shorter guide
+   * is read through `__VRMPET3D_SETUP_STEPS__(false)`, the same function the page builds its own stepper from, so one
+   * boot of the real page is enough to assert both. The bridge below IS the desktop case (`pickModelFile`).
    */
-  asyncCheck('the first-run guide walks its six screens and writes what each one promises', function () {
+  asyncCheck('the first-run guide walks its own steps, hides 模型动作 and writes what each step promises', function () {
     var spy = globalThis.__VRMPET3D_SETUP_SPY__;
     var markup = globalThis.__VRMPET3D_SETUP_MARKUP__;
     var source = globalThis.__VRMPET3D_SETUP_SOURCE__;
@@ -7512,24 +7517,54 @@
             // ③ 桌宠界面 and ④ AI 碎碎念: two choices, and the AI default comes from the live provider list.
             document.querySelector('#setup-surface input[value="app"]').click();
             document.querySelector('#setup-speech-source input[value="ai"]').click();
+            var aiNote = document.getElementById('setup-ai-note');
             return waitFor(function () {
               return settingsWith(function (p) { return p.petSurface === 'app'; }).length > 0
                 && settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; }).length > 0;
             }, 4000).then(function (written) {
               var ai = settingsWith(function (p) { return p.speech && p.speech.source === 'ai'; })[0];
               var speech = ai ? ai.body.preferences.speech : null;
-              // ⑤ 模型动作: a FOLDER, copied by the host.
+              // The AI explanation travels with the AI 来源 row, so it is on screen exactly while that row is.
+              var aiNoteShown = Boolean(aiNote && !aiNote.hidden);
+              /**
+               * ⑤ 模型动作: HIDDEN from the flow, and its wiring is still driven here.
+               *
+               * The operator took the step out (「隐藏第五项模型动作」) but the markup and its picker stayed, so this
+               * is the one place that proves the picker still hands the host a FOLDER — the check that would
+               * otherwise go quiet the day somebody unhides it. It is not part of the walk below: a user cannot
+               * reach a hidden section, and the walk asserts what a user reaches.
+               */
               document.getElementById('setup-motion-pick').click();
               return after(150).then(function () {
                 var imported = posted('/vrmpet3d/motions', function (body) { return body.importDir === 'C:/motions/pack'; });
-                // 完成 last: five steps forward, then the ONE write that ends the guide.
+                /**
+                 * The walk: every step of THIS run, and the ONE write that ends it.
+                 *
+                 * The count comes from the page (`guide().total`) rather than from a number written here — it is 5
+                 * on desktop and 4 on dsh web, and a hard-coded count is how a probe starts passing a guide it
+                 * never walked. The visible screen is recorded after every click, so "模型动作 was never shown"
+                 * is measured rather than assumed.
+                 */
                 var next = document.getElementById('setup-next');
-                for (var i = 0; i < 5; i += 1) next.click();
+                var flow = guide().total;
+                var visited = visible().slice();
+                for (var i = 0; i < flow - 1; i += 1) { next.click(); visited = visited.concat(visible()); }
                 var lastScreen = visible();
                 var stepper = document.getElementById('setup-steps');
                 var marked = stepper ? Array.prototype.filter.call(stepper.children, function (node) {
                   return node.getAttribute('data-active') === '1';
                 }).length : 0;
+                /** The words this run shows, and the promise that none of them is a number (operator: 不要序号). */
+                var shownSteps = stepper ? Array.prototype.filter.call(stepper.children, function (node) {
+                  return !node.hidden;
+                }).map(function (node) { return node.textContent; }) : [];
+                var numbered = stepper ? Array.prototype.some.call(stepper.children, function (node) {
+                  return /[0-9①-⑩]/.test(node.textContent);
+                }) : true;
+                /** dsh web's own guide: the same function the page builds its stepper from, with no desktop. */
+                var webSteps = typeof globalThis.__VRMPET3D_SETUP_STEPS__ === 'function'
+                  ? globalThis.__VRMPET3D_SETUP_STEPS__(false)
+                  : null;
                 /**
                  * 完成 writes `completed` AND closes the window — one click, not two.
                  *
@@ -7551,9 +7586,16 @@
                   spy.enabled = false;
                   window.fetch = outerFetch;
                   globalThis.vrmpet3dDesktop = outerBridge;
+                  var sameList = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
                   report.firstRunGuide = {
                     atStart: atStart,
                     screens: screens.length,
+                    flow: flow,
+                    visited: visited,
+                    shownSteps: shownSteps,
+                    numbered: numbered,
+                    webSteps: webSteps,
+                    aiNoteShown: aiNoteShown,
                     ready: ready,
                     uploaded: uploaded,
                     preferredModel: preferred,
@@ -7575,6 +7617,16 @@
                   return atStart.length === 1 && atStart[0] === 'setup-0'
                     && lastScreen.length === 1 && lastScreen[0] === 'setup-5'
                     && marked === 1
+                    /**
+                     * The flow itself: 欢迎 → 偏好模型 → 桌宠界面 → AI 碎碎念 → 完成 on THIS page (a launcher bridge),
+                     * with 模型动作 never among them — the hidden step is hidden from the WALK, not merely styled out.
+                     */
+                    && flow === 5
+                    && sameList(visited, ['setup-0', 'setup-1', 'setup-2', 'setup-3', 'setup-5'])
+                    && sameList(shownSteps, ['欢迎', '偏好模型', '桌宠界面', 'AI 碎碎念', '完成'])
+                    && numbered === false
+                    && sameList(webSteps, ['欢迎', '偏好模型', 'AI 碎碎念', '完成'])
+                    && aiNoteShown === true
                     && uploaded && preferred && imported && finished
                     // 完成 closed the window itself, and the button is there only because it could not.
                     && closeCalls >= 1 && closeFallbackShown === true

@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2254 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2261 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -32,13 +32,18 @@ FOLDER; the host copies the bytes into the profile's own state directory
 may move, be renamed or vanish. The panels still LIST a directory an older build imported, and still remove it, but
 no new one can be added — a recorded path was a live dependency on somebody else's folder, which is the defect the
 file import replaced. The guide itself (`/vrmpet3d/setup`, `lib/setup-page.*`) is 欢迎 / 偏好模型 / 桌宠界面 /
-AI 碎碎念 / 模型动作 / 完成: the in-app pet offers it once per plugin ACTIVATION until 完成 writes `completed` in
+AI 碎碎念 / 完成 — 模型动作 is HIDDEN and 桌宠界面 is skipped where no independent pet can exist (dsh web), which is
+why the stepper's entries carry no numbers (operator, 2026-10-13: 「不要在框架上部的…中不要写数字和序号」). The
+in-app pet offers the guide once per plugin ACTIVATION until 完成 writes `completed` in
 `<profile>/vrmpet3d-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
 asks again, exactly as the operator specified.
 
 **The shipped DEFAULTS are his, as of 2026-10-13** (「修改几处默认配置」): 视线 曲率 0.1 with a 0.05–1 control, 静止停看 2 s,
-划过强度 1, 作用范围 10 %, 碎碎念空闲嘀咕 20–60 s / 工作嘀咕 12–36 s — all in `lib/core.js` (`DEFAULTS` + `GAZE_CURVE_RANGE` +
-`WIND_LIMITS` + `SPEECH_LIMITS`), with the page's slider bounds matched. **状态与动作 ships his mapping too**: the
+划过强度 1, 作用范围 10 %, 碎碎念每句显示 8 s / 空闲嘀咕 20–60 s / 工作嘀咕 12–36 s — all in `lib/core.js` (`DEFAULTS` +
+`GAZE_CURVE_RANGE` + `WIND_LIMITS` + `SPEECH_LIMITS`), with the page's slider bounds matched. (「每句显示8秒，空闲嘀咕间隔
+20-60秒」 came in one sentence about the 通用设置 defaults; the eight replaced a five, and all three numbers are pinned as
+LITERALS in `verify.mjs` now, because a default compared only with itself moves everywhere at once.)
+**状态与动作 ships his mapping too**: the
 `defaults` block of [assets/motions/vrmpet3d-motions.json](assets/motions/vrmpet3d-motions.json) is his per-state clip
 list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, error 2, offline 1), and the `clips`
 block carries his 循环/单次 per clip. The one part of that section that CANNOT ship in the manifest is the per-state

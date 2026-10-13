@@ -6,7 +6,8 @@
   <title>vrmpet3d · 初次安装引导</title>
   <meta name="color-scheme" content="dark light">
   <!--
-    The first-run guide: five screens and a finish, on its own route (`/vrmpet3d/setup`).
+    The first-run guide: its screens and a finish, on its own route (`/vrmpet3d/setup`). Which of the six the flow
+    VISITS depends on where it is running — see the stepper below.
 
     A THIRD page beside 模型参数 and 通用设置, opened the same way — by the launcher on DSH Desktop (a real window,
     with the preload bridge, so a file picker is native) and as a browser tab anywhere else. The MODEL step is the
@@ -33,12 +34,14 @@
       gap: 12px; padding: 12px 24px; border-top: 1px solid var(--line, #333a4d); background: inherit; backdrop-filter: blur(6px); }
     .setup-nav-right { display: flex; gap: 8px; }
     .setup-nav button { min-width: 96px; }
-    /* The welcome step's risk note. It is the ONE piece of prose this guide keeps on purpose (operator,
-       2026-10-13: 「欢迎页的内容不要删，那些很重要」): everything else on these pages lost its explanation. */
+    /* The welcome step's risk note. It is the guide's ONE paragraph of risk (operator, 2026-10-13: 「欢迎页的内容
+       不要删，那些很重要」) — and the note beside a choice (`.setup-choice .note`) is the other shape of prose here:
+       one line saying what the option does, never a paragraph. */
     .setup-warning { border-left: 3px solid var(--warn, #e0a75e); padding-left: 12px; }
     .setup-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
     .setup-choice { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
     .setup-choice label { display: flex; align-items: flex-start; gap: 8px; }
+    .setup-choice label .note { flex: 1 1 auto; }
     .setup-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
     .setup-done { font-size: 15px; }
   </style>
@@ -50,13 +53,22 @@
     <div id="status" role="status" aria-live="polite">正在读取…</div>
   </header>
 
+  <!--
+    One entry per screen, and NO NUMBERS (operator, 2026-10-13: 「不要在框架上部的…中不要写数字和序号」).
+
+    A numbered stepper was a lie the moment a step could be missing: this run does not always visit all six screens —
+    桌宠界面 has nothing to choose where no independent pet can exist (`data-desktop-only`: dsh web's only pet is the
+    in-app one) and 模型动作 is HIDDEN (`data-hidden`, operator: 「隐藏第五项模型动作」) — so a fixed count would show a
+    step that is not there and a gap where one never was. The words live here and the policy in the attributes; both
+    files are read together by `verify-desktop.mjs`.
+  -->
   <ol class="setup-steps" id="setup-steps" aria-label="引导进度">
-    <li data-step="0">① 欢迎</li>
-    <li data-step="1">② 偏好模型</li>
-    <li data-step="2">③ 桌宠界面</li>
-    <li data-step="3">④ AI 碎碎念</li>
-    <li data-step="4">⑤ 模型动作</li>
-    <li data-step="5">完成</li>
+    <li data-screen="setup-0">欢迎</li>
+    <li data-screen="setup-1">偏好模型</li>
+    <li data-screen="setup-2" data-desktop-only="1">桌宠界面</li>
+    <li data-screen="setup-3">AI 碎碎念</li>
+    <li data-screen="setup-4" data-hidden="1">模型动作</li>
+    <li data-screen="setup-5">完成</li>
   </ol>
 
   <main>
@@ -67,7 +79,6 @@
         <p>这是一个<strong>早期版本</strong>的插件，作者也是第一次开发 DSH 插件。它<strong>还没有经过系统性的验证</strong>，
           可能存在 bug，也可能带来性能下降；设置页面的排版也可能比较混乱。</p>
         <p class="setup-warning">如果你在使用中遇到任何性能问题，请<strong>第一时间禁用这个插件</strong>，再慢慢排查。</p>
-        <p class="note">这个引导出现的意义就是：把该配的东西一次配完，之后它就安静下来。点「下一步」开始。</p>
       </div>
     </section>
 
@@ -93,7 +104,7 @@
       <div class="card">
         <div class="setup-choice" id="setup-surface">
           <label><input type="radio" name="setup-surface" value="auto">
-            <strong>自动</strong></label>
+            <strong>自动</strong><span class="note">Desktop端自动开启独立桌宠</span></label>
           <label><input type="radio" name="setup-surface" value="app">
             <strong>只在内置桌宠</strong></label>
         </div>
@@ -111,7 +122,7 @@
         </div>
         <div class="setup-choice" id="setup-speech-source">
           <label><input type="radio" name="setup-speech-source" value="builtin">
-            <strong>内置台词</strong></label>
+            <strong>内置台词</strong><span class="note">内置台词基本已经够用</span></label>
           <label><input type="radio" name="setup-speech-source" value="ai">
             <strong>AI 生成</strong></label>
         </div>
@@ -120,11 +131,18 @@
           <select id="setup-ai-provider"></select>
           <select id="setup-ai-model"></select>
         </div>
+        <!-- Shown with the row above: the AI's own words are configured on the OTHER page, in the same 碎碎念 section. -->
+        <p class="hint" id="setup-ai-note" hidden>人格信息和不同状态的提示词，都在 通用设置 → 碎碎念 里设置。</p>
         <p class="hint" id="setup-speech-note"></p>
       </div>
     </section>
 
-    <!-- ⑤ 模型动作 -->
+    <!--
+      模型动作 — HIDDEN from the flow (operator, 2026-10-13: 「隐藏第五项模型动作」), which is why its stepper entry
+      carries `data-hidden`. The markup and its wiring stay: the pack ships bundled and needs no import (HANDOFF), so
+      the step had nothing left to ask, and hiding it is reversible where deleting it is not. 通用设置 → 状态与动作 is
+      where the same import lives for anyone who does want it.
+    -->
     <section class="settings-section setup-screen" id="setup-4" hidden>
       <h2>模型动作</h2>
       <div class="card">

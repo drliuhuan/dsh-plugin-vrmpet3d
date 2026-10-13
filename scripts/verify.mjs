@@ -1683,6 +1683,15 @@ group('6d. 碎碎念: what the pet says on its own');
   const defaults = core.cleanSpeech(null);
   eq(defaults.enabled, true, 'speech is on by default');
   eq(defaults.holdSeconds, core.SPEECH_LIMITS.holdSeconds, 'a line is held for the shipped few seconds');
+  /**
+   * The SHIPPED numbers as LITERALS (operator, 2026-10-13: 「修改几个通用设置中的默认值：每句显示8秒，空闲嘀咕间隔
+   * 20-60秒」). 复位 puts these back and a fresh profile starts on them, so they are pinned here rather than only
+   * compared against themselves above: a number that moved would otherwise move in the panel, in the docs and in this
+   * suite at once, consistently and silently.
+   */
+  eq(core.DEFAULT_SPEECH.holdSeconds, 8, 'a line is shown for eight seconds');
+  eq(core.DEFAULT_SPEECH.idleMinSeconds, 20, 'the idle chatter starts at twenty seconds');
+  eq(core.DEFAULT_SPEECH.idleMaxSeconds, 60, 'and is drawn up to sixty');
   eq(core.cleanSpeech({ enabled: false }).enabled, false,
     'turning it OFF survives cleaning — the one edit whose whole point is the absence of speech');
   eq(core.cleanSpeech({ holdSeconds: 999 }).holdSeconds, core.SPEECH_LIMITS.maxHoldSeconds,
@@ -1725,7 +1734,10 @@ group('6d. 碎碎念: what the pet says on its own');
   const firstWorking = chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0);
   eq(core.speechLines('zh', 'working').indexOf(firstWorking) !== -1, true, '工作中 opens with one of its own lines');
   chatterClock += 5_000;
-  eq(chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0), null,
+  // Five seconds is INSIDE the shipped hold (eight, the operator's default), so what comes back is the line that is
+  // still up rather than a new one — "not replaced" is the same text, not silence (the 2026-10-13 default moved this
+  // from the one to the other, and the assertion that says what the rule MEANS moved with it).
+  eq(chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0), firstWorking,
     'the held line is not replaced while it is still up');
   chatterClock += 6_000;
   eq(chatter.observe(chatterPrefs, 'working', null, 'zh', () => 0), null,
@@ -1948,7 +1960,9 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   const customPrefs = prefs({ source: 'custom', lines: { working: '自定义的一句' } });
   eq(custom.observe(customPrefs, 'working', null, 'zh', rnd), '自定义的一句', 'a custom box is spoken for its state');
   eq(custom.wantsAi, null, 'and pure custom never asks a model anything');
-  clock += 6000;
+  // Past the hold, so the machine is free to move on: derived from the shipped hold rather than written as six
+  // seconds, which stopped being past it when the operator's default became eight (2026-10-13).
+  clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
   /**
    * THE OPERATOR'S RULE (2026-10-11): "开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念."
    *
@@ -1982,7 +1996,9 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   eq(ai.observe(aiPrefs, 'working', null, 'zh', rnd), '先这么说',
     'the request is not re-published while that line is held');
   eq(ai.wantsAi.seq, firstSeq, 'so the surface cannot be asked twice for one event');
-  clock += 6000;
+  // Past the hold, so the state change is looked at: six seconds used to be past it and stopped being past it when
+  // the shipped hold became eight (operator, 2026-10-13).
+  clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
   /**
    * Moving on with AI on: the request goes out, but the PET says nothing on its own.
    *
@@ -2051,7 +2067,10 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   const slow = core.pumpAiSpeech(late, lateBook, () => new Promise((resolveLate) => { release = resolveLate; }));
   // The ask starts on a microtask, so the request has to be admitted to flight before it can be released.
   await null;
-  clock += 6000;
+  // Past the hold, so `done` is what the machine is looking at when the late answer lands: six seconds stopped being
+  // past the shipped hold on 2026-10-13, and at six the state never moved — which would have left this assertion
+  // passing because the line was still held rather than because the answer was dropped.
+  clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
   late.observe(latePrefs, 'done', null, 'zh', rnd);
   release({ text: '迟到的台词' });
   await slow;

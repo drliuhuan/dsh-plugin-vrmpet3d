@@ -11,7 +11,7 @@ fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2254 checks · works offline
+no runtime dependencies · 9 verification suites · 2261 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -30,7 +30,7 @@ retired MMD chapters.
 | **One menu** | right-click either pet: 重置视角 / 重置大小 / 通用设置 / 切换模型 / 当前模型参数设置 / 切换表面 / 重力 / 隐藏宠物 |
 | **Two settings pages** | 模型参数 (per model) and 通用设置, over `/vrmpet3d/config` and `/vrmpet3d/global` |
 | **Model picker** | 切换模型, over `/vrmpet3d/picker`: drop a `.vrm`/`.glb` on the big target (or click it) and click a thumbnail to switch — a progress bar covers the load, the picker refuses input while it runs, and it is the SAME component the guide's 偏好模型 step mounts |
-| **First-run guide** | 欢迎 / 偏好模型 / 桌宠界面 / AI 碎碎念 / 模型动作 / 完成, over `/vrmpet3d/setup` — it appears once per start until it is finished |
+| **First-run guide** | 欢迎 / 偏好模型 / 桌宠界面 / AI 碎碎念 / 完成, over `/vrmpet3d/setup` — 模型动作 is hidden and 桌宠界面 is skipped where no independent pet can exist (dsh web), which is why the stepper carries no numbers; it appears once per start until it is finished |
 | **Voice** | the status prompt above the head, plus 碎碎念 from built-in tables (20 lines per state, Chinese and English, in the shipped character's voice), your own lines, or a model (a DSH provider or any OpenAI-compatible endpoint) |
 | **Parts** | your own 部位 rows — a label, the structures it owns, an emotion and a 碎碎念 — matched against the model's real bone/mesh names |
 | **Privacy** | turn boundaries and session counts only. Never session text, tool arguments or attachments |
@@ -131,7 +131,7 @@ LZMA2 because Node cannot decode LZMA without a dependency this plugin does not 
 
 ## Verification
 
-**9 verification suites, 2254 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2261 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -142,12 +142,12 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1093 — state machine, and the nine motion states |
+| `node scripts/verify.mjs` | 1096 — state machine, and the nine motion states |
 | `node scripts/verify-model.mjs` | 750 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 97 — the widget, the menu, the desktop page, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar and a posed model's part hit test |
-| `node scripts/verify-desktop.mjs` | 260 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
+| `node scripts/verify-desktop.mjs` | 264 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
 | `node scripts/check-docs.mjs` | documented paths, commands and counts match reality |

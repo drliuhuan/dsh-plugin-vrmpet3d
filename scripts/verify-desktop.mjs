@@ -139,6 +139,27 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
   ok(setupScript.includes('createModelPicker') && !setupScript.includes('setup-model-path')
     && !setupScript.includes("'pickModelFile', importModel"),
     'and the guide mounts the component instead of the typed-path row and the import call it replaced');
+  /**
+   * AND THE FLOW THE STEPPER DESCRIBES IS THE ONE THE SCRIPT WALKS.
+   *
+   * Three things about it stopped being constant on 2026-10-13 (operator: 「不要在框架上部的…中不要写数字和序号」
+   * and 「隐藏第五项模型动作」): the entries carry no numbers, 模型动作 is hidden outright, and 桌宠界面 is visited only
+   * where an independent pet can exist — dsh web has one surface, so the step has nothing to ask. The markup owns
+   * the words and the attributes, the script owns the policy, and these are the joins between them.
+   */
+  const stepperHtml = (/id="setup-steps"[\s\S]*?<\/ol>/.exec(setupHtml) || [''])[0];
+  const stepWords = [...stepperHtml.matchAll(/<li[^>]*>([^<]*)<\/li>/g)].map((match) => match[1]);
+  ok(stepWords.length === 6 && !stepWords.some((word) => /[0-9①-⑩]/.test(word)),
+    `the stepper's words carry no numbers or ordinals (${stepWords.join(' / ')})`);
+  ok(/data-hidden="1"[^>]*>模型动作/.test(setupHtml) && setupScript.includes("node.getAttribute('data-hidden') === '1'"),
+    '模型动作 is marked hidden in the stepper and the script drops the hidden entries');
+  ok(/data-desktop-only="1"[^>]*>桌宠界面/.test(setupHtml)
+    && setupScript.includes("node.getAttribute('data-desktop-only') !== '1'")
+    && setupScript.includes("typeof launcher.pickModelFile === 'function'"),
+    '桌宠界面 is marked desktop-only, and the script asks the launcher whether that surface exists');
+  ok(setupHtml.includes('id="setup-ai-note"') && setupScript.includes("el('setup-ai-note')")
+    && setupScript.includes('aiNote.hidden = speech.source'),
+    "the AI step's explanation is markup the script shows and hides with the AI 来源 row");
 }
 
 // ---------------------------------------------------------------------------
