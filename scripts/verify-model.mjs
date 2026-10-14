@@ -1581,6 +1581,7 @@ group('8. registered routes and both catalogs over HTTP');
         kind: 'expired', at: 1700000000002, sessionId: 'sess-2', reason: 'completed',
         focused: false, presentId: null, running: false,
       },
+      catalogKeys: ['byId:object', 'ids:array', 'phase:string'],
     },
   });
   petState = await readState();
@@ -1597,6 +1598,8 @@ group('8. registered routes and both catalogs over HTTP');
     'and WHICH rule ended the last notice — the field the 任务达成-disappears report needed');
   eq(petState.payload.why.dismissed.focused, false, 'with the focus value that rule read');
   eq(petState.payload.why.dismissed.presentId, null, 'and the session it compared against (null: there was none)');
+  eq(JSON.stringify(petState.payload.why.catalogKeys), JSON.stringify(['byId:object', 'ids:array', 'phase:string']),
+    'and the SHAPE of the session snapshot, so a field this plugin cannot read can be named');
   petState = await readState();
   eq(petState.payload.why && petState.payload.why.working, 2, 'the window (and a debugger) reads it back on the next poll');
   petState = await postState({ state: 'working', why: { running: 'yes', working: 'lots', evil: '<script>' } });
