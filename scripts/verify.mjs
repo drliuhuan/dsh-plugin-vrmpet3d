@@ -352,6 +352,13 @@ group('5. preferences');
   eq(defaults.modelId, '', 'the default model is AUTOMATIC rather than a built-in avatar');
   eq(defaults.motion, true, 'motion on by default');
   eq(defaults.physics, true, 'physics on by default');
+  // Spring bones during an authored clip (operator, 2026-10-14): shipped ON, and an older stored profile — which has
+  // no such key — gets the NEW behaviour rather than the old one, which is why the cleaner tests `!== false`.
+  eq(defaults.motionPhysics, true, 'the spring bones keep their physics while a clip plays, by default');
+  eq(core.cleanPreferences({ motionPhysics: false }).motionPhysics, false,
+    'while an explicit off is kept, for a clip whose own hair animation is wanted');
+  eq(core.cleanPreferences({ motionPhysics: 'nonsense' }).motionPhysics, true,
+    'and anything that is not a stored false reads as on');
 
   const dirty = core.cleanPreferences({
     scope: 'current', size: 9999, motion: false, modelId: 'x'.repeat(900),

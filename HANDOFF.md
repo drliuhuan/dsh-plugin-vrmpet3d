@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2430 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2433 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -117,6 +117,20 @@ does not, and the file's own tracks stop counting in that case too (the same ans
 at zero is not on screen). `Scene.blinkState()`'s `paused` reads the same rule, because it exists to explain the gate.
 The dance clip is the first user: `template.working` gives it `expression: "none"` and `gaze: false`, so it plays with a
 blank face, with blinking, and without following the cursor — all three by file name, in the pack's manifest.
+
+**THE SPRING BONES KEEP THEIR PHYSICS DURING A CLIP** (operator, 2026-10-14: 「在动作执行的时候，模型的物理（头发，裙摆的晃动等）都消失了，
+有办法在动作的时候让模型也有物理互动吗？」). Nothing had switched the simulation off — `stepPhysics` runs after the mixer, and
+the comment beside it says so — but a dance carries tracks for the hair and skirt bones TOO, so every frame the mixer
+re-posed them onto the clip's keyframe and the chain never accumulated a swing. On screen that is the hair sitting in the
+clip's authored pose, which reads as "the physics is gone". The fix is the three-vrm answer: `Scene.takeSpringTracks`
+(measured `{"withPhysics":{"dropped":1,"tracksLeft":1}}`) drops the tracks whose target node is in the chain index
+(`springChainOf`, matched by NODE OBJECT — three rewrites characters in names, so a name rule would stop matching on the
+one model that spells a bone unusually). The clip then drives the BODY and the simulation owns 头发/裙摆/呆毛, swinging
+them with the movement. `preferences.motionPhysics` (shipped ON, read as `!== false` so an older profile gets the new
+behaviour) is the way back to a clip's own hair animation, and it has a box in 模型参数 → 弹簧骨. Second half, same reason:
+with the simulation UNAVAILABLE (`physicsEnabled === false`, i.e. the model's chains threw) the synthetic `applyChains`
+oscillator now runs DURING a clip as well — skipping whatever nodes the clip still writes — because for that model it is
+the only motion the hair can have, and leaving it frozen through a whole clip is the report above.
 
 **The two TEXTS have a FIXED default size, and the pet's box is not consulted** (operator, 2026-10-13: 「状态文字默认大小设置
 为18px」, then 「默认文字大小固定，放大缩小的倍数和盒子大小解耦连，就是完全不相关，避免缩放模型的时候缩放文字」): `STATUS_FONT_PX`

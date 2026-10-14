@@ -7080,6 +7080,63 @@
   });
 
   /**
+   * THE SPRING BONES KEEP THEIR PHYSICS DURING A CLIP (operator, 2026-10-14: 「在动作执行的时候，模型的物理（头发，裙摆的晃动等）
+   * 都消失了，有办法在动作的时候让模型也有物理互动吗？」).
+   *
+   * The simulation was never off — `stepPhysics` runs after the mixer — but a dance carries tracks for the hair and
+   * skirt bones too, so the mixer re-posed them every frame and the chains never accumulated a swing. `takeSpringTracks`
+   * drops exactly those tracks (the three-vrm answer), and keeps them — reporting them as the clip's own — when
+   * `preferences.motionPhysics` is false. Driven here against a real scene and a real bone, with the chain index
+   * swapped for a one-entry map so the check does not depend on this avatar having spring bones of its own.
+   */
+  check('an authored clip\'s spring-bone tracks are dropped, so the physics owns the hair and skirt', function () {
+    var scene = widget.scene;
+    var THREE = scene && scene.THREE;
+    /**
+     * A synthetic root and one synthetic node, rather than the avatar's own bones: this widget's scene can be holding
+     * the PLACEHOLDER as this runs (measured: `bones: 0`), and the rule under test is about a clip's tracks and a chain
+     * index — neither of which needs a real VRM. The index is swapped for one entry, so the check also passes on a model
+     * that declares no spring bones at all.
+     */
+    var root = THREE && new THREE.Group ? new THREE.Group() : null;
+    var node = THREE && new THREE.Object3D ? new THREE.Object3D() : null;
+    var why = {
+      hasScene: Boolean(scene),
+      hasThree: Boolean(THREE),
+      hasMethod: Boolean(scene && typeof scene.takeSpringTracks === 'function'),
+      synthetic: Boolean(root && node),
+    };
+    report.springTracks = why;
+    if (!root || !node || typeof scene.takeSpringTracks !== 'function') return false;
+    node.name = 'probeSpringNode';
+    root.add(node);
+    var realIndex = scene.springChainOf;
+    var realPreferences = scene.preferences;
+    var build = function () {
+      return new THREE.AnimationClip('probe-spring', 1, [
+        new THREE.QuaternionKeyframeTrack(node.name + '.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]),
+        new THREE.VectorKeyframeTrack('probe-does-not-bind.position', [0, 1], [0, 0, 0, 0, 0, 0]),
+      ]);
+    };
+    try {
+      scene.springChainOf = new Map([[node, { name: 'probe-chain' }]]);
+      var onClip = build();
+      var on = scene.takeSpringTracks(onClip, root);
+      scene.preferences = { motionPhysics: false };
+      var offClip = build();
+      var off = scene.takeSpringTracks(offClip, root);
+      why.withPhysics = { dropped: on.dropped, tracksLeft: onClip.tracks.length, animated: on.animated.length };
+      why.withMotionPhysicsOff = { dropped: off.dropped, tracksLeft: offClip.tracks.length, animated: off.animated.length };
+      return on.dropped === 1 && onClip.tracks.length === 1 && on.animated.length === 0
+        && off.dropped === 0 && off.animated.length === 1 && offClip.tracks.length === 2;
+    } finally {
+      scene.springChainOf = realIndex;
+      scene.preferences = realPreferences;
+    }
+  });
+
+
+  /**
    * THE OPERATOR'S ONE-SHOT RULES, driven through the real scheduler on a real avatar.
    *
    * 「当状态的动作列表里有循环动作时，单次动作结束后，必须衔接循环动作，严禁单次动作循环播放；如果没有循环动作，单次动作
