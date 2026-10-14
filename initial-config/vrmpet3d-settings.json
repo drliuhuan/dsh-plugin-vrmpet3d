@@ -1,8 +1,8 @@
 {
-  "version": 39,
+  "version": 11,
   "preferences": {
     "scope": "global",
-    "petSurface": "window",
+    "petSurface": "both",
     "size": 100,
     "windowSize": 100,
     "gravity": false,
@@ -28,8 +28,8 @@
     "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.507421875,
-    "placementY": 0.2514367816091954,
+    "placementX": 0.5756510257720947,
+    "placementY": 0.3055555409398572,
     "motions": {
       "resting": [
         "a9",
@@ -46,6 +46,9 @@
         "ak",
         "am",
         "an"
+      ],
+      "working": [
+        "a4"
       ],
       "waiting": [
         "a1",
@@ -134,6 +137,11 @@
           "expression": "none"
         },
         "ak": {
+          "expression": "none"
+        }
+      },
+      "working": {
+        "a4": {
           "expression": "none"
         }
       },
