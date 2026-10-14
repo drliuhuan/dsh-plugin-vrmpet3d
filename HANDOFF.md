@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2406 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2418 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -274,6 +274,16 @@ turn clock and whether this surface believes DSH has the user's attention. Sanit
 the host rewrites the block field by field — and dropped with the report it explains when the state ages out. It needs the
 pet's PAGE reloaded to start sending (the host accepts it either way), and it deliberately does not force a report: it rides
 along with the state changes and the 5 s heartbeat rather than turning the channel into a 1 Hz feed.
+
+**…and it names its own dismissal** (`why.dismissed`), which is the field the operator's follow-up needed. Measured with
+`build/probe-out/watch-state.mjs` on 2026-10-14: after a turn ended with his focus in ANOTHER application and nothing else
+running, 任务达成 appeared and was gone four seconds later (exactly the minimum hold), with the pet going back to 静息态
+rather than 工作中 — so the dismissal was one of the two rules that need no new work, and from outside they are
+indistinguishable: the presence+focus acknowledgement (`acknowledged`), and the OLD timer rule that applies when there is no
+session identity to compare (`expired`). `PetMachine.noteDismissal` records `kind`, the notice's sessionId, `focused` and
+`presentId` — the two values the rule actually read — plus `retracted`/`focus-return`/`cleared` for the other paths, so the
+next occurrence is a fact rather than an argument. **A page still running the OLD client sends no `why` at all, and that is
+visible from outside too**: the route answers `"why": null`.
 
 **Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
 

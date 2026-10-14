@@ -1577,6 +1577,10 @@ group('8. registered routes and both catalogs over HTTP');
       held: null, settling: { reason: 'completed', at: 1700000000001, sessionId: 'sess-1' },
       interaction: null, focused: true,
       turn: { open: false, startedAt: 1699999999000, endedAt: 1700000000000 },
+      dismissed: {
+        kind: 'expired', at: 1700000000002, sessionId: 'sess-2', reason: 'completed',
+        focused: false, presentId: null, running: false,
+      },
     },
   });
   petState = await readState();
@@ -1589,6 +1593,10 @@ group('8. registered routes and both catalogs over HTTP');
   eq(petState.payload.why.settling && petState.payload.why.settling.sessionId, 'sess-1',
     'and so is the one still waiting out its settle window');
   eq(petState.payload.why.focused, true, 'and whether this surface believes DSH has the user\'s attention');
+  eq(petState.payload.why.dismissed && petState.payload.why.dismissed.kind, 'expired',
+    'and WHICH rule ended the last notice — the field the 任务达成-disappears report needed');
+  eq(petState.payload.why.dismissed.focused, false, 'with the focus value that rule read');
+  eq(petState.payload.why.dismissed.presentId, null, 'and the session it compared against (null: there was none)');
   petState = await readState();
   eq(petState.payload.why && petState.payload.why.working, 2, 'the window (and a debugger) reads it back on the next poll');
   petState = await postState({ state: 'working', why: { running: 'yes', working: 'lots', evil: '<script>' } });

@@ -1125,6 +1125,48 @@ group('6. state machine precedence');
     seen.resolve(present);
     eq(seen.settleFor('s1'), core.COMPLETION_SETTLE_MS, 'and the user being back in the session clears the debt');
   }
+  {
+    /**
+     * WHY a notice ended is recorded, because the operator's 2026-10-14 report is otherwise unanswerable.
+     *
+     * 「尽管我的焦点全程都在其他应用，dsh 工作完成后，任务完成的状态只持续了几秒钟，就自己消失了，而并没有任何新的任务在跑」 — measured, the
+     * notice lasted exactly the minimum hold and the pet went back to 静息态. With no new work, exactly two rules can do
+     * that, and they are indistinguishable on screen: the presence+focus acknowledgement, and the old timer rule that
+     * applies when there is no session identity to compare. `lastDismissal` names the one that fired and prints the
+     * values it read, so that report becomes a fact instead of an argument.
+     */
+    let whyClock = 300000;
+    const whyMachine = new core.PetMachine(() => whyClock, 120000);
+    const here = { available: true, running: false, pending: false, currentSessionId: 's1' };
+    whyMachine.boundary({ type: 'turn/end', sessionId: 's1', seq: 1, reason: 'completed' });
+    whyClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(whyMachine.resolve(here), 'done', 'a completion in the session the user is in is announced');
+    whyClock += core.NOTICE_WINDOW_MS + 1;
+    whyMachine.setFocus(false);
+    whyMachine.resolve(here);
+    eq(whyMachine.lastDismissal === undefined, true,
+      'and NOTHING dismisses it while DSH has no focus and the session is unchanged');
+    whyMachine.setFocus(true);
+    whyMachine.resolve(here);
+    eq(whyMachine.lastDismissal && whyMachine.lastDismissal.kind, 'acknowledged',
+      'while coming back to the session WITH focus records the rule that ended it');
+    eq(whyMachine.lastDismissal.focused, true, 'and the focus value it read');
+    eq(whyMachine.lastDismissal.presentId, 's1', 'and the session it compared against');
+
+    // The OTHER rule: no session identity to compare, so the notice expires on the clock alone — the shape a missing
+    // `currentSessionId` takes, and the one that would dismiss a completion with the user in another application.
+    const blind = new core.PetMachine(() => whyClock, 120000);
+    const nowhere = { available: true, running: false, pending: false };
+    blind.boundary({ type: 'turn/end', sessionId: 's1', seq: 1, reason: 'completed' });
+    whyClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(blind.resolve(nowhere), 'done', 'a completion with no session context is still announced');
+    blind.setFocus(false);
+    whyClock += core.NOTICE_WINDOW_MS + 1;
+    eq(blind.resolve(nowhere), 'resting', 'but it expires on the hold alone, with no focus and nothing running');
+    eq(blind.lastDismissal && blind.lastDismissal.kind, 'expired',
+      'and the record says so, which is the difference the report needed');
+    eq(blind.lastDismissal.presentId, null, 'with the missing side named');
+  }
 
   /**
    * 任务完成 lasts as long as the 状态 settings ask — with the notice window as the FLOOR.
