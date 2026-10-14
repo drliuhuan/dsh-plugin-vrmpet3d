@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 7,
   "preferences": {
     "scope": "global",
     "petSurface": "both",
@@ -28,8 +28,8 @@
     "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.5807291507720947,
-    "placementY": 0.025622576132588004,
+    "placementX": 0.5095052242279052,
+    "placementY": 0.30962643678160917,
     "motions": {
       "resting": [
         "a9",
@@ -77,6 +77,35 @@
     },
     "motionClips": {
       "resting": {
+        "ae": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "ag": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "aj": {
+          "expression": "none"
+        },
+        "aa": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "ak": {
+          "expression": "none"
+        },
+        "am": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "ai": {
+          "expression": "none"
+        },
         "ah": {
           "expression": "none"
         },
@@ -90,38 +119,7 @@
           "expression": "none",
           "gaze": false
         },
-        "ae": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ai": {
-          "expression": "none"
-        },
         "ac": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ag": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "a9": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ad": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ak": {
-          "expression": "none"
-        },
-        "am": {
           "loop": false,
           "expression": "none",
           "gaze": false
@@ -131,10 +129,12 @@
           "expression": "none",
           "gaze": false
         },
-        "aj": {
-          "expression": "none"
+        "ad": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
         },
-        "aa": {
+        "a9": {
           "loop": false,
           "expression": "none",
           "gaze": false
@@ -142,14 +142,11 @@
       },
       "working": {
         "a4": {
-          "expression": "none"
+          "expression": "none",
+          "gaze": false
         }
       },
       "waiting": {
-        "a3": {
-          "expression": "none",
-          "gaze": false
-        },
         "a2": {
           "expression": "none",
           "gaze": false
@@ -158,9 +155,17 @@
           "loop": true,
           "expression": "none",
           "gaze": false
+        },
+        "a3": {
+          "expression": "none",
+          "gaze": false
         }
       },
       "done": {
+        "ar": {
+          "expression": "happy",
+          "gaze": false
+        },
         "aq": {
           "expression": "happy",
           "gaze": false
@@ -168,19 +173,15 @@
         "ap": {
           "expression": "happy",
           "gaze": false
-        },
-        "ar": {
-          "expression": "happy",
-          "gaze": false
         }
       },
       "error": {
-        "a6": {
+        "a7": {
           "loop": false,
           "expression": "sad",
           "gaze": false
         },
-        "a7": {
+        "a6": {
           "loop": false,
           "expression": "sad",
           "gaze": false

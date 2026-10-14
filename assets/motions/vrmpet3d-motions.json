@@ -136,6 +136,35 @@
   },
   "template": {
     "resting": {
+      "idle/idle stretch2.vrma": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle stretch4.vrma": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle3.vrma": {
+        "expression": "none"
+      },
+      "idle/hungry2.vrma": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle4.vrma": {
+        "expression": "none"
+      },
+      "idle/touch hair1.vrma": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle2.vrma": {
+        "expression": "none"
+      },
       "idle/idle.vrma": {
         "expression": "none"
       },
@@ -149,38 +178,7 @@
         "expression": "none",
         "gaze": false
       },
-      "idle/idle stretch2.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle2.vrma": {
-        "expression": "none"
-      },
       "idle/idle lookaround2.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle stretch4.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/hungry1.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle stretch1.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle4.vrma": {
-        "expression": "none"
-      },
-      "idle/touch hair1.vrma": {
         "loop": false,
         "expression": "none",
         "gaze": false
@@ -190,10 +188,12 @@
         "expression": "none",
         "gaze": false
       },
-      "idle/idle3.vrma": {
-        "expression": "none"
+      "idle/idle stretch1.vrma": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
       },
-      "idle/hungry2.vrma": {
+      "idle/hungry1.vrma": {
         "loop": false,
         "expression": "none",
         "gaze": false
@@ -201,14 +201,11 @@
     },
     "working": {
       "dance/Dancing.vrma": {
-        "expression": "none"
+        "expression": "none",
+        "gaze": false
       }
     },
     "waiting": {
-      "attention/wave hand 3.vrma": {
-        "expression": "none",
-        "gaze": false
-      },
       "attention/wave hand 2.vrma": {
         "expression": "none",
         "gaze": false
@@ -217,9 +214,17 @@
         "loop": true,
         "expression": "none",
         "gaze": false
+      },
+      "attention/wave hand 3.vrma": {
+        "expression": "none",
+        "gaze": false
       }
     },
     "done": {
+      "success/jump 3.vrma": {
+        "expression": "happy",
+        "gaze": false
+      },
       "success/jump 2.vrma": {
         "expression": "happy",
         "gaze": false
@@ -227,19 +232,15 @@
       "success/jump 1.vrma": {
         "expression": "happy",
         "gaze": false
-      },
-      "success/jump 3.vrma": {
-        "expression": "happy",
-        "gaze": false
       }
     },
     "error": {
-      "fail/fall down1.vrma": {
+      "fail/fall down2.vrma": {
         "loop": false,
         "expression": "sad",
         "gaze": false
       },
-      "fail/fall down2.vrma": {
+      "fail/fall down1.vrma": {
         "loop": false,
         "expression": "sad",
         "gaze": false
