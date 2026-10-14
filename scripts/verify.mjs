@@ -1057,6 +1057,76 @@ group('6. state machine precedence');
   eq(machine.resolve(onlineIdle), 'resting', 'a stale completion stops showing as done');
 
   /**
+   * A completion that was SHOWN and then taken back makes the next one wait LONGER — the flash/retract cooldown.
+   *
+   * Operator, 2026-10-14: 「刚刚的任务结束后，桌宠短暂出现了一下成功状态，但是焦点还没有切换回DSH成功状态就消失了，而且还会
+   * 反复跳出"深度求索中…"」. A long task whose rounds are further apart than the base window showed 任务达成 in every quiet
+   * gap, and the next round took it away again — flash, retract, flash, retract. A completion taken back was therefore
+   * PREMATURE, and the honest response is to demand more quiet before saying it again FOR THAT SESSION: 4 s, 8, 16 —
+   * capped, because a real end still has to be announced while the user is looking at the desk.
+   *
+   * The debt is per SESSION, and the two ways out are asserted here too: a completion the user actually saw clears it,
+   * and so does time.
+   */
+  {
+    // Its OWN clock: this block drives a machine through several minutes, and the shared `clock` is what the
+    // assertions after it are positioned against.
+    let flapClock = 100000;
+    const flap = new core.PetMachine(() => flapClock, 120000);
+    const idle = { available: true, running: false, pending: false, currentSessionId: 'other' };
+    const busy = { available: true, running: true, pending: false, currentSessionId: 's1', runningSince: flapClock };
+    eq(flap.settleFor('s1'), core.COMPLETION_SETTLE_MS, 'a session with no history waits the shipped window');
+    // Round one: end, settle, SHOWN, then the next round takes it back. The user is looking at ANOTHER session
+    // (`idle`), which is what keeps the notice alive: presence in the notice's own session is the acknowledgement.
+    flap.boundary({ type: 'turn/start', sessionId: 's1', seq: 1, reason: 'completed' });
+    flap.boundary({ type: 'turn/end', sessionId: 's1', seq: 2, reason: 'completed' });
+    eq(flap.resolve(idle), 'resting', 'nothing is announced before the window passes');
+    flapClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(flap.resolve(idle), 'done', 'a quiet gap is announced');
+    flap.boundary({ type: 'turn/start', sessionId: 's1', seq: 3, reason: 'completed' });
+    eq(flap.resolve(busy), 'working', 'and the round that follows takes it back');
+    eq(flap.settleFor('s1'), core.COMPLETION_SETTLE_MS * 2,
+      `which makes the next completion in that session wait twice as long (${flap.settleFor('s1')} ms)`);
+    // Round two: the same gap length is now NOT enough to be a completion…
+    flap.boundary({ type: 'turn/end', sessionId: 's1', seq: 4, reason: 'completed' });
+    flapClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(flap.resolve(idle), 'resting', 'so the same quiet gap no longer flashes 任务达成');
+    // …and the longer window really does promote it.
+    flapClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(flap.resolve(idle), 'done', 'until the longer window has really passed');
+    // A second retraction doubles it again, up to the ceiling.
+    flap.boundary({ type: 'turn/start', sessionId: 's1', seq: 5, reason: 'completed' });
+    flap.resolve(busy);
+    eq(flap.retractions.s1, 2, 'and a second flash is remembered too');
+    eq(flap.settleFor('s1'), core.COMPLETION_SETTLE_MAX_MS,
+      `the ceiling is reached rather than growing for ever (${flap.settleFor('s1')} ms)`);
+    // The debt belongs to ONE session: another session's completion is unaffected.
+    eq(flap.settleFor('s2'), core.COMPLETION_SETTLE_MS, 'another session still waits the shipped window');
+    // Time forgets it, so an hour of flashing cannot silence the pet for the rest of the day.
+    flapClock += 60 * 60 * 1000 + 1;
+    eq(flap.settleFor('s1'), core.COMPLETION_SETTLE_MS, 'and a session whose debt is old waits the shipped window again');
+  }
+  {
+    // A completion the user SAW is not a premature one: going back to the session pays the debt.
+    let seenClock = 200000;
+    const seen = new core.PetMachine(() => seenClock, 120000);
+    const present = { available: true, running: false, pending: false, currentSessionId: 's1' };
+    seen.boundary({ type: 'turn/start', sessionId: 's1', seq: 1, reason: 'completed' });
+    seen.boundary({ type: 'turn/end', sessionId: 's1', seq: 2, reason: 'completed' });
+    seenClock += core.COMPLETION_SETTLE_MS + 1;
+    eq(seen.resolve(present), 'done', 'a completion in the session the user is watching is announced');
+    seen.boundary({ type: 'turn/start', sessionId: 's1', seq: 3, reason: 'completed' });
+    seen.resolve(present);
+    eq(seen.settleFor('s1'), core.COMPLETION_SETTLE_MS * 2, 'a retracted completion leaves a debt');
+    seen.boundary({ type: 'turn/end', sessionId: 's1', seq: 4, reason: 'completed' });
+    seenClock += core.COMPLETION_SETTLE_MS * 2 + 1;
+    eq(seen.resolve(present), 'done', 'the grown window passes and the completion is announced');
+    seenClock += core.NOTICE_WINDOW_MS + 1;
+    seen.resolve(present);
+    eq(seen.settleFor('s1'), core.COMPLETION_SETTLE_MS, 'and the user being back in the session clears the debt');
+  }
+
+  /**
    * 任务完成 lasts as long as the 状态 settings ask — with the notice window as the FLOOR.
    *
    * The operator's report was that the 持续时间 field "只可能把它缩短": the state was gated by

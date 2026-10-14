@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2382 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2406 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -250,6 +250,30 @@ stop — what this fixes is the IN-APP pet, in a window this plugin does not own
 listeners down with the widget, and the browser probe pins all of it on a page whose ticks are hand-driven: it installs the
 drivers the way `start()` does, stamps the frame clock into the past (the throttled state), requires a pump anyway, requires
 one more SYNCHRONOUSLY on a `focus` event, and hands the page back with no interval left running.
+
+**A completion that gets taken back makes the NEXT one wait longer** (operator, 2026-10-14: 「刚刚的任务结束后，桌宠短暂出现了
+一下成功状态，但是焦点还没有切换回DSH成功状态就消失了，而且还会反复跳出"深度求索中…"」, clarified as 「刚刚的所有对话都完成了，没有子
+代理或者子任务」). The mechanism is in the rules as they stood: a `turn/end` starts the settle window, a quiet gap longer than
+`COMPLETION_SETTLE_MS` promotes it to 任务达成, and the session's OWN next round dismisses the shown notice — so a task whose
+rounds are further apart than 4 s flashes 达成, loses it, flashes it again. **A completion that had to be taken back was
+premature**, so the pet now remembers it: `PetMachine.noteRetraction` counts it per SESSION and `settleFor` doubles that
+session's window for the next one (4 s → 8 → 16, `COMPLETION_SETTLE_MAX_MS`), which is the whole fix — one flash, then
+quiet, then a 任务达成 that stays. Three deliberate edges: only a COMPLETION is counted (a failure latching until the next
+turn starts is the documented end of an error notice, not a completion the pet got wrong); a completion the user actually
+SAW pays the debt (`dismissNotice`'s `keepDebt` flag is what tells the two dismissals apart); and the debt is forgotten
+after an hour, so a bad morning cannot make the pet refuse to report completions for the rest of the day. **What is NOT
+fixed, and the operator should know it**: while he sits in front of the session, a gap longer than the window still flashes
+once and is then ACKNOWLEDGED (he is present and focused, 4.2 s later) rather than retracted — acknowledged completions pay
+the debt by design, so the lever for that case is the window itself (8 s / 16 s, his call) or option A from the same
+question (hold a shown notice until he looks). Say the word and it is a one-line change.
+
+**The state route now carries WHY** (`/vrmpet3d/state`'s `why` block, added to answer exactly that report): the machine's
+INPUTS rather than its answer — `running`/`working`/`waiting`/`unread`, `runningIds` (WHICH sessions were counted, the
+difference between a stale status entry and a real turn), the notice on screen, the one still settling, the interaction, the
+turn clock and whether this surface believes DSH has the user's attention. Sanitised twice — the client caps every string,
+the host rewrites the block field by field — and dropped with the report it explains when the state ages out. It needs the
+pet's PAGE reloaded to start sending (the host accepts it either way), and it deliberately does not force a report: it rides
+along with the state changes and the 5 s heartbeat rather than turning the channel into a 1 Hz feed.
 
 **Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
 

@@ -1564,6 +1564,41 @@ group('8. registered routes and both catalogs over HTTP');
   petState = await postState({ state: 'working', line: 42 });
   eq(petState.payload.line, null, 'and a non-string is refused rather than rendered');
   /**
+   * The WHY block: the machine's INPUTS, relayed so "it keeps saying 深度求索中 with nothing running" is answerable from
+   * one request instead of a guess (operator, 2026-10-14). It crosses a page boundary, so this asserts both halves that
+   * matter: the fields a diagnostic needs survive, and everything else is rewritten rather than trusted.
+   */
+  petState = await postState({
+    state: 'working',
+    why: {
+      running: true, working: 2, waiting: 0, unread: 1, pending: false, available: true,
+      scope: 'global', session: 'sess-1', runningIds: ['sess-1', 'sess-2'],
+      notice: { reason: 'completed', at: 1700000000000, sessionId: 'sess-2' },
+      held: null, settling: { reason: 'completed', at: 1700000000001, sessionId: 'sess-1' },
+      interaction: null, focused: true,
+      turn: { open: false, startedAt: 1699999999000, endedAt: 1700000000000 },
+    },
+  });
+  petState = await readState();
+  eq(petState.payload.why && petState.payload.why.running, true, 'the why block says whether work is running');
+  eq(petState.payload.why.working, 2, 'how many sessions were counted');
+  eq(JSON.stringify(petState.payload.why.runningIds), JSON.stringify(['sess-1', 'sess-2']),
+    'and WHICH ones, which is the difference between a stale status entry and a real turn');
+  eq(petState.payload.why.notice && petState.payload.why.notice.sessionId, 'sess-2',
+    'the completion on screen is named');
+  eq(petState.payload.why.settling && petState.payload.why.settling.sessionId, 'sess-1',
+    'and so is the one still waiting out its settle window');
+  eq(petState.payload.why.focused, true, 'and whether this surface believes DSH has the user\'s attention');
+  petState = await readState();
+  eq(petState.payload.why && petState.payload.why.working, 2, 'the window (and a debugger) reads it back on the next poll');
+  petState = await postState({ state: 'working', why: { running: 'yes', working: 'lots', evil: '<script>' } });
+  petState = await readState();
+  eq(petState.payload.why, null,
+    'and a why block with nothing usable in it is dropped rather than stored as junk');
+  petState = await postState({ state: 'working', why: null });
+  petState = await readState();
+  eq(petState.payload.why, null, 'while a report with no why at all clears it');
+  /**
    * The PRESS travels the same way — which part of the model it landed on.
    *
    * Relayed for the same reason the line is: the answer lives only in the page that measured it, and "I clicked
