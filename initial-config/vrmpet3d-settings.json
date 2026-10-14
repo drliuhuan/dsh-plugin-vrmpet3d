@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 71,
   "preferences": {
     "scope": "global",
     "petSurface": "both",
@@ -9,6 +9,7 @@
     "windowGravity": false,
     "motion": true,
     "lookAtPointer": true,
+    "motionPhysics": true,
     "physics": true,
     "hidden": false,
     "sleepAfterMs": 120000,
@@ -28,8 +29,8 @@
     "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.5095052242279052,
-    "placementY": 0.30962643678160917,
+    "placementX": 0.03906247019767761,
+    "placementY": 0.29813218390804597,
     "motions": {
       "resting": [
         "a9",

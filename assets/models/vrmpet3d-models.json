@@ -1,0 +1,96 @@
+{
+  "springs": {
+    "BlueFatFish.vrm": {
+      "DaiMao": {
+        "stiffness": 0.4,
+        "dragForce": 0.2,
+        "gravityPower": 0.05
+      },
+      "ErDuo.L": {
+        "stiffness": 1,
+        "dragForce": 0.2,
+        "gravityPower": 0.05
+      },
+      "ErDuo.R": {
+        "stiffness": 1,
+        "dragForce": 0.2,
+        "gravityPower": 0.05
+      },
+      "FaBing.L": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "FaBing.R": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "H_QunZi.L": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "H_QunZi.R": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Hou_hair": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Hou_hair.L": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Hou_hair.R": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "LiuHai": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "LiuHai.L": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "LiuHai.R": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Q_QunZi.L": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Q_QunZi.R": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "QunZi.L": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "QunZi.R": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "WeiBa": {
+        "gravityPower": 0.05
+      },
+      "Z_HouQunZi": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Z_QunZi": {
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      }
+    }
+  }
+}

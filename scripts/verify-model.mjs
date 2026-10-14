@@ -1429,6 +1429,26 @@ group('8. registered routes and both catalogs over HTTP');
     'the motion catalog reports the bundled motion directory');
   ok(motionCatalog.payload.motions.some(motion => motion.source === 'bundled'),
     'and the shipped pack is listed out of the box, without the user importing anything');
+  /**
+   * THE PACK'S SPRING VALUES ride along with it (operator, 2026-10-14: 「把当前 BlueFatFish 弹簧骨的参数作为默认参数推上去」).
+   *
+   * Keyed by the LIVE model id, because the manifest itself is keyed by file name and an id is positional: the host owns
+   * the catalog that turns one into the other, so it does the resolution and the client only indexes by the id it has.
+   * The shipped model is in this fixture's catalog, so the entry is asserted by BOTH halves — the id, and the chain map
+   * behind it.
+   */
+  const defaults = motionCatalog.payload.springDefaults;
+  ok(defaults && typeof defaults === 'object', 'the motion catalog carries the pack\'s spring values');
+  const fatFish = modelCatalog.payload.models.find(model => model.name === 'BlueFatFish.vrm');
+  ok(Boolean(fatFish), 'the fixture catalog lists the shipped model the defaults are written for');
+  if (fatFish) {
+    const chains = defaults[fatFish.id];
+    ok(chains && typeof chains === 'object',
+      `and its spring values are keyed by its LIVE model id (${fatFish.id}; payload keys: ${Object.keys(defaults).join(', ') || '(none)'})`);
+    ok(Boolean(chains && chains.DaiMao), 'with a chain the model file actually declares');
+    eq(chains && chains.DaiMao && chains.DaiMao.stiffness, 0.4,
+      'and the number the operator tuned for it (0.4 on the ahoge), not the file\'s own value');
+  }
 
   // The two catalogs are disjoint at the payload level and at the route level. The bundled model is a MODEL and
   // must never appear among the motions; the fixture directory here holds one model and one motion.
