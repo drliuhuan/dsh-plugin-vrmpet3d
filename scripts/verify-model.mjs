@@ -1582,6 +1582,12 @@ group('8. registered routes and both catalogs over HTTP');
         focused: false, presentId: null, running: false,
       },
       catalogKeys: ['byId:object', 'ids:array', 'phase:string'],
+      /**
+       * The unread breakdown, added with the 绿点 fix of 2026-10-14: four helper sessions DSH marked `completionUnread`
+       * that are in the record table but NOT in the app's own list — the shape that says why the dot is (not) lit,
+       * without a session id or a title in it.
+       */
+      unreadDetail: { candidates: 4, counted: 0, inIds: 0, inById: 4, subagent: 0, blank: 0, withCwd: 4, running: 1 },
     },
   });
   petState = await readState();
@@ -1600,7 +1606,9 @@ group('8. registered routes and both catalogs over HTTP');
   eq(petState.payload.why.dismissed.presentId, null, 'and the session it compared against (null: there was none)');
   eq(JSON.stringify(petState.payload.why.catalogKeys), JSON.stringify(['byId:object', 'ids:array', 'phase:string']),
     'and the SHAPE of the session snapshot, so a field this plugin cannot read can be named');
-  petState = await readState();
+  eq(JSON.stringify(petState.payload.why.unreadDetail),
+    JSON.stringify({ candidates: 4, counted: 0, inIds: 0, inById: 4, subagent: 0, blank: 0, withCwd: 4, running: 1 }),
+    'and WHY the green dot is or is not lit, as counts: candidates, counted, and which half of the catalog held them');  petState = await readState();
   eq(petState.payload.why && petState.payload.why.working, 2, 'the window (and a debugger) reads it back on the next poll');
   petState = await postState({ state: 'working', why: { running: 'yes', working: 'lots', evil: '<script>' } });
   petState = await readState();
@@ -1650,6 +1658,18 @@ group('8. registered routes and both catalogs over HTTP');
   const storedAfterState = await server.json('/vrmpet3d/settings');
   eq(JSON.stringify(storedAfterState.payload.preferences.status), '{}',
     'and the state channel persisted nothing either: it is live telemetry, not a preference');
+  /**
+   * The unread breakdown is sanitised like every other field, and this sits LAST in the section on purpose: it changes
+   * what the route holds, and every assertion above it reads that route.
+   */
+  await postState({
+    state: 'working',
+    why: { running: true, unreadDetail: { candidates: 'lots', counted: -3, inIds: null, inById: 2.7, junk: 'x' } },
+  });
+  const junkDetail = await readState();
+  eq(JSON.stringify(junkDetail.payload.why && junkDetail.payload.why.unreadDetail),
+    JSON.stringify({ inById: 2 }),
+    `while a nonsense breakdown is filtered down to the counts that are real (got ${JSON.stringify(junkDetail.payload.why)})`);
 
   // ---- the desktop window's routes, over real HTTP -------------------------
   //

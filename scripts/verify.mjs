@@ -3049,6 +3049,42 @@ group('8. session aggregate');
     eq(classified.snapshot().notice, undefined, 'a helper the host DID classify is skipped as before');
     eq(classified.snapshot().unreadCount, 0, 'and it never contributes to the dot either');
     /**
+     * THE 绿点 REGRESSION (operator, 2026-10-14: 「明明没有已完成的会话，在工作中的时候，深度求索中前面有绿点」).
+     *
+     * Measured live with `build/probe-out/watch-state.mjs`: `unread=0` in 219 of 219 samples, then `unread=4` in every
+     * sample after four review subagents were spawned — one per helper. `mainSession` was written to stop exactly that,
+     * but its store half looks for an `isSubagent` FIELD that this build's records do not have (measured: `id`,
+     * `displayTitle`, `running`, `retainedBy`, `blank`, `updatedAt`, `projectionValues`, `title`, `cwd`), so a helper
+     * reached the `byId` fallback — a table of everything the store has seen — and was counted. The app's own LIST
+     * (`ids`) is the half that answers the real question, and every test above this uses a store WITHOUT one.
+     */
+    const withList = new core.SessionAggregate(() => now);
+    withList.setInput({
+      connected: true,
+      phase: 'ready',
+      catalog: {
+        ids: ['m1'],
+        byId: { m1: { id: 'm1', blank: false }, h1: { id: 'h1', blank: false } },
+      },
+      statuses: new Map([['m1', { running: false, completionUnread: true }], ['h1', { running: false, completionUnread: true }]]),
+    });
+    const withListSnap = withList.snapshot();
+    eq(withListSnap.unreadCount, 1, 'a helper in the record table but NOT in the app\'s list is not the user\'s dot');
+    eq(withListSnap.unreadDetail.candidates, 2, 'the breakdown counts every session DSH marked unread');
+    eq(withListSnap.unreadDetail.counted, 1, 'and how many of them passed as the user\'s own');
+    eq(withListSnap.unreadDetail.inIds, 1, 'naming the app\'s own list as the reason');
+    eq(withListSnap.unreadDetail.inById, 2, 'beside the record table, which holds both');
+    // A store that has no list keeps the OLD answer: this may only ever be stricter where a list exists.
+    const noList = new core.SessionAggregate(() => now);
+    noList.setInput({
+      connected: true,
+      phase: 'ready',
+      catalog: { byId: { h1: { id: 'h1' } } },
+      statuses: new Map([['h1', { running: false, completionUnread: true }]]),
+    });
+    eq(noList.snapshot().unreadCount, 1, 'a store with no ids list falls back to the record table, unchanged');
+
+    /**
      * And the fallback the store edge exists for is untouched: with NO identity list at all (the RPC boundary stream
      * not wired, which is the case `observeStoreEdge` was added for) a session the app lists still reports when it
      * stops — the fix fails closed for strangers, not for the user.
