@@ -107,6 +107,17 @@ Three consequences worth knowing before touching this:
   something no box could turn off. `MOTION_TEMPLATE_FIELDS` is the whitelist, applied in one place
   (`core.cleanMotionTemplateEntry`) so the host's manifest reader and the core cannot disagree about it.
 
+**「默认（无表情）」 is NOT an expression, so it does not stop the blink** (operator, 2026-10-14: 「之前有设置过如果有表情，停用眨眼。
+但是这个默认（无）属于没有表情，眨眼应该正常触发。所以，所有表情设置为默认（无表情）的时候，眨眼都要正常触发」, said while putting
+`dance/Dancing.vrma` into 工作中 with exactly that answer). The blink gate asked `Boolean(currentFace())`, and that answer has
+to be an OBJECT — "nothing" is an answer, and `expressionTargets` uses it to keep the emotion table out AND to hold the
+clip FILE's own face at zero — so the gate was reading "the clip spoke" as "a face is showing" and holding the eyes open
+over a blank face. It now asks what is SHOWING: a real expression name or a mouth shape pauses the blink, a blank answer
+does not, and the file's own tracks stop counting in that case too (the same answer is what silences them, so a face held
+at zero is not on screen). `Scene.blinkState()`'s `paused` reads the same rule, because it exists to explain the gate.
+The dance clip is the first user: `template.working` gives it `expression: "none"` and `gaze: false`, so it plays with a
+blank face, with blinking, and without following the cursor — all three by file name, in the pack's manifest.
+
 **The two TEXTS have a FIXED default size, and the pet's box is not consulted** (operator, 2026-10-13: 「状态文字默认大小设置
 为18px」, then 「默认文字大小固定，放大缩小的倍数和盒子大小解耦连，就是完全不相关，避免缩放模型的时候缩放文字」): `STATUS_FONT_PX`
 is 18, 碎碎念 is its 0.95 (`core.speechPromptFontPx`, 17.1 px), and the signature takes the model's correction and NOTHING else —

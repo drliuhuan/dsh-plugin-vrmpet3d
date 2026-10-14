@@ -7288,6 +7288,25 @@
                 pet.scene.playback.record.faceTracks = true;
                 found.blinkPausedWithClipFace = pet.scene.blinkState().paused !== blinkBefore
                   || pet.scene.blinkState().paused === true;
+                /**
+                 * …AND 「默认（无表情）」 DOES NOT PAUSE IT, even for a clip whose FILE carries a face.
+                 *
+                 * Operator, 2026-10-14: 「之前有设置过如果有表情，停用眨眼。但是这个默认（无）属于没有表情，眨眼应该正常触发。所以，
+                 * 所有表情设置为默认（无表情）的时候，眨眼都要正常触发」. That answer is what holds the file's own tracks at
+                 * ZERO (see `expressionTargets`), so there is no face on screen for a blink to overwrite — while a clip
+                 * that merely says nothing about its face keeps pausing the blink, which the line above still pins.
+                 */
+                var blankMap = CORE.setMotionClip(pet.preferences, 'resting', 'a1', 'expression', CORE.MOTION_FACE_DEFAULT);
+                pet.preferences.motionClips = blankMap;
+                if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) {
+                  pet.scene.preferences.motionClips = blankMap;
+                }
+                found.blinkPausedByBlankFace = pet.scene.blinkState().paused;
+                found.blinkFaceFromClip = Boolean(pet.scene.currentFace());
+                pet.preferences.motionClips = keptClips;
+                if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) {
+                  pet.scene.preferences.motionClips = keptSceneClips;
+                }
                 report.oneShotRules = found;
                 return found.pickedOnEntry === 'a2' && found.playingOnEntry === 'a2'
                   && found.loopStillRunning === true && found.firedWhileLoop === 'a1'
@@ -7305,7 +7324,9 @@
                   && found.faceDefault.otherExpression !== null
                   && found.faceDefault.namedKept === true
                   && found.faceDefault.fileSideZeroed === true
-                  && found.blinkPausedWithClipFace === true;
+                  && found.blinkPausedWithClipFace === true
+                  // The blank answer is still an ANSWER (so the mood stays out) and still does not blink-stop.
+                  && found.blinkFaceFromClip === true && found.blinkPausedByBlankFace === false;
               });
             });
           });
