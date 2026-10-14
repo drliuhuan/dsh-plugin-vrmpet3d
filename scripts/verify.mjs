@@ -3469,8 +3469,55 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     'and the refusal is per STATE: the same clip can still look at the cursor in another state');
   same(core.setMotionClip(core.cleanPreferences({ motionClips: { resting: { a1: { gaze: false, mouth: 'A' } } } }), 'resting', 'a1', 'gaze', null),
     { resting: { a1: { mouth: 'A' } } }, 'clearing the switch drops only the switch');
-  same(core.cleanMotionClips({ resting: { a1: { gaze: true } } }), {},
-    'a stored "gaze: true" is dropped rather than kept: the switch only ever records a refusal');
+  same(core.cleanMotionClips({ resting: { a1: { gaze: true } } }), { resting: { a1: { gaze: true } } },
+    'a stored "gaze: true" is KEPT now: the pack template can refuse for a clip, and taking that back has to be storable');
+  eq(core.motionGazeFor(core.cleanPreferences({ motionClips: { resting: { a1: { gaze: true } } } }), 'resting', 'a1'), true,
+    'and it reaches the renderer as a permission, over a template that refuses');
+
+  /**
+   * THE PACK'S 状态与动作 TEMPLATE (operator, 2026-10-14: 「现在的本机上的状态与动作里面的内容，包括每个动作的表情状态，全部作为默认模板上传」).
+   *
+   * Written by FILE NAME in the manifest, translated here against the live catalog, and merged FIELD BY FIELD
+   * under the profile's own entry. The two halves that matter most are the ones a naive implementation gets wrong:
+   * a profile that decided ONE thing about a clip keeps the template's other fields, and 「跟随情绪」 has to remain
+   * expressible against a template that names a face — which is what `MOTION_FACE_FOLLOW` is for.
+   */
+  const templateCatalog = [
+    { id: 'a1', name: 'idle/one.vrma' },
+    { id: 'a2', name: 'idle/two.vrma' },
+  ];
+  const declaredTemplate = core.motionClipTemplate({
+    resting: {
+      'idle/one.vrma': { loop: false, expression: 'none', gaze: false },
+      'idle/two.vrma': { expression: 'happy' },
+      'idle/missing.vrma': { expression: 'sad' },
+      'idle\\three.vrma': { loop: true },
+    },
+    nowhere: { 'idle/one.vrma': { loop: true } },
+    done: { 'idle/one.vrma': 'not an object' },
+  }, templateCatalog);
+  same(declaredTemplate, {
+    resting: { a1: { loop: false, expression: 'none', gaze: false }, a2: { expression: 'happy' } },
+  }, 'the template is translated to ids by NAME, drops clips this profile does not have, and ignores unreachable states');
+
+  const withTemplate = core.cleanPreferences({});
+  eq(core.motionClipFor(withTemplate, 'resting', 'a1', declaredTemplate).expression, 'none',
+    'a profile that has configured nothing reads the template');
+  eq(core.motionLoopForState(withTemplate, 'resting', 'a1', true, declaredTemplate), false,
+    'including the play mode, which the template sits above the catalog for and below the profile');
+  eq(core.motionGazeFor(withTemplate, 'resting', 'a1', declaredTemplate), false,
+    'and the gaze refusal');
+  same(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'resting', 'a1', declaredTemplate),
+    { loop: true, expression: 'none', gaze: false },
+    'and a profile that decided ONE field keeps the template\'s other fields');
+  same(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { expression: 'follow' } } } }), 'resting', 'a1', declaredTemplate),
+    { loop: false, expression: 'follow', gaze: false },
+    'while 「跟随情绪」 is storable as the sentinel, which is what lets a template\'s face be taken back');
+  same(core.motionClipFor(withTemplate, 'done', 'a1', declaredTemplate), null,
+    'a state the template says nothing about falls through to no entry at all');
+  same(core.motionClipTemplate({ resting: { 'idle/one.vrma': { speech: 'hi', prompt: 'x', mouth: 'A' } } }, templateCatalog),
+    { resting: { a1: { mouth: 'A' } } },
+    'and per-clip 碎碎念/提示词 do NOT travel in the template: they are the user\'s words, and one could not be taken back');
 
   /**
    * The two TEXTS a clip owns in a state (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词」).

@@ -1025,6 +1025,43 @@ group('5b. the bundled motion pack');
   eq(Object.keys(core.motionMapWithDefaults({}, declaredDefaults, bundled.motions)).length,
     Object.keys(declaredDefaults).length,
     'with every state resolving through the catalog, so nothing ships as a mapping that draws nothing');
+
+  /**
+   * And the pack's `template`: how each of those clips PLAYS and what face it wears.
+   *
+   * The operator's own 状态与动作 configuration, shipped by file name so a new user's pet is not faceless (2026-10-14:
+   * 「现在的本机上的状态与动作里面的内容，包括每个动作的表情状态，全部作为默认模板上传」). Validated the way the defaults are —
+   * a block that a hand edit can break, and the failure worth catching is the same one: a name nothing answers to.
+   */
+  eq(JSON.stringify(plugin.readMotionTemplate(null)), '{}', 'a missing template block declares nothing');
+  eq(JSON.stringify(plugin.readMotionTemplate({ resting: { 'idle/a.vrma': { loop: false, expression: 'Joy' } } })),
+    JSON.stringify({ resting: { 'idle/a.vrma': { loop: false, expression: 'Joy' } } }),
+    'a template entry survives the reader with its fields');
+  eq(JSON.stringify(plugin.readMotionTemplate({ resting: { 'idle/a.vrma': { speech: 'hi', prompt: 'x' } } })),
+    '{}',
+    'and carries no per-clip 碎碎念: those are the user\'s words, and a template line could not be taken back');
+  eq(JSON.stringify(plugin.readMotionTemplate({ sleeping: { 'idle/a.vrma': { loop: true } }, resting: { 'idle/a.vrma': 'no' } })),
+    '{}', 'an unreachable state and a non-object entry are dropped');
+  eq(JSON.stringify(plugin.readMotionTemplate({ resting: { 'nested\\a.vrma': { gaze: false } } })),
+    JSON.stringify({ resting: { 'nested/a.vrma': { gaze: false } } }),
+    'and a name written on Windows is normalised to forward slashes, like the catalog reports it');
+
+  const packTemplate = plugin.bundledMotionTemplate();
+  ok(Object.keys(packTemplate).length > 0,
+    `the shipped pack declares a per-clip template (${Object.keys(packTemplate).join(', ')})`);
+  const templateNames = [];
+  Object.keys(packTemplate).forEach((state) => {
+    Object.keys(packTemplate[state]).forEach((name) => templateNames.push(state + ' -> ' + name));
+  });
+  eq(templateNames.filter(entry => !namesInPack.has(entry.split(' -> ')[1])).join(', '), '',
+    'and every clip the template names is a real clip in the pack');
+  const resolvedTemplate = core.motionClipTemplate(packTemplate, bundled.motions);
+  eq(Object.keys(resolvedTemplate).length, Object.keys(packTemplate).length,
+    'with every state resolving through the catalog, so no template state ships pointing at nothing');
+  const declaredFaces = Object.keys(packTemplate).reduce((total, state) => total
+    + Object.keys(packTemplate[state]).filter(name => typeof packTemplate[state][name].expression === 'string').length, 0);
+  ok(declaredFaces > 0,
+    `and it carries the faces the operator configured (${declaredFaces} clip(s) name an expression)`);
 }
 
 // ---------------------------------------------------------------------------

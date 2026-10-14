@@ -165,7 +165,7 @@ plugin's own script is served through a combo URL whose path is `/plugins/`.
 `lib/core.js` contains the state machine, fall physics, framing maths, idle motion,
 motion-format detection and preference cleaning, and imports neither DOM nor
 three.js. That is not tidiness for its own sake: those are the parts most likely to
-be subtly wrong, and keeping them pure lets the core suite's 1182 checks run in well
+be subtly wrong, and keeping them pure lets the core suite's 1191 checks run in well
 under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
@@ -673,6 +673,20 @@ ships in until the operator chooses a mapping) nothing plays without a mapping, 
 change. `readMotionDefaults` validates that block rather than trusting it: a state the session machine cannot
 reach, a duplicate, a non-name, or a backslash path is dropped, because this is a file a person hand-edits.
 
+**The same file's `template` block is the operator's whole 状态与动作 configuration** — `{ [state]: { '<relative
+name>': { loop?, expression?, mouth?, gaze? } } }` — shipped so a fresh profile's pet is not merely pointed at his
+clips but wears the faces he gave them (2026-10-14: 「…包括每个动作的表情状态，全部作为默认模板上传」). The path is the
+same one `defaults` takes: `readMotionTemplate` validates the block, `core.motionClipTemplate` resolves its names
+against the catalog just built, `/vrmpet3d/motions` sends the result as `motionClipDefaults` beside `motionDefaults`,
+both surfaces hand it to their scene (`setMotionClipDefaults`), and `core.motionClipFor(…, template)` merges it FIELD
+BY FIELD **under** the profile's own entry — a profile that decided the play mode for a clip still inherits the
+template's face, and one that picked a face keeps the template's 凝视. Two values exist only because a template does, and
+both are what keeps a default from being a setting nobody can turn off: `MOTION_FACE_FOLLOW` (`'follow'`), the stored
+way to say 「跟随情绪」 against a template that names a face, and `gaze: true`, which takes a template's refusal back for
+one clip. Per-clip 碎碎念/提示词 are deliberately NOT part of the template — they are the user's own words, and an absent
+string already means "use the state's pool", so a template line could not be overruled back to "no line"
+(`MOTION_TEMPLATE_FIELDS` is the whitelist, applied once in `core.cleanMotionTemplateEntry`).
+
 **A state draws ONE clip from a LIST, at the moment it is entered.** The persisted map is
 `{ state: [id, ...] }`, and the canonical shape is a list even for one clip. Two things follow, and both are
 contracts rather than conveniences:
@@ -879,7 +893,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2363 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
+Nine suites, 2382 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
 suites, the `build/` tools and the notes) — the `mmd` suite that used to make it ten went with MMD support on
 2026-10-12, and every figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs`
 recomputes them. The

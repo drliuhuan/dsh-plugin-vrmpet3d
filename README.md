@@ -11,7 +11,7 @@ fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2363 checks · works offline
+no runtime dependencies · 9 verification suites · 2382 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -118,10 +118,13 @@ and `assets/motions/` — the shipped pack — is never touched by any of it.
 imported model or motion directories — they are offered from the first scan, with no directory to import: they
 are read from the plugin's own folder, the way the bundled `SampleModel.vrm` is. The pack is filed **one folder per
 state** (`idle/`, `working/`, `attention/`, `success/`, `fail/`, `offline/`), and that filing IS the mapping: each
-state's picker offers only its own folder, so one list is never every clip the operator has authored. Their
-`循环`/`单次` mode comes from the folder's own `vrmpet3d-motions.json` beside them, and that file's `defaults` block is
-where a state→clip mapping for a fresh install belongs. It ships **empty**, so nothing plays until you tick a clip in
-通用设置 → 状态与动作; each clip still loops or plays once exactly as declared.
+state's picker offers only its own folder, so one list is never every clip the operator has authored. That folder's
+`vrmpet3d-motions.json` is the pack's own answer for a fresh install, in three blocks: `clips` (per file, 循环/单次),
+`defaults` (which clips each state draws) and `template` (per state AND clip: 循环/表情/口型/凝视). All three ship
+**filled with the operator's own configuration** — his state mapping and the face, gaze and play mode he gave every
+clip — written by FILE NAME rather than by a profile's ids, so the defaults survive a different machine and the next
+clip added to the pack. Anything you set in 通用设置 → 状态与动作 wins over it, field by field, and 「跟随情绪」 is there
+to take a template's face back.
 
 **A large clip may be stored compressed, as `<name>.vrma.br`.** Dance clips are megabytes, so the pack keeps them
 brotli-compressed and the plugin unpacks one into memory when it plays; nothing else changes, and the clip is
@@ -142,11 +145,11 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1182 — state machine, the nine motion states, the shipped 部位 碎碎念 (两个手势 × 中英), and the session aggregate's completion rules (a helper's stop is not the user's) |
-| `node scripts/verify-model.mjs` | 758 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
+| `node scripts/verify.mjs` | 1191 — state machine, the nine motion states, the shipped 部位 碎碎念 (两个手势 × 中英), the session aggregate's completion rules (a helper's stop is not the user's), and the pack's 状态与动作 template (per-clip 循环/表情/口型/凝视, merged field by field under the profile's own) |
+| `node scripts/verify-model.mjs` | 767 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and its per-clip template, and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
-| `node scripts/verify-browser.mjs --page client-test` | 100 — the widget, the menu, the desktop page, the shipped 部位 台词 per gesture, the background pump that keeps a throttled window alive, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar, a posed model's part hit test, and 通用设置's 状态与动作 rows with their per-clip 碎碎念 and AI 提示词 |
+| `node scripts/verify-browser.mjs --page client-test` | 101 — the widget, the menu, the desktop page, the shipped 部位 台词 per gesture, the background pump that keeps a throttled window alive, the pack template through a real scene, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar, a posed model's part hit test, and 通用设置's 状态与动作 rows with their per-clip 碎碎念 and AI 提示词 |
 | `node scripts/verify-desktop.mjs` | 269 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |

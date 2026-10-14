@@ -54,6 +54,18 @@ node scripts/capture-config.mjs --source <dir>   # 读别的 profile
 }
 ```
 
+还有第二块，`template`：**每个状态 × 每个动作**的设置（`loop` / `expression` / `mouth` / `gaze`），同样按文件名。
+`motions` 只说「哪些动作」，`motionClips` 才说「每个动作怎么放、什么表情」——它就是 `template` 的来源，所以配置好
+状态与动作之后，**两块都要更新**（`build/probe-out/make-motion-template.mjs` 就是照着运行中的 profile 生成它的）。
+逐动作的**碎碎念/提示词不上传**：那是用户自己的话，而且清单里没法表达「不要这句话」（空的字符串已经意味着「用状态
+自己的池子」），所以 `template` 只带上面四个字段：
+
+```json
+{
+  "template": { "done": { "success/jump 1.vrma": { "expression": "happy", "gaze": false } } }
+}
+```
+
 `motion-catalog.json`（`--catalog` 抓的）给出每个 id 对应的 `name`，翻译就是照它做。示例（在插件运行时）：
 
 ```bash

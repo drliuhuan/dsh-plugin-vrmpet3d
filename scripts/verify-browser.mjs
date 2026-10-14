@@ -515,7 +515,15 @@ function runBrowser(browser) {
     '--no-sandbox',
     '--disable-dev-shm-usage',
     '--hide-scrollbars',
-    '--virtual-time-budget=60000',
+    /**
+     * The page's VIRTUAL time budget, doubled on 2026-10-14 after it produced three false failures in one day:
+     * `the page never finished: running: <whichever check was in flight>`, twice inside `check-docs.mjs` and once
+     * standalone, while the same command passed 100/100 with the same page minutes earlier. The rAF-driven checks
+     * spend virtual time in proportion to the frames they need, and a busy machine needs more of them for the same
+     * logical wait — so 60 s was not a ceiling the page could be relied on to fit inside. Raising it changes
+     * nothing about what is checked: a page that genuinely hangs still ends as a loud parse error, a minute later.
+     */
+    '--virtual-time-budget=120000',
     '--dump-dom',
     url,
   ];

@@ -6989,6 +6989,67 @@
    * declared curl on every finger joint read out of the GLB's own JSON.
    */
   /**
+   * THE PACK'S 状态与动作 TEMPLATE, through the renderer a pet actually draws with.
+   *
+   * Operator, 2026-10-14: 「现在的本机上的状态与动作里面的内容，包括每个动作的表情状态，全部作为默认模板上传」. The manifest
+   * carries it by file name, the host resolves it to ids, and this is where the three layers meet: the template,
+   * the profile's own field, and the layer below (the emotion table). Both directions are asserted, because a
+   * template is only a default if the user can take it back — 「跟随情绪」 for the face and a 凝视 box that can be
+   * ticked again are exactly what stops it from being a setting nobody can turn off.
+   */
+  check('a pack template gives a fresh profile its faces, gaze and play mode, and the profile can take each back', function () {
+    var scene = widget.scene;
+    if (!scene || typeof scene.setMotionClipDefaults !== 'function') return false;
+    /**
+     * The scene may be holding the preferences object it was BUILT with rather than this page's copy (the same trap
+     * the 默认-face check below spells out), so every write goes to both and both are put back at the end.
+     */
+    var keptPageClips = widget.preferences.motionClips;
+    var keptSceneClips = scene.preferences ? scene.preferences.motionClips : undefined;
+    var writeClips = function (map) {
+      widget.preferences.motionClips = map;
+      if (scene.preferences) scene.preferences.motionClips = map;
+    };
+    var keptPlayback = scene.playback;
+    var keptPick = scene.pickState;
+    var keptPreview = scene.preview;
+    scene.setMotionClipDefaults({ resting: { a1: { loop: false, expression: CORE.MOTION_FACE_DEFAULT, gaze: false } } });
+    writeClips({});
+    scene.playback = { id: 'a1' };
+    scene.pickState = 'resting';
+    scene.preview = null;
+    // 「默认（无表情）」 is an ANSWER, so the object comes back with both fields null rather than nothing at all —
+    // that difference is what keeps the emotion table out of a clip that asked for a blank face.
+    var blank = scene.currentFace();
+    var refused = scene.clipGazeAllowed() === false;
+    var loopOff = scene.motionLoops('a1', 'resting') === false;
+    // The profile's own word wins FIELD BY FIELD: it takes the play mode and keeps the template's face.
+    writeClips(CORE.setMotionClip(widget.preferences, 'resting', 'a1', 'loop', true));
+    var loopOn = scene.motionLoops('a1', 'resting') === true;
+    var faceKept = scene.currentFace();
+    // …and 「跟随情绪」 takes the template's face back (the sentinel, not a cleared field, or the template returns).
+    writeClips(CORE.setMotionClip(widget.preferences, 'resting', 'a1', 'expression', CORE.MOTION_FACE_FOLLOW));
+    var followed = scene.currentFace();
+    // …and the 凝视 box can be ticked again against a template that refuses.
+    writeClips(CORE.setMotionClip(widget.preferences, 'resting', 'a1', 'gaze', true));
+    var allowed = scene.clipGazeAllowed() === true;
+    scene.setMotionClipDefaults({});
+    widget.preferences.motionClips = keptPageClips;
+    if (scene.preferences) scene.preferences.motionClips = keptSceneClips;
+    scene.playback = keptPlayback;
+    scene.pickState = keptPick;
+    scene.preview = keptPreview;
+    report.motionTemplate = {
+      blank: blank, refused: refused, loopOff: loopOff, loopOn: loopOn,
+      faceKept: faceKept, followed: followed, allowed: allowed,
+    };
+    return Boolean(blank) && blank.expression === null && blank.mouth === null
+      && refused && loopOff && loopOn
+      && Boolean(faceKept) && faceKept.expression === null
+      && followed === null && allowed;
+  });
+
+  /**
    * THE OPERATOR'S ONE-SHOT RULES, driven through the real scheduler on a real avatar.
    *
    * 「当状态的动作列表里有循环动作时，单次动作结束后，必须衔接循环动作，严禁单次动作循环播放；如果没有循环动作，单次动作

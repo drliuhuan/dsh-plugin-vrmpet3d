@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2363 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2382 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -79,10 +79,33 @@ a stored mapping that pins ids is a trap that re-arms on the next clip added, wh
 **状态与动作 ships his mapping too**: the
 `defaults` block of [assets/motions/vrmpet3d-motions.json](assets/motions/vrmpet3d-motions.json) is his per-state clip
 list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, error 2, offline 1), and the `clips`
-block carries his 循环/单次 per clip. The one part of that section that CANNOT ship in the manifest is the per-clip 凝视
-switch — the format has no place for it — but the per-state 间隔 no longer needs one: `DEFAULTS.motionEvery` is his
+block carries his 循环/单次 per clip. The per-state 间隔 does not need a block of its own: `DEFAULTS.motionEvery` is his
 `resting {min:20,max:60}`, and only a profile that has STORED an interval (an empty map included, which is how "off" is
-stored) keeps its own. Say the word if the 凝视 switch should be added to the manifest file.
+stored) keeps its own.
+
+**…and since 2026-10-14 the whole of it, down to each clip's 表情, is the shipped TEMPLATE** (operator: 「现在的本机上的状态与
+动作里面的内容，包括每个动作的表情状态，全部作为默认模板上传」). The manifest gained a `template` block —
+`{ [state]: { '<relative name>': { loop?, expression?, mouth?, gaze? } } }`, written by name for the same reason
+`defaults` is — and the host resolves it against the live catalog (`core.motionClipTemplate`) and serves it as
+`motionClipDefaults` on `/vrmpet3d/motions`, beside `motionDefaults`. Both surfaces hand it to their scene
+(`setMotionClipDefaults`), and every per-clip reader resolves through `core.motionClipFor(…, template)`, which merges
+the profile's own entry FIELD BY FIELD over the template's: a profile that decided the play mode for a clip still
+inherits the template's face, and one that picked a face keeps the template's 凝视.
+
+Three consequences worth knowing before touching this:
+
+* **`MOTION_FACE_FOLLOW` (`'follow'`) exists because of the template.** An absent `expression`/`mouth` field used to mean
+  「跟随情绪」, and it still does — but with a template naming a face, "this clip says nothing" had to become sayable, or
+  the panel's 跟随 row would be a control that does nothing. The panel writes the sentinel only when it is overruling a
+  template (with no template it still CLEARS the field, so an untouched profile's map is as small as it was), and the
+  renderer treats `'follow'` and an absent field as the same answer.
+* **凝视 became THREE-state** for the same reason: `gaze: false` refuses, `absent` follows, and `gaze: true` — newly
+  storable — takes a template's refusal back for that one clip. The panel's box shows the RESOLVED answer and writes
+  `true` only against a template that refuses.
+* **The template carries no per-clip 碎碎念/提示词.** Those are the user's own words, and a template line could not be
+  overruled back to "no line" (an absent string already means "use the state's pool"), so shipping one would ship
+  something no box could turn off. `MOTION_TEMPLATE_FIELDS` is the whitelist, applied in one place
+  (`core.cleanMotionTemplateEntry`) so the host's manifest reader and the core cannot disagree about it.
 
 **The two TEXTS have a FIXED default size, and the pet's box is not consulted** (operator, 2026-10-13: 「状态文字默认大小设置
 为18px」, then 「默认文字大小固定，放大缩小的倍数和盒子大小解耦连，就是完全不相关，避免缩放模型的时候缩放文字」): `STATUS_FONT_PX`
