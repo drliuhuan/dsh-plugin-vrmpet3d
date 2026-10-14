@@ -1046,10 +1046,17 @@
      * The background drivers are installed by `start()`, which THIS page never calls — every check here ticks the
      * widget by hand — so the check installs them the way the app does (`startBackgroundPump` is idempotent) and takes
      * them back down at the end. That teardown is not tidiness: this page's ticks come in bursts with long gaps
-     * between checks, so a 1 Hz pump left running would count as "no frames for a while" during every later check and
+     * between checks, so a pump left running would count as "no frames for a while" during every later check and
      * drive the machine behind the probe's back.
+     *
+     * Installed at 1 ms rather than the production second ON PURPOSE: this page runs under a 60 s virtual-time budget
+     * that the checks' rAF waits already eat most of (how much varies with the machine — a loaded run needs more
+     * frames for the same logical wait), so waiting out a real second to watch one tick spends budget the page does
+     * not have. Measured: at 1000 ms this check tipped a busy run over, and the harness reported whichever check
+     * happened to be running. The interval, the grace test and the wake path are all the production ones; only the
+     * period is shortened.
      */
-    widget.startBackgroundPump();
+    widget.startBackgroundPump(1);
     var pumps = 0;
     var realPump = widget.pump;
     widget.pump = function () {
@@ -1083,7 +1090,7 @@
           pumpedOnFocus: afterWake - withNoFrames,
         };
         resolve(withNoFrames >= 1 && afterWake > withNoFrames);
-      }, 1100);
+      }, 10);
     });
   });
 
@@ -3526,6 +3533,14 @@
     if (!scene || typeof scene.setDragMotion !== 'function') return false;
     widget.closeMenu();
     widget.resetSize();
+    /**
+     * 重力要先打开，显式地。这条检查测的是「抛出去之后飞行期间的反馈」，不是默认值：应用内重力自 2026-10-14 起
+     * 默认关闭（操作者「把当前设置作为默认设置推上去」，他的桌宠是悬浮窗），而关着的时候一次释放根本不产生飞行 ——
+     * 那样这条检查就会以「没有上升样本」失败，测到的是默认值而不是这条通道。检查结束前把原来的值放回去。
+     */
+    var gravityBefore = widget.preferences.gravity;
+    widget.preferences.gravity = true;
+    widget.applyGravity();
     var samples = [];
     var realSet = scene.setDragMotion;
     scene.setDragMotion = function (vx, vy) {
@@ -3572,6 +3587,9 @@
       apexFlips: rising.length > 0 && falling.length > 0,
       last: settled,
     };
+    // Put the pet's own 重力 back, so the checks after this one see the preferences they expect.
+    widget.preferences.gravity = gravityBefore !== false;
+    widget.applyGravity();
     return thrown && samples.length > 0
       && rising.length > 0 && falling.length > 0 && sideways.length > 0
       && Boolean(settled) && settled.airborne === false && settled.vx === 0 && settled.vy === 0;

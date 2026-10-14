@@ -965,8 +965,8 @@ if (live.skipped) {
          * the failure worth naming here: from every other angle it looks exactly like a working debug switch.
          */
         const debugMode = globalPage.debugMode || {};
-        ok(debugMode.control === true && debugMode.surface === 'auto' && debugMode.checked === false,
-          `and the 调试模式 switch, shipped off on 自动 (${JSON.stringify(debugMode)})`);
+        ok(debugMode.control === true && debugMode.surface === core.DEFAULTS.petSurface && debugMode.checked === false,
+          `and the 调试模式 switch, shipped off on the shipped surface (${JSON.stringify(debugMode)}, shipped ${core.DEFAULTS.petSurface})`);
         /**
          * And the 碎碎念 section: the pet's own voice, its per-state lines and the AI half.
          *

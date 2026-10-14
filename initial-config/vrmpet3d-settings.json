@@ -1,5 +1,5 @@
 {
-  "version": 49,
+  "version": 56,
   "preferences": {
     "scope": "global",
     "petSurface": "window",
@@ -28,43 +28,9 @@
     "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.7578597691719757,
-    "placementY": 0.2423945044160942,
-    "motions": {
-      "resting": [
-        "a8",
-        "a9",
-        "aa",
-        "ab",
-        "ac",
-        "ad",
-        "ae",
-        "af",
-        "ag",
-        "ah",
-        "ai",
-        "aj",
-        "al",
-        "am"
-      ],
-      "waiting": [
-        "a1",
-        "a2",
-        "a3"
-      ],
-      "done": [
-        "ao",
-        "ap",
-        "aq"
-      ],
-      "error": [
-        "a5",
-        "a6"
-      ],
-      "offline": [
-        "an"
-      ]
-    },
+    "placementX": 0.7849085365853659,
+    "placementY": 0.04625923645320195,
+    "motions": {},
     "motionLoop": {},
     "motionEvery": {
       "resting": {
@@ -72,76 +38,7 @@
         "max": 60
       }
     },
-    "motionClips": {
-      "resting": {
-        "a8": {
-          "loop": false,
-          "gaze": false
-        },
-        "a9": {
-          "loop": false,
-          "gaze": false
-        },
-        "aa": {
-          "loop": false,
-          "gaze": false
-        },
-        "ab": {
-          "loop": false,
-          "gaze": false
-        },
-        "ac": {
-          "loop": false,
-          "gaze": false
-        },
-        "ad": {
-          "loop": false,
-          "gaze": false
-        },
-        "ae": {
-          "loop": false,
-          "gaze": false
-        },
-        "af": {
-          "loop": false,
-          "gaze": false
-        },
-        "al": {
-          "loop": false,
-          "gaze": false
-        },
-        "am": {
-          "loop": false,
-          "gaze": false
-        }
-      },
-      "waiting": {
-        "a1": {
-          "loop": true
-        }
-      },
-      "error": {
-        "a5": {
-          "loop": false,
-          "gaze": false
-        },
-        "a6": {
-          "loop": false,
-          "gaze": false
-        }
-      },
-      "offline": {
-        "an": {
-          "loop": true,
-          "gaze": false
-        }
-      },
-      "landing": {
-        "a5": {
-          "loop": false
-        }
-      }
-    },
+    "motionClips": {},
     "status": {},
     "statusScale": {},
     "speech": {

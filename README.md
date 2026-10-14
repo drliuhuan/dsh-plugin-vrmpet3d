@@ -11,7 +11,7 @@ fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2363 checks · works offline
+no runtime dependencies · 9 verification suites · 2364 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -142,7 +142,7 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1182 — state machine, the nine motion states, the shipped 部位 碎碎念 (两个手势 × 中英), and the session aggregate's completion rules (a helper's stop is not the user's) |
+| `node scripts/verify.mjs` | 1183 — state machine, the nine motion states, the shipped 部位 碎碎念 (两个手势 × 中英), the session aggregate's completion rules (a helper's stop is not the user's), and the shipped DEFAULTS (显示位置 / 重力) |
 | `node scripts/verify-model.mjs` | 758 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |

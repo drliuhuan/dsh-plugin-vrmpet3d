@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2363 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2364 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -51,6 +51,30 @@ asks again, exactly as the operator specified.
 (`DEFAULTS` + `GAZE_CURVE_RANGE` + `WIND_LIMITS` + `SPEECH_LIMITS`), with the page's slider bounds AND its placeholder values
 matched. Every one of those numbers is pinned as a LITERAL in `verify.mjs`, because a default that is only compared with itself
 moves in the panel, in the docs and in the suite at once — consistently and silently.
+
+**…and the SURFACE and 重力 defaults joined them on 2026-10-14** (operator: 「把当前设置作为默认设置推上去」, after he had the
+repo's own snapshot applied to this machine). Two values changed, and both are now read from `DEFAULTS` instead of being
+spelled into an expression: `DEFAULTS.petSurface` is `window` (the standalone desktop pet is the one he looks at; `auto`
+means the same thing at runtime — `applySurface` tries the window for both and falls back to the in-app copy when no
+launcher can exist, which is what the web build needs), and `gravity` is `false`, so BOTH gravity keys now ship OFF
+(`windowGravity` has been off since 2026-10-10's "drag and place"). The cleaner used to say `out.gravity = source.gravity
+!== false` and `out.windowGravity = source.windowGravity === true`, which is how the app pet shipped ON while
+`DEFAULTS.gravity` was read by nobody — a default that only exists as a boolean expression cannot be seen, tested or
+changed in one place. Deliberately NOT shipped with them, because they are machine facts rather than parameters (the same
+rule `initial-config/README.md` §2 states): `modelId`, `viewYaw`/`viewPitch`, `placementX`/`placementY`, the app pet's
+`x`/`y`, and the AI half's `dshProvider`/`dshModel` — pinning a provider id would break the AI 碎碎念 half for the other
+DSH install shape (account vs API key), so those stay empty, which is what "follow DSH" means.
+
+**⚠️ MOTION IDS DO NOT TRAVEL, and the snapshot proved it the hard way.** `motions` and `motionClips` are keyed by
+per-profile ids (`a8`, `a9`, …) minted as `a` + base36 of the clip's index in the discovery order — so ADDING a file
+renumbers everything after it. `dance/Dancing.vrma` landed at index 4, and from that day every id from the old `a4` up
+in the repo's `initial-config/vrmpet3d-settings.json` pointed one file EARLIER: applying that snapshot to this machine
+mapped 出错 and 落地 to `dance/极乐净土.vrma.br`, 离线 to `idle/touch hair2.vrma`, and 完成 to `offline/sleeping.vrma`
+plus two of the three jumps. The name-keyed source of truth is the pack manifest —
+`assets/motions/vrmpet3d-motions.json` `defaults`/`clips`, which was translated correctly and IS what a profile with an
+empty map falls back to (`motionMapWithDefaults`: a state the stored map does not MENTION takes the declared names). The
+snapshot's two maps are therefore EMPTY again as of 2026-10-14, and any future `capture-config` will keep them that way:
+a stored mapping that pins ids is a trap that re-arms on the next clip added, while the manifest absorbs it.
 **状态与动作 ships his mapping too**: the
 `defaults` block of [assets/motions/vrmpet3d-motions.json](assets/motions/vrmpet3d-motions.json) is his per-state clip
 list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, error 2, offline 1), and the `clips`
