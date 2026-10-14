@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2362 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2363 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -180,6 +180,28 @@ too. The classification is now REMEMBERED (`{ running: undefined, isSubagent: tr
 lets `subagent()` answer for it for the rest of the page's life, and the completion itself is gated on `mainSession(id)`
 so an unvouched session's turn end is silence rather than 任务达成 — while a frame that says `isSubagent: false` still
 reports with no catalog row at all, which is the half that keeps a brand-new session from losing its completion.
+
+**The pet no longer freezes when DSH loses focus** (operator, 2026-10-14: 「我知道了，只要焦点离开dsh，碎碎念和工作状态就卡住了」,
+which explained both 「工作的时候碎碎念只显示一句…」 and 「任务完成后，必须点进dsh才更新到完成状态，否则一直是深度求索中」 — one cause for
+all three). Chromium STOPS `requestAnimationFrame` in a window that lost focus or was covered by another application, and
+everything the app pet does on a CLOCK lived inside that one loop: the 工作中 mutter's 12–36 s cadence, the 4 s settle
+window that promotes a finished turn to 任务达成, the hold that clears a line, the 用时 clock, and the state report the
+floating window reads. So a throttled window froze on its last state with one line on screen — while
+`createStateReporter`'s heartbeat (a timer, not a frame) kept re-sending that same stale state, which is why 深度求索中
+looked alive rather than stale. The frame loop is now SPLIT: `VrmPet3DWidget.prototype.pump()` is the half that must never
+be throttled (focus poll → `resolve` → speech → the state report → the two texts), `tick()` calls it where that code used
+to sit, and `startBackgroundPump()` drives it from three sources — a 1 s interval that does NOTHING while a frame ran less
+than `PUMP_GRACE_MS` (1500 ms) ago, so an ordinary 60 fps window is bit-for-bit what it was, plus `focus`/`blur` and
+`visibilitychange` wake listeners, which is what makes coming back to DSH instant instead of up to a second later.
+Honestly bounded: Chromium THROTTLES that interval to about one tick a second in a hidden window rather than stopping it
+(a window covered for a long stretch can be slower still), so while the operator is away the floating window learns the
+completion within a second or so and the pet keeps muttering — and the case he actually described, coming back to DSH,
+is immediate because the wake listeners do not wait for any timer at all.
+**The floating window needs none of this**: the launcher creates it with `backgroundThrottling: false`, so its frames never
+stop — what this fixes is the IN-APP pet, in a window this plugin does not own. `dispose` takes the interval and the
+listeners down with the widget, and the browser probe pins all of it on a page whose ticks are hand-driven: it installs the
+drivers the way `start()` does, stamps the frame clock into the past (the throttled state), requires a pump anyway, requires
+one more SYNCHRONOUSLY on a `focus` event, and hands the page back with no interval left running.
 
 **Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
 

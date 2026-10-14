@@ -1027,6 +1027,67 @@
   });
 
   /**
+   * The pet keeps its CLOCK with no animation frames, and wakes the moment DSH is focused again.
+   *
+   * The operator's own report (2026-10-14): 「只要焦点离开dsh，碎碎念和工作状态就卡住了」, and before that 「任务完成后，必须点进
+   * dsh才更新到完成状态，否则一直是深度求索中」. Chromium throttles a window that lost focus or was covered by another
+   * application, which STOPS `requestAnimationFrame` — and with the state machine, the 碎碎念 cadence, the 4 s settle
+   * window that promotes 任务达成, and the state report the floating window reads all inside that loop, the pet froze on
+   * its last state with one line on screen, while DSH's own heartbeat kept re-sending it as if it were current.
+   *
+   * Asserted by DRIVING it rather than by reading the source: the frame loop is cancelled here — exactly what the
+   * browser does to a window nobody is looking at — and a spy on `pump` has to see it run anyway (the interval), and
+   * then run once more SYNCHRONOUSLY on a `focus` event (the wake that makes coming back to DSH instant). A build that
+   * merely moved the code out of `tick` without adding a driver fails this, which is the whole point of the check.
+   */
+  asyncCheck('the pet keeps its clock with no animation frames, and wakes when DSH is focused again', function () {
+    var view = widget.document.defaultView;
+    /**
+     * The background drivers are installed by `start()`, which THIS page never calls — every check here ticks the
+     * widget by hand — so the check installs them the way the app does (`startBackgroundPump` is idempotent) and takes
+     * them back down at the end. That teardown is not tidiness: this page's ticks come in bursts with long gaps
+     * between checks, so a 1 Hz pump left running would count as "no frames for a while" during every later check and
+     * drive the machine behind the probe's back.
+     */
+    widget.startBackgroundPump();
+    var pumps = 0;
+    var realPump = widget.pump;
+    widget.pump = function () {
+      pumps += 1;
+      return realPump.apply(widget, arguments);
+    };
+    /**
+     * And now no frame has run for a long time — which is the state a throttled window is in. The pump is gated on
+     * `PUMP_GRACE_MS` (1500 ms) since the last FRAME, so stamping that clock into the past is the honest way to say
+     * "the loop is gone" on a page whose frames are driven by hand; one interval period plus slack is then enough for
+     * a pump to be due, with no race.
+     */
+    widget.lastTickAt = 0;
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        var withNoFrames = pumps;
+        // And now the operator clicks back into DSH: the wake listener pumps once, immediately, with no interval wait.
+        view.dispatchEvent(new Event('focus'));
+        var afterWake = pumps;
+        widget.pump = realPump;
+        try { view.clearInterval(widget.pumpInterval); } catch (_error) { /* already gone */ }
+        widget.pumpInterval = null;
+        if (widget.onWake) {
+          try { view.removeEventListener('focus', widget.onWake); } catch (_error) { /* already gone */ }
+          try { view.removeEventListener('blur', widget.onWake); } catch (_error) { /* ditto */ }
+          try { widget.document.removeEventListener('visibilitychange', widget.onWake); } catch (_error) { /* ditto */ }
+          widget.onWake = null;
+        }
+        report.backgroundPump = {
+          pumpedWithNoFrames: withNoFrames,
+          pumpedOnFocus: afterWake - withNoFrames,
+        };
+        resolve(withNoFrames >= 1 && afterWake > withNoFrames);
+      }, 1100);
+    });
+  });
+
+  /**
    * The two gestures, and the rule that separates them.
    *
    * The operator's own words: "鼠标滚轮在提示文字上时，只缩放状态提示文字（防止某些模型和提示文字不匹配）；鼠标滚轮
