@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 13,
   "preferences": {
     "scope": "global",
     "petSurface": "both",
@@ -28,8 +28,8 @@
     "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.5756510257720947,
-    "placementY": 0.3055555409398572,
+    "placementX": 0.5807291507720947,
+    "placementY": 0.025622576132588004,
     "motions": {
       "resting": [
         "a9",
@@ -77,32 +77,10 @@
     },
     "motionClips": {
       "resting": {
-        "a9": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
+        "ah": {
+          "expression": "none"
         },
-        "aa": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ab": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ac": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ad": {
-          "loop": false,
-          "expression": "none",
-          "gaze": false
-        },
-        "ae": {
+        "an": {
           "loop": false,
           "expression": "none",
           "gaze": false
@@ -112,32 +90,54 @@
           "expression": "none",
           "gaze": false
         },
+        "ae": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "ai": {
+          "expression": "none"
+        },
+        "ac": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
         "ag": {
           "loop": false,
           "expression": "none",
           "gaze": false
+        },
+        "a9": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "ad": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
+        },
+        "ak": {
+          "expression": "none"
         },
         "am": {
           "loop": false,
           "expression": "none",
           "gaze": false
         },
-        "an": {
+        "ab": {
           "loop": false,
           "expression": "none",
           "gaze": false
         },
-        "ah": {
-          "expression": "none"
-        },
-        "ai": {
-          "expression": "none"
-        },
         "aj": {
           "expression": "none"
         },
-        "ak": {
-          "expression": "none"
+        "aa": {
+          "loop": false,
+          "expression": "none",
+          "gaze": false
         }
       },
       "working": {
@@ -146,8 +146,7 @@
         }
       },
       "waiting": {
-        "a1": {
-          "loop": true,
+        "a3": {
           "expression": "none",
           "gaze": false
         },
@@ -155,17 +154,18 @@
           "expression": "none",
           "gaze": false
         },
-        "a3": {
+        "a1": {
+          "loop": true,
           "expression": "none",
           "gaze": false
         }
       },
       "done": {
-        "ap": {
+        "aq": {
           "expression": "happy",
           "gaze": false
         },
-        "aq": {
+        "ap": {
           "expression": "happy",
           "gaze": false
         },
