@@ -1153,8 +1153,10 @@ group('6. state machine precedence');
     eq(whyMachine.lastDismissal.focused, true, 'and the focus value it read');
     eq(whyMachine.lastDismissal.presentId, 's1', 'and the session it compared against');
 
-    // The OTHER rule: no session identity to compare, so the notice expires on the clock alone — the shape a missing
-    // `currentSessionId` takes, and the one that would dismiss a completion with the user in another application.
+    // The OTHER rule: no session identity to compare, so it waits for the user to be back at DSH — and NEVER expires on
+    // the clock alone. That timer shape is exactly what the operator's report measured (`kind: expired`, `focused: false`,
+    // `presentId: null`, `running: false`): 任务达成 vanished four seconds after it appeared while his focus was in
+    // another application and nothing was running.
     const blind = new core.PetMachine(() => whyClock, 120000);
     const nowhere = { available: true, running: false, pending: false };
     blind.boundary({ type: 'turn/end', sessionId: 's1', seq: 1, reason: 'completed' });
@@ -1162,9 +1164,12 @@ group('6. state machine precedence');
     eq(blind.resolve(nowhere), 'done', 'a completion with no session context is still announced');
     blind.setFocus(false);
     whyClock += core.NOTICE_WINDOW_MS + 1;
-    eq(blind.resolve(nowhere), 'resting', 'but it expires on the hold alone, with no focus and nothing running');
-    eq(blind.lastDismissal && blind.lastDismissal.kind, 'expired',
-      'and the record says so, which is the difference the report needed');
+    eq(blind.resolve(nowhere), 'done', 'and it does NOT expire on the hold while the user is elsewhere');
+    eq(blind.lastDismissal === undefined, true, 'so nothing was dismissed by the clock');
+    blind.setFocus(true);
+    eq(blind.resolve(nowhere), 'resting', 'while coming back to DSH clears it');
+    eq(blind.lastDismissal && blind.lastDismissal.kind, 'focus-return',
+      'and the record names the path, which is why a session id matters');
     eq(blind.lastDismissal.presentId, null, 'with the missing side named');
   }
 
