@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 39,
   "preferences": {
     "scope": "global",
     "petSurface": "window",
@@ -76,63 +76,112 @@
       "resting": {
         "a9": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "aa": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "ab": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "ac": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "ad": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "ae": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "af": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "ag": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "am": {
           "loop": false,
+          "expression": "none",
           "gaze": false
         },
         "an": {
           "loop": false,
+          "expression": "none",
           "gaze": false
+        },
+        "ah": {
+          "expression": "none"
+        },
+        "ai": {
+          "expression": "none"
+        },
+        "aj": {
+          "expression": "none"
+        },
+        "ak": {
+          "expression": "none"
         }
       },
       "waiting": {
         "a1": {
-          "loop": true
+          "loop": true,
+          "expression": "none",
+          "gaze": false
+        },
+        "a2": {
+          "expression": "none",
+          "gaze": false
+        },
+        "a3": {
+          "expression": "none",
+          "gaze": false
+        }
+      },
+      "done": {
+        "ap": {
+          "expression": "happy",
+          "gaze": false
+        },
+        "aq": {
+          "expression": "happy",
+          "gaze": false
+        },
+        "ar": {
+          "expression": "happy",
+          "gaze": false
         }
       },
       "error": {
         "a6": {
           "loop": false,
+          "expression": "sad",
           "gaze": false
         },
         "a7": {
           "loop": false,
+          "expression": "sad",
           "gaze": false
         }
       },
       "offline": {
         "ao": {
           "loop": true,
+          "expression": "blink",
           "gaze": false
         }
       },
