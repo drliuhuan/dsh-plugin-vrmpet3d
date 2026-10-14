@@ -1650,6 +1650,29 @@ group('8. registered routes and both catalogs over HTTP');
   const storedAfterState = await server.json('/vrmpet3d/settings');
   eq(JSON.stringify(storedAfterState.payload.preferences.status), '{}',
     'and the state channel persisted nothing either: it is live telemetry, not a preference');
+  /**
+   * And a report from a SUPERSEDED activation is REFUSED — the fix for the flicker the operator caught on 2026-10-14:
+   * a hot reload leaves the previous activation's widget mounted, still pumping a stale world (no statuses ⇒ 静息态, a
+   * focus flag nobody updates) into the same slot, and the two answers alternated every two seconds on his desk.
+   *
+   * Last in this section on purpose: it changes what the route holds, and every assertion above it reads that route.
+   */
+  petState = await postState({ state: 'working', why: { generation: 7, running: true, working: 1 } });
+  eq(petState.payload.superseded, undefined, 'a report from the current activation is accepted');
+  petState = await readState();
+  eq(petState.payload.why && petState.payload.why.generation, 7, 'and its generation is what the host remembers');
+  // The baseline is read, not assumed: everything above this block has been moving the route on purpose.
+  const stateBeforeRefusal = petState.payload.state;
+  petState = await postState({ state: 'resting', why: { generation: 6, running: false, working: 0 } });
+  eq(petState.payload.superseded, true, 'while an OLDER activation is refused');
+  petState = await readState();
+  eq(petState.payload.state, stateBeforeRefusal,
+    `and it cannot move the state the live pet published (it stayed ${JSON.stringify(petState.payload.state)})`);
+  eq(petState.payload.why && petState.payload.why.generation, 7, 'nor the diagnostic that explains it');
+  petState = await postState({ state: 'resting', why: { running: false } });
+  eq(petState.payload.superseded, true, 'and a report with no generation at all loses to one that has it');
+  petState = await postState({ state: 'working', why: { generation: 8, running: true, working: 1 } });
+  eq(petState.payload.superseded, undefined, 'while a NEWER activation takes the slot over');
 
   // ---- the desktop window's routes, over real HTTP -------------------------
   //

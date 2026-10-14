@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2421 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2428 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -284,6 +284,23 @@ session identity to compare (`expired`). `PetMachine.noteDismissal` records `kin
 `presentId` — the two values the rule actually read — plus `retracted`/`focus-return`/`cleared` for the other paths, so the
 next occurrence is a fact rather than an argument. **A page still running the OLD client sends no `why` at all, and that is
 visible from outside too**: the route answers `"why": null`.
+
+**TWO WIDGETS CANNOT BOTH BE THE PET** (operator, 2026-10-14: 「桌宠会不停的在 idle 和工作态反复切换，不停的弹出『深度求索中…』又消失」).
+Measured with `build/probe-out/watch-state.mjs` right after the completion above: the route alternated every TWO SECONDS
+between `working / running=true / focused=false / working=1` and `resting / running=false / focused=true / working=0`, with
+the SAME session-store shape in both — two reporters, one truth each, so 深度求索中 appeared and vanished on his desk. The
+stale reporter is a widget left over from an EARLIER activation of this plugin (a hot reload does not unmount it): its
+session subscription died with the old module, so it reports a world with no statuses (静息态) and a focus flag nobody
+updates, into the same host slot the live pet uses. Two fixes, one on each side:
+
+* the client stamps every activation with a GENERATION on `globalThis` (`PLUGIN_GENERATION`), remembers it on the widget,
+  and a widget whose generation is no longer current DISPOSES ITSELF on its next pump (`supersededByPump`). `globalThis`
+  is what survives a hot reload — the old closures do not, but they can still READ it;
+* the host REFUSES any report whose `why.generation` is lower than the newest it has seen, and once it has seen one, any
+  report with NO generation, answering `{superseded: true}` so the reporter knows. That half is what ends the fight even
+  while a stale widget from an older BUILD is still running: the current client speaks first and the older one can no
+  longer overwrite the route. The guard sits at the TOP of the POST handler, before anything is written — placed beside
+  the diagnostic it reads it had already lost the argument, which the suite caught.
 
 **Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
 
