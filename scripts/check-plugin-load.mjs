@@ -675,15 +675,21 @@ report(service?.assetRoutes === null,
      * The SETTINGS page used to pass that expression too, because 部位's placeholder spelled the shipped lines out
      * (「碎碎念：留空则说内置的 变态！」). The operator removed the announcement (2026-10-13: 「碎碎念框那行也变成通用灰字」),
      * so the page has nothing left to compute: it reads the table ONLY to publish its content for the panel's
-     * self-test (deliberately, source or not), and it must not grow a second copy of the source rule to keep the old
-     * wording alive. This pair is what says so.
+     * self-test (deliberately, source or not, and since 2026-10-14 BOTH gesture pools), and it must not grow a second
+     * copy of the source rule to keep the old wording alive. This pair is what says so.
+     *
+     * The two arguments after the source switch are new on 2026-10-14 (operator: 「拆成两池，长按另写 20 条」): the
+     * shipped table is picked by GESTURE and by the LOCALE the surface is running in, so both press paths now hand
+     * over their own reason for the press and their own language. Pinned in the source because the two surfaces
+     * drifting apart on a shipped-default rule is the failure this project has paid for most often.
      */
-    report(/partSpeechLines\(item, speech\.source === 'builtin'\)/.test(coreSource)
-      && /core\.partSpeechLines\(item, speech\.source === 'builtin'\)/.test(windowSource),
-      'both press paths pass the SAME source argument to the shipped part lines');
-    report(/core\.partSpeechLines\(item\)/.test(configSource)
+    report(/partSpeechLines\(item, speech\.source === 'builtin', language, gesture\)/.test(coreSource)
+      && /core\.partSpeechLines\(item, speech\.source === 'builtin', language, reason\)/.test(windowSource),
+      'both press paths pass the SAME source argument to the shipped part lines, plus the gesture and the locale');
+    report(/core\.partSpeechLines\(item, true, 'zh', 'click'\)/.test(configSource)
+      && /core\.partSpeechLines\(item, true, 'zh', 'hold'\)/.test(configSource)
       && !/partSpeechLines\(item, partSource/.test(configSource),
-      'and the settings page reads the table ONLY to publish it, never to word a hint with it');
+      'and the settings page reads the table ONLY to publish it — both pools of it, never to word a hint with it');
     /**
      * The DATA-LOSS LATCH, pinned in the source.
      *

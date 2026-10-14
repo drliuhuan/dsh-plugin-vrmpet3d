@@ -985,6 +985,48 @@
   });
 
   /**
+   * WHICH gesture asked decides which shipped pool answers (operator, 2026-10-14: 「拆成两池，长按另写 20 条」).
+   *
+   * The table itself and the machine's choice of pool are pinned in the core suite; what only THIS page can show is
+   * the link between them — `notePress`'s reason travelling through `reactSpeech` into the lookup. That link is one
+   * argument wide and fails SILENTLY: drop it and a long press answers from the click pool with nothing on screen
+   * looking wrong. Driven through `notePress` because that is what all three gesture call sites use, and read off the
+   * machine's own language, so the page's real locale is the one being exercised.
+   */
+  check('a click and a long press draw from the shipped 点击 and 长按 pools, in the page\'s own language', function () {
+    var shipped = CORE.cleanPreferences({});
+    var chest = CORE.partItemById(shipped, 'chest');
+    if (!chest) return false;
+    var anatomy = { region: 'chest', part: chest, bone: 'J_Bip_C_Chest', mesh: null };
+    var language = widget.language === 'en' ? 'en' : 'zh';
+    var clickPool = CORE.partSpeechLines(chest, true, language, 'click');
+    var holdPool = CORE.partSpeechLines(chest, true, language, 'hold');
+    widget.speech.clear();
+    widget.preferences.speech = CORE.cleanSpeech({ enabled: true, source: 'builtin' });
+    widget.preferences.parts = shipped.parts;
+    widget.speechEvent = 'working';
+    widget.notePress('click', anatomy);
+    var click = widget.speech.current ? widget.speech.current.text : null;
+    widget.speech.clear();
+    widget.notePress('hold', anatomy);
+    var hold = widget.speech.current ? widget.speech.current.text : null;
+    report.gesturePools = {
+      language: language,
+      click: click,
+      hold: hold,
+      clickFromClickPool: clickPool.indexOf(click) !== -1,
+      holdFromHoldPool: holdPool.indexOf(hold) !== -1,
+      sharedLines: clickPool.filter(function (line) { return holdPool.indexOf(line) !== -1; }).length,
+    };
+    // Put the widget back where the checks after this one expect it.
+    widget.speech.clear();
+    widget.preferences.speech = CORE.cleanSpeech({});
+    widget.preferences.parts = CORE.cleanPreferences({}).parts;
+    return clickPool.indexOf(click) !== -1 && holdPool.indexOf(hold) !== -1
+      && clickPool.indexOf(hold) === -1 && holdPool.indexOf(click) === -1;
+  });
+
+  /**
    * The two gestures, and the rule that separates them.
    *
    * The operator's own words: "鼠标滚轮在提示文字上时，只缩放状态提示文字（防止某些模型和提示文字不匹配）；鼠标滚轮
@@ -5043,15 +5085,20 @@
       /**
        * And the SHIPPED 屁股 row is what answered the earlier click, through the same raycast.
        *
-       * The two lines are the operator's own (2026-10-12: 「默认碎碎念："变态！""大色狼！"」), the region is read off
-       * the scene's record (`hips` is a 屁股 by the name table, and the fixture's centre is that bone), and the
-       * bubble has to be SHOWING it — an empty box on that row is the whole feature, so "the defaults exist" and
-       * "they reach the pet's bubble" are two different claims and this is the second one.
+       * The click pool is the operator's own — the two lines written first (2026-10-12: 「默认碎碎念："变态！""大色狼！"」)
+       * and eighteen more on 2026-10-14 — the region is read off the scene's record (`hips` is a 屁股 by the name
+       * table, and the fixture's centre is that bone), and the bubble has to be SHOWING one of them: an empty box on
+       * that row is the whole feature, so "the defaults exist" and "they reach the pet's bubble" are two different
+       * claims and this is the second one. Both languages are accepted because which locale this mounted page
+       * resolved is the harness's business, not this assertion's.
        */
+      var buttShipped = CORE.partItemById(CORE.cleanPreferences({}), 'butt');
+      var buttClickPools = CORE.partSpeechLines(buttShipped, true, 'zh', 'click')
+        .concat(CORE.partSpeechLines(buttShipped, true, 'en', 'click'));
       var shippedPressOk = Boolean(found.shippedPress && found.shippedPress.state)
         && found.shippedPress.state.region === 'butt'
         && found.shippedPress.hidden === false
-        && (found.shippedPress.text === '变态！' || found.shippedPress.text === '大色狼！');
+        && buttClickPools.indexOf(found.shippedPress.text) !== -1;
       // Back to the shipped parts, so the checks after this one see the profile a user starts with.
       pet.preferences.parts = CORE.cleanPreferences({}).parts;
       scene.applyPreferences(pet.preferences);

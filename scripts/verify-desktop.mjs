@@ -685,21 +685,28 @@ if (live.skipped) {
           && parts.lineHints[0] === '碎碎念：一行一句，摸到这个部位时随机说一句',
           `and ONE grey hint shared by every 碎碎念 box (${JSON.stringify(parts.lineHints)})`);
         /**
-         * And the two parts whose voice comes from the SHIPPED table get it while their boxes stay empty.
+         * And EVERY part whose box is empty answers from the SHIPPED table — all ten of them since 2026-10-14, in two
+         * pools each (点击 / 长按).
          *
-         * This is the operator's own condition (2026-10-12: "默认碎碎念：'变态！''大色狼！'…匹配词和AI提示词写进系统底层，
-         * AI提示词那里默认留空，跟未输入状态一样"): what matters is the PAIR — the defaults are readable AND nothing was
-         * written into the user's settings to get them.
+         * The operator's condition (2026-10-12: "默认碎碎念…匹配词和AI提示词写进系统底层，AI提示词那里默认留空，跟未输入状态
+         * 一样") is what matters, and it is the PAIR: the defaults are readable AND nothing was written into the user's
+         * settings to get them. What is still special about 胸部 and 屁股 is the 提示词 — they are the only two rows
+         * with one — and their two original lines still lead their click pools.
          */
         const builtinSpeech = parts.builtinSpeech || [];
-        ok(builtinSpeech.length === 2
+        ok(builtinSpeech.length === parts.count
           && builtinSpeech.every((entry) => entry.boxEmpty === true)
+          && builtinSpeech.every((entry) => Array.isArray(entry.lines) && entry.lines.length === 20
+            && Array.isArray(entry.holdLines) && entry.holdLines.length === 20
+            && entry.lines.indexOf(entry.holdLines[0]) === -1)
           && builtinSpeech.some((entry) => entry.label === '胸部'
-            && JSON.stringify(entry.lines) === JSON.stringify(['变态！', '大色狼！'])
+            && entry.lines[0] === '变态！' && entry.lines[1] === '大色狼！'
             && entry.prompt === '被主人摸到胸部了，必须要傲娇的回骂这个摸人家胸的变态主人才行。')
           && builtinSpeech.some((entry) => entry.label === '屁股'
-            && entry.prompt === '被主人摸到屁股了，必须要傲娇的回骂这个摸人家屁股的变态主人才行。'),
-        `only 胸部 and 屁股 answer from the shipped table, with both of their boxes still empty (${JSON.stringify(builtinSpeech)})`);
+            && entry.lines[0] === '变态！'
+            && entry.prompt === '被主人摸到屁股了，必须要傲娇的回骂这个摸人家屁股的变态主人才行。')
+          && builtinSpeech.filter((entry) => entry.prompt !== '').length === 2,
+        `all ${parts.count} shipped parts answer from the shipped table while their boxes stay empty — twenty 点击 and twenty 长按 lines each, and 胸部 / 屁股 the only two with a 提示词 (${builtinSpeech.map((entry) => `${entry.label}:${entry.lines && entry.lines.length}+${entry.holdLines && entry.holdLines.length}`).join(' ')})`);
         /**
          * And the shipped table is IN FORCE only while 台词来源 is the built-in one — a second fact, published
          * separately on purpose.

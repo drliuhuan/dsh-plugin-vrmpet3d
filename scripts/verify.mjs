@@ -577,20 +577,65 @@ group('5. preferences');
       && item.emotion.emotions.length === 0 && item.speech.lines.length === 0 && item.speech.prompt === '';
   }), true,
   'each silent, structureless and with an EMPTY 碎碎念 box by default — the shipped voice is not stored as if the user wrote it');
-  eq(core.partSpeechLines(partDefaults[7]).join('/'), '变态！/大色狼！',
-    'while 胸部 answers a press with its shipped lines');
+  /**
+   * The shipped pool is picked by GESTURE and by LANGUAGE now (operator, 2026-10-14: 「给自带的身体部位，每个部位按照默认的性格
+   * 提示词，生成20个点击对应部位的碎碎念」, then 「拆成两池，长按另写 20 条」): every one of the ten regions answers a poke
+   * with twenty lines and a finger held down with twenty OTHERS, in both languages.
+   *
+   * 胸部 and 屁股 keep the two lines the operator wrote by hand first (2026-10-12) at the head of their click pools, and
+   * that is asserted here rather than only in the settings page: the table is what the pet says, and a data edit that
+   * dropped them would otherwise be invisible.
+   */
+  const chestClick = core.partSpeechLines(partDefaults[7], true, 'zh', 'click');
+  const chestHold = core.partSpeechLines(partDefaults[7], true, 'zh', 'hold');
+  eq(chestClick.slice(0, 2).join('/'), '变态！/大色狼！',
+    'while 胸部 answers a press with its shipped lines — the two the operator wrote first, leading its click pool');
+  eq(chestClick.length, 20, 'and that pool is twenty lines deep');
+  eq(chestHold.length, 20, 'with twenty MORE for a finger held down');
+  eq(chestClick.filter(function (line) { return chestHold.indexOf(line) !== -1; }).length, 0,
+    'and the two gestures never answer with the same line, which is the whole point of splitting them');
+  const shippedPools = [];
+  partDefaults.forEach(function (item) {
+    ['click', 'hold'].forEach(function (gesture) {
+      ['zh', 'en'].forEach(function (lang) {
+        shippedPools.push({
+          where: item.id + '/' + gesture + '/' + lang,
+          lang: lang,
+          lines: core.partSpeechLines(item, true, lang, gesture),
+        });
+      });
+    });
+  });
+  eq(shippedPools.reduce(function (total, pool) { return total + pool.lines.length; }, 0), 800,
+    'ten shipped parts × two gestures × two languages × twenty lines');
+  eq(shippedPools.filter(function (pool) { return pool.lines.length !== 20; }).map(function (pool) { return pool.where; }).join(','),
+    '',
+    'no region is short of lines: every pool has exactly twenty');
+  eq(shippedPools.filter(function (pool) {
+    return pool.lines.some(function (line) { return pool.lines.indexOf(line) !== pool.lines.lastIndexOf(line); });
+  }).map(function (pool) { return pool.where; }).join(','),
+    '',
+    'and no pool repeats a line inside itself — the reason a pool is twenty deep at all');
+  eq(shippedPools.filter(function (pool) {
+    return pool.lines.some(function (line) { return line.length > (pool.lang === 'zh' ? 30 : 42); });
+  }).map(function (pool) { return pool.where; }).join(','),
+    '',
+    'and every line fits the bubble the reviewer was given: 中文 ≤30 字, English ≤42 characters');
+  eq(core.partSpeechLines(partDefaults[3]).join(''), core.partSpeechLines(partDefaults[3], true, 'zh', 'click').join(''),
+    'a caller that passes neither language nor gesture gets the Chinese click pool, which is what the old table was');
   /**
    * …and only while the pet is speaking from the BUILT-IN source. The shipped table IS the built-in source, so the
    * same `tableAllowed` switch that turns the state table off (operator, 2026-10-11) turns this one off too — the
-   * second half of 「如果设置了AI碎碎念，就停止输出内置的碎碎念」, which the fortieth pass left out because these
-   * lines did not exist yet.
+   * second half of 「如果设置了AI碎碎念，就停止输出内置的碎碎念」, and it now has to hold for EITHER gesture.
    */
   eq(core.partSpeechLines(partDefaults[7], false).length, 0,
     'and says nothing from the shipped table once the source is not 内置短语');
+  eq(core.partSpeechLines(partDefaults[7], false, 'zh', 'hold').length, 0,
+    'which is true of the long-press pool as well, not just the click one');
   eq(core.partSpeechPrompt(partDefaults[8]), '被主人摸到屁股了，必须要傲娇的回骂这个摸人家屁股的变态主人才行。',
     'and 屁股 has a shipped instruction for the model');
-  eq(core.partSpeechLines(partDefaults[3]).length + core.partSpeechPrompt(partDefaults[3]).length, 0,
-    'a shipped part with no table entry of its own still answers nothing at all');
+  eq(core.partSpeechLines({ region: null, speech: core.cleanPartSpeech(null) }).length, 0,
+    'a part of the user\'s own with no region still answers nothing at all — there is no pool to fall back to');
   // The user's own box wins over every shipped one — the operator's own condition: "如果输入了，则以输入的为准".
   const chestOwn = core.cleanPartSpeech({ lines: ['别碰'], prompt: '我自己的提示词' });
   eq(core.partSpeechLines({ region: 'chest', speech: chestOwn }).join(''), '别碰',
@@ -2295,23 +2340,47 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
    * A part with SHIPPED lines says them, and says them BEFORE the state's box is consulted — while the source is
    * the built-in one, which is the only source those lines belong to (2026-10-12).
    *
-   * 胸部 and 屁股 are the two rows this exists for: their boxes ship empty and the pet still answers 变态！, which
-   * is the difference between an empty box and a silent part. The state's box is deliberately fuller than the
-   * part's here, so "the part's own voice wins" is the thing being measured rather than the only line available.
+   * 胸部 and 屁股 were the two rows this existed for — their boxes ship empty and the pet still answers 变态！ — and
+   * since 2026-10-14 every region has a pool of its own, in two gestures. The state's box is deliberately fuller than
+   * the part's here, so "the part's own voice wins" is the thing being measured rather than the only line available.
    */
   const shippedParts = core.cleanPreferences({
     speech: { enabled: true, source: 'builtin', lines: { working: '状态台词' } },
   });
+  const chestItem = core.partItemById(shippedParts, 'chest');
+  const chestClickPool = core.partSpeechLines(chestItem, true, 'zh', 'click');
   const pressingChest = new core.SpeechMachine(() => clock);
   const chestLine = pressingChest.react(shippedParts,
-    { region: 'chest', bone: 'J_Bip_C_Chest', mesh: null, part: core.partItemById(shippedParts, 'chest') }, 'working', 'zh', rnd);
-  eq(chestLine === '变态！' || chestLine === '大色狼！', true,
+    { region: 'chest', bone: 'J_Bip_C_Chest', mesh: null, part: chestItem }, 'working', 'zh', rnd);
+  eq(chestClickPool.indexOf(chestLine) !== -1, true,
     `a shipped 胸部 part answers with its OWN lines rather than the state's (${chestLine})`);
   eq(pressingChest.current.part, 'chest', 'recorded against that part, so a readout can say where it came from');
+  /**
+   * And the GESTURE picks the pool (operator, 2026-10-14): the same press held down draws from 长按's twenty, never
+   * from the click's. This is the one thing a split table can get wrong while still saying something plausible, so
+   * it is asserted on the press path rather than on the lookup alone.
+   */
+  const chestHoldPool = core.partSpeechLines(chestItem, true, 'zh', 'hold');
+  const pressingHeld = new core.SpeechMachine(() => clock);
+  const heldLine = pressingHeld.react(shippedParts,
+    { region: 'chest', bone: 'J_Bip_C_Chest', mesh: null, part: chestItem }, 'working', 'zh', rnd, 'hold');
+  eq(chestHoldPool.indexOf(heldLine) !== -1, true,
+    `and a press HELD DOWN draws from the 长按 pool instead (${heldLine})`);
+  eq(chestClickPool.indexOf(heldLine), -1, 'which a click could never have said');
+  /**
+   * …and so does the LANGUAGE, on the same terms: the surface hands over the locale it is running in, so an English
+   * DSH hears the half written for it rather than the Chinese one.
+   */
+  const chestEnPool = core.partSpeechLines(chestItem, true, 'en', 'click');
+  const pressingEn = new core.SpeechMachine(() => clock);
+  const enLine = pressingEn.react(shippedParts,
+    { region: 'chest', bone: 'J_Bip_C_Chest', mesh: null, part: chestItem }, 'working', 'en', rnd);
+  eq(chestEnPool.indexOf(enLine) !== -1, true, `and an English surface is answered from the en pool (${enLine})`);
   const pressingButt = new core.SpeechMachine(() => clock);
+  const buttItem = core.partItemById(shippedParts, 'butt');
   const buttLine = pressingButt.react(shippedParts,
-    { region: 'butt', bone: null, mesh: 'pantsu', part: core.partItemById(shippedParts, 'butt') }, 'working', 'zh', rnd);
-  eq(buttLine === '变态！' || buttLine === '大色狼！', true, 'and so does 屁股');
+    { region: 'butt', bone: null, mesh: 'pantsu', part: buttItem }, 'working', 'zh', rnd);
+  eq(core.partSpeechLines(buttItem, true, 'zh', 'click').indexOf(buttLine) !== -1, true, 'and so does 屁股');
   /**
    * …and the SAME two rows go quiet once the source is 自定义: the shipped table is the built-in source, so the
    * press falls through to the user's own state box exactly as it does for a part with no table entry at all.
@@ -2704,11 +2773,58 @@ group('8. session aggregate');
   eq(snapshot.running, false, 'turn/end stops it running');
   eq(snapshot.notice?.reason, 'completed', 'turn/end records the completion notice');
 
-  // A subagent boundary is ignored entirely.
+  // A subagent boundary is ignored as a BOUNDARY — and its classification is remembered (2026-10-14).
   const before = aggregate.snapshot().notice;
+  const runningBefore = aggregate.snapshot().running;
   aggregate.boundary({ type: 'turn/start', sessionId: 'child', seq: 9, isSubagent: true });
   eq(aggregate.snapshot().notice, before, 'a subagent boundary changes nothing');
-  eq(aggregate.records.has('child'), false, 'a subagent boundary is not recorded');
+  eq(aggregate.snapshot().running, runningBefore, 'and a helper starting does not put the pet to work');
+  /**
+   * The classification is the ONE thing a helper's frame leaves behind, and it is load-bearing: the frame is the only
+   * live answer to "is this a helper", and the pet's own store edge (below) has nothing else to filter on for a helper
+   * spawned after the baseline identities arrived.
+   */
+  eq(aggregate.records.get('child') && aggregate.records.get('child').isSubagent, true,
+    'while its classification IS remembered, which is what keeps its later store edge silent');
+  eq(aggregate.subagent('child'), true, 'so the aggregate can answer for it from then on');
+  eq(aggregate.records.get('child') ? aggregate.records.get('child').running : 'missing', undefined,
+    'and nothing else about it was recorded — no running, no notice');
+  {
+    /**
+     * A helper that ALSO holds a row in the app's own session list is still not the user's task, which is why the
+     * classification is what `mainSession` asks FIRST. `observeStoreEdge` is the path being pinned: the store's
+     * falling edge used to be the way a helper's stop became 任务达成.
+     */
+    const listed = new core.SessionAggregate(() => clock);
+    const world = { connected: true, catalog: { byId: { main: {}, child: {} }, phase: 'ready' } };
+    listed.setInput({ ...world, statuses: new Map([['child', { running: true }]]) });
+    listed.boundary({ type: 'turn/start', sessionId: 'child', seq: 1, isSubagent: true });
+    listed.boundary({ type: 'turn/end', sessionId: 'child', seq: 2, reason: 'completed', isSubagent: true });
+    eq(listed.snapshot().notice, undefined, 'a helper WITH a session row still reports no completion');
+    listed.setInput({ ...world, statuses: new Map([['child', { running: false, completionUnread: true }]]) });
+    eq(listed.snapshot().notice, undefined, 'and its store edge is silent too');
+    eq(listed.snapshot().unreadCount, 0, 'and it never lights the dot, listed row or not');
+    /**
+     * The fail-closed half: a frame for a session NOBODY can vouch for — not classified by the host, not listed by the
+     * app — is silence, because a turn ending there is indistinguishable from a helper's.
+     */
+    const stranger = new core.SessionAggregate(() => clock);
+    const app = { connected: true, catalog: { byId: { main: {} }, phase: 'ready' }, statuses: new Map() };
+    stranger.setInput(app);
+    stranger.boundary({ type: 'turn/start', sessionId: 'ghost', seq: 1 });
+    stranger.boundary({ type: 'turn/end', sessionId: 'ghost', seq: 2, reason: 'completed' });
+    eq(stranger.snapshot().notice, undefined, 'a turn end for a session nobody can vouch for is not a completion');
+    /**
+     * …while a frame the host DID classify as a root still reports, catalog row or not: the fail-closed rule must not
+     * cost the user's own brand-new session its completion.
+     */
+    const fresh = new core.SessionAggregate(() => clock);
+    fresh.setInput(app);
+    fresh.boundary({ type: 'turn/start', sessionId: 'new1', seq: 1, isSubagent: false });
+    fresh.boundary({ type: 'turn/end', sessionId: 'new1', seq: 2, reason: 'completed', isSubagent: false });
+    eq(fresh.snapshot().notice && fresh.snapshot().notice.sessionId, 'new1',
+      'while a ROOT the host vouched for reports normally, listed or not');
+  }
 
   // ---------------------------------------------------------------------------
   // The store's own running flag, which is what makes 任务完成 work without the RPC
@@ -2760,6 +2876,77 @@ group('8. session aggregate');
     storeAggregate.setInput({ ...sub, statuses: runningStore(true) });
     storeAggregate.setInput({ ...sub, statuses: runningStore(false) });
     eq(storeAggregate.snapshot().notice, undefined, 'a subagent stopping is not a completion');
+
+    /**
+     * …and a HELPER THE PET CANNOT CLASSIFY is not the user's task either (operator, 2026-10-14: 「子代理、子任务完成后
+     * 不应该汇报完成的状态，必须总任务完成了才汇报完成状态」).
+     *
+     * This is the failing half, and it was measured live before it was written down: three probe subagents were spawned
+     * into a long-lived session, and while the main session kept working the pet's green dot was lit for two of them
+     * (`/vrmpet3d/state`: `state=working unread=2`). Both inputs are realistic and neither is exotic —
+     *
+     *   * DSH marks a finished subagent's session `completionUnread` exactly like a user session's (that is what the
+     *     dot is drawn from), and the pet counted every in-scope session's flag;
+     *   * a helper spawned AFTER the baseline identities arrived has no classification at all — no record, and (for a
+     *     subagent) no session-list row — so the old `subagent(id)` test answered "not a subagent" and let its stop
+     *     through as a completion.
+     *
+     * The rule is now the app's own session list: a session it does not list cannot be one the user is told to go
+     * back to, so it reports nothing. `h1` below is exactly that session: only ever in the status map.
+     */
+    const helpers = new core.SessionAggregate(() => now);
+    const listed = { connected: true, catalog: { byId: { m1: {} }, phase: 'ready' } };
+    helpers.reset([{ sessionId: 'm1', isSubagent: false }]);
+    helpers.setInput({ ...listed, statuses: new Map([['m1', { running: true }], ['h1', { running: true }]]) });
+    eq(helpers.snapshot().running, true, 'the user\'s own session is what makes the pet work');
+    helpers.setInput({
+      ...listed,
+      statuses: new Map([['m1', { running: true }], ['h1', { running: false, completionUnread: true }]]),
+    });
+    eq(helpers.snapshot().notice, undefined, 'a helper the app never listed raises no completion at all');
+    eq(helpers.snapshot().unreadCount, 0, 'and its unread flag draws no green dot of the user\'s');
+    eq(helpers.snapshot().running, true, 'while the user\'s own session keeps the pet on 工作中');
+    // The user's own session, finished while off screen, still does both — that is the dot's whole point.
+    helpers.setInput({
+      ...listed,
+      statuses: new Map([
+        ['m1', { running: false, completionUnread: true }],
+        ['h1', { running: false, completionUnread: true }],
+      ]),
+    });
+    eq(helpers.snapshot().notice && helpers.snapshot().notice.sessionId, 'm1',
+      'the user\'s own session still reports its completion');
+    eq(helpers.snapshot().unreadCount, 1, 'and only THAT one is counted toward the dot');
+    /**
+     * A helper the HOST did classify (an identity list or a boundary frame) is skipped on the same terms, so the fix
+     * does not depend on which of the two paths learned about it.
+     */
+    const classified = new core.SessionAggregate(() => now);
+    classified.setInput({ ...listed, statuses: new Map([['m1', { running: true }], ['h1', { running: true }]]) });
+    classified.reset([{ sessionId: 'm1', isSubagent: false }, { sessionId: 'h1', isSubagent: true }]);
+    classified.setInput({
+      ...listed,
+      statuses: new Map([['m1', { running: true }], ['h1', { running: false, completionUnread: true }]]),
+    });
+    eq(classified.snapshot().notice, undefined, 'a helper the host DID classify is skipped as before');
+    eq(classified.snapshot().unreadCount, 0, 'and it never contributes to the dot either');
+    /**
+     * And the fallback the store edge exists for is untouched: with NO identity list at all (the RPC boundary stream
+     * not wired, which is the case `observeStoreEdge` was added for) a session the app lists still reports when it
+     * stops — the fix fails closed for strangers, not for the user.
+     */
+    const noStream = new core.SessionAggregate(() => now);
+    noStream.setInput({ ...listed, statuses: new Map([['m1', { running: true }]]) });
+    noStream.setInput({ ...listed, statuses: new Map([['m1', { running: false }]]) });
+    eq(noStream.snapshot().notice && noStream.snapshot().notice.sessionId, 'm1',
+      'and a listed session still reports with no boundary stream at all, which is why this path exists');
+    /**
+     * A helper running ALONE is not the user's work, which is the same rule seen from the other side: the pet stays
+     * off 工作中 rather than reporting a task nobody asked for.
+     */
+    const helperOnly = new core.SessionAggregate(() => now);
+    helperOnly.setInput({ ...listed, statuses: new Map([['h1', { running: true }]]) });
+    eq(helperOnly.snapshot().running, false, 'a helper running alone is not the user\'s work either');
 
     /**
      * And the precedence that caused the stuck pet: a `turn/start` whose `turn/end` never arrives — a dropped

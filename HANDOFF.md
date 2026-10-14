@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2331 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2362 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -109,6 +109,23 @@ earlier write had left one), so the "end of the table" it found was the NEXT one
 `SPEECH_STATES is not defined` — and it was restored byte-for-byte from `lib/client.core.js`, which is `lib/core.js`
 VERBATIM (that is what the chunk is), a fact worth remembering as a recovery source. The anchors are regexes now.
 
+**The 部位 碎碎念 table is TWO pools per gesture, in both languages, and it round-trips the same way** (2026-10-14; his
+ask: 「给自带的身体部位，每个部位按照默认的性格提示词，生成20个点击对应部位的碎碎念」, then 「拆成两池，长按另写 20 条」).
+`DEFAULT_PART_LINES` is keyed by REGION and then by `click` / `hold`, each carrying `zh` and `en` — twenty lines a pool,
+800 in all — so every one of the ten shipped parts answers a poke AND a finger held down, instead of only 胸部 and 屁股
+answering `变态！`. Those two were written first (2026-10-12) and their two lines still LEAD their click pools; they are
+also still the only two regions with a shipped AI 提示词, because the other eight are the persona plus what the region
+IS (眼睛 small and nearsighted, 尾巴 the mood indicator, 脚 ticklish…). `partSpeechLines(item, tableAllowed, language,
+gesture)` picks the pool, `SpeechMachine.react` takes the gesture as its sixth argument, and the two press paths hand
+over their OWN reason and locale (`notePress`'s reason through `reactSpeech`; `reactToPart`'s `reason` and the page's
+own `language`). That link is ONE ARGUMENT WIDE and fails silently — a hold answering from the click pool looks like
+nothing at all — so `check-plugin-load.mjs` pins both call shapes and the client probe drives a real click and a real
+hold through `notePress`. **A user's own box stays ONE pool for both gestures**: that box is text he wrote, and
+splitting it in 部位 is a separate decision nobody has asked for. The review copy is
+[part-speech-lines-review.md](part-speech-lines-review.md) at the repo root and the round trip lives in
+`build/probe-out/parts/` (`BRIEF.md` → ten fragments → `check.mjs` → `assemble.mjs` → his edit → `import.mjs`), the same
+shape as the state table's, so the next 碎碎念 edit has a precedent to copy.
+
 **The 工作中 pool is 41 lines and the pet CHATTERS while working** (second round, same day). His dangerous-cute lines
 began in 需要授权 as questions; he moved them into 工作中 as COMPLETED statements (「我把那个按钮点了，看看有什么用。」…) and
 asked for approval to be serious again, so `approval` is now twenty plain requests with none of the jokes — asserted by
@@ -136,6 +153,33 @@ never back-to-back and never sooner than `minGapSeconds`. That window has its ow
   * AND a heartbeat bug fell out of it: `report(lastBeat.state, lastBeat.line, null, true)` passed a junk clock to force a
     send, which also told the host "no clock" every few seconds — the floating window's 用时 was cleared on every beat. It
     passes the last real clock and the `force` flag that exists for it now.
+
+**A HELPER's completion is not the user's completion** (operator, 2026-10-14: 「子代理、子任务完成后不应该汇报完成的状态，
+必须总任务完成了才汇报完成状态」). Measured live before it was fixed, which is why it is written down as a rule rather than a
+hunch: three probe subagents were spawned into a long-lived session and, while the main session kept working,
+`/vrmpet3d/state` reported **`state=working unread=2`** — DSH marks a finished SUBAGENT session `completionUnread` exactly
+like a user session's (that flag is what the green dot is drawn from, bullet above), and the pet counted every in-scope
+session's flag. Two holes, one rule. The dot (`snapshot().unreadCount`) counted helpers; and `observeStoreEdge` — the
+store's falling edge, the ONLY completion path when the RPC boundary stream is not wired — asked `subagent(id)`, which
+**fails OPEN** for a helper spawned after the baseline identities arrived (no record, and for a subagent no session-list
+row either), so its stop walked straight into a 任务达成 notice. Both now go through ONE predicate,
+`SessionAggregate.mainSession(id)`: the host must not have called it a helper AND the app itself must LIST it
+(`catalog.byId`, the sidebar's own rows — the only place a dot can be drawn). A session with no row in the user's list is
+not something they can be told to go back to, so it reports nothing; a session that IS listed still reports its completion
+with no boundary stream at all (pinned as the no-regression half, because that fallback is the reason this path exists),
+and `workingCount` now reads the same predicate instead of keeping its own copy of the test. `verify.mjs` drives a helper
+that exists only in the status map — no completion, no dot on it, and no 工作中 from a helper running alone — beside the
+listed session that still does both.
+
+The FRAME path had the same hole from the other side: `boundary()` threw a helper frame's `isSubagent: true` away
+without a trace, so the only live answer to "is this a helper" — DSH's own registry, computed host-side, where a subagent
+is created through its parent's scoped context and so is never one of `agents.roots()` — was known to the path that
+ignored it and unknown to the path that needed it. A helper spawned after the baseline identities arrived therefore had
+no classification anywhere, and a helper that also holds a row in the app's session list would have passed `mainSession`
+too. The classification is now REMEMBERED (`{ running: undefined, isSubagent: true }`, nothing else), which is also what
+lets `subagent()` answer for it for the rest of the page's life, and the completion itself is gated on `mainSession(id)`
+so an unvouched session's turn end is silence rather than 任务达成 — while a frame that says `isSubagent: false` still
+reports with no catalog row at all, which is the half that keeps a brand-new session from losing its completion.
 
 **Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
 
