@@ -7050,6 +7050,36 @@
   });
 
   /**
+   * A widget the document has dropped stands down — and a re-render does not kill it.
+   *
+   * Operator, 2026-10-14: 「桌宠会不停的在 idle 和工作态反复切换，不停的弹出『深度求索中…』又消失」. Two reporters were writing the
+   * host's ONE state slot: the live pet, and a LEFTOVER widget from an earlier activation (its session subscription died
+   * with the old module, so it reported a world with no statuses). The first attempt at this used a GENERATION counter
+   * bumped by the module and took the pet down completely — the bundle is re-evaluated more often than a slot is
+   * re-rendered, so the mounted widget disposed itself. This pins the replacement rule: staleness is the DOM's answer,
+   * ONE pump of detachment is tolerated, and re-attaching brings the pet straight back.
+   */
+  check('a widget whose pet left the document stands down, and a re-render does not kill it', function () {
+    var pet = widget.pet;
+    var host = pet && pet.parentNode;
+    if (!host || typeof widget.detachedFromDocument !== 'function') return false;
+    var next = pet.nextSibling;
+    var aliveWhileConnected = widget.detachedFromDocument() === false;
+    host.removeChild(pet);
+    var firstDetached = widget.detachedFromDocument();
+    var secondDetached = widget.detachedFromDocument();
+    host.insertBefore(pet, next);
+    var aliveAgain = widget.detachedFromDocument() === false;
+    report.detachedWidget = {
+      aliveWhileConnected: aliveWhileConnected,
+      firstDetached: firstDetached,
+      secondDetached: secondDetached,
+      aliveAgain: aliveAgain,
+    };
+    return aliveWhileConnected && firstDetached === false && secondDetached === true && aliveAgain;
+  });
+
+  /**
    * THE OPERATOR'S ONE-SHOT RULES, driven through the real scheduler on a real avatar.
    *
    * 「当状态的动作列表里有循环动作时，单次动作结束后，必须衔接循环动作，严禁单次动作循环播放；如果没有循环动作，单次动作
