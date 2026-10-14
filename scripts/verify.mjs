@@ -378,34 +378,32 @@ group('5. preferences');
    * ticks, the store answers `auto`, and the next snapshot untickes it, so the switch reads as broken rather
    * than as refused.
    */
-  eq(core.cleanPreferences({}).petSurface, 'window',
-    'the pet starts on 独立窗口 — the operator\'s own setting, made the default on 2026-10-14');
+  eq(core.cleanPreferences({}).petSurface, 'auto', 'the pet starts on 自动');
   eq(core.cleanPreferences({ petSurface: 'both' }).petSurface, 'both',
     'the debug mode is a value the cleaner keeps rather than one it rewrites');
-  eq(core.cleanPreferences({ petSurface: 'everywhere' }).petSurface, 'window',
-    'and an unknown surface falls back to the shipped default rather than reaching the launcher');
+  eq(core.cleanPreferences({ petSurface: 'everywhere' }).petSurface, 'auto',
+    'and an unknown surface still falls back to the shipped default rather than reaching the launcher');
 
   /**
    * 重力, in two keys, and they must not be able to move together.
    *
    * The menu's 重力 switch is per surface (operator, 2026-10-12: 「内置宠物和外置宠物的重力开关状态完全独立」),
-   * and since 2026-10-14 BOTH ship OFF, which is the operator's own pair (「把当前设置作为默认设置推上去」): his pet is
-   * the floating window, and the window has been "drag and place" since 2026-10-10. The one assertion that matters
+   * and the shipped defaults are the behaviour each surface already had: the app overlay's pet throws and
+   * bounces, and the floating window has been "drag and place" since 2026-10-10 (operator, 2026-10-14: 「显示位置和
+   * 重力都不下发」 — his own profile runs both off, and that is his, not the default). The one assertion that matters
    * most is the LAST pair: writing one key must leave the other exactly as it was, because a cleaner that
    * defaulted both from one value would silently recouple two switches the user was promised were separate.
    */
-  eq(core.cleanPreferences({}).gravity, false, 'the app pet ships with 重力 OFF, which is the operator\'s own switch');
+  eq(core.cleanPreferences({}).gravity, true, 'the app pet ships with 重力 on, as it always threw');
   eq(core.cleanPreferences({}).windowGravity, false,
-    'and the floating window ships with it off too, which is its drag-and-place behaviour');
+    'and the floating window ships with it off, which is its drag-and-place behaviour');
   eq(core.cleanPreferences({ gravity: false }).gravity, false, 'an explicit off is kept for the app pet');
-  eq(core.cleanPreferences({ gravity: true }).gravity, true,
-    'and so is an explicit on, so the switch can turn throwing back on');
   eq(core.cleanPreferences({ windowGravity: true }).windowGravity, true,
     'and for the window, so the switch can turn throwing back on out there');
-  eq(core.cleanPreferences({ gravity: true }).windowGravity, false,
-    'turning the app pet\'s 重力 on does not turn the window\'s on');
-  eq(core.cleanPreferences({ windowGravity: true }).gravity, false,
-    'and turning the window\'s on does not turn the app pet\'s on');
+  eq(core.cleanPreferences({ gravity: false }).windowGravity, false,
+    'turning the app pet\'s 重力 off does not turn the window\'s on');
+  eq(core.cleanPreferences({ windowGravity: true }).gravity, true,
+    'and turning the window\'s on does not turn the app pet\'s off');
 
   /**
    * The floating window's own parking spot, as `placementX`/`placementY`.

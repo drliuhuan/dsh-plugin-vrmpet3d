@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2364 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2363 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -52,18 +52,19 @@ asks again, exactly as the operator specified.
 matched. Every one of those numbers is pinned as a LITERAL in `verify.mjs`, because a default that is only compared with itself
 moves in the panel, in the docs and in the suite at once — consistently and silently.
 
-**…and the SURFACE and 重力 defaults joined them on 2026-10-14** (operator: 「把当前设置作为默认设置推上去」, after he had the
-repo's own snapshot applied to this machine). Two values changed, and both are now read from `DEFAULTS` instead of being
-spelled into an expression: `DEFAULTS.petSurface` is `window` (the standalone desktop pet is the one he looks at; `auto`
-means the same thing at runtime — `applySurface` tries the window for both and falls back to the in-app copy when no
-launcher can exist, which is what the web build needs), and `gravity` is `false`, so BOTH gravity keys now ship OFF
-(`windowGravity` has been off since 2026-10-10's "drag and place"). The cleaner used to say `out.gravity = source.gravity
-!== false` and `out.windowGravity = source.windowGravity === true`, which is how the app pet shipped ON while
-`DEFAULTS.gravity` was read by nobody — a default that only exists as a boolean expression cannot be seen, tested or
-changed in one place. Deliberately NOT shipped with them, because they are machine facts rather than parameters (the same
-rule `initial-config/README.md` §2 states): `modelId`, `viewYaw`/`viewPitch`, `placementX`/`placementY`, the app pet's
-`x`/`y`, and the AI half's `dshProvider`/`dshModel` — pinning a provider id would break the AI 碎碎念 half for the other
-DSH install shape (account vs API key), so those stay empty, which is what "follow DSH" means.
+**显示位置 and 重力 are NOT shipped defaults — they are the operator's own choices** (2026-10-14: 「显示位置和重力都不下发」,
+said while his own settings were being weighed as the release defaults). His profile runs `petSurface: window` and BOTH
+gravity keys OFF — he looks at the floating window — and that stays HIS: a new user still starts on `auto`, with the app
+pet's 重力 ON and the window's OFF, exactly as before. Two values moved into `DEFAULTS` anyway, because that is the one
+place a default is written: `DEFAULTS.petSurface` (the cleaner used to fall back to a hard-coded `'auto'` beside it), and
+the two gravity keys — the cleaner used to spell their defaults INTO the expressions
+(`out.gravity = source.gravity !== false`, `out.windowGravity = source.windowGravity === true`), so `DEFAULTS.gravity`
+was read by nobody and "the app pet ships with 重力 on" existed only as a boolean expression. Both now read the table, and
+a stored value that is not a boolean means the same thing as an absent one. Also NOT shipped, because they are machine
+facts rather than parameters (the rule `initial-config/README.md` §2 states): `modelId`, `viewYaw`/`viewPitch`,
+`placementX`/`placementY`, the app pet's `x`/`y`, and the AI half's `dshProvider`/`dshModel` — pinning a provider id
+would break the AI 碎碎念 half for the other DSH install shape (account vs API key), so those stay empty, which is what
+"follow DSH" means.
 
 **⚠️ MOTION IDS DO NOT TRAVEL, and the snapshot proved it the hard way.** `motions` and `motionClips` are keyed by
 per-profile ids (`a8`, `a9`, …) minted as `a` + base36 of the clip's index in the discovery order — so ADDING a file

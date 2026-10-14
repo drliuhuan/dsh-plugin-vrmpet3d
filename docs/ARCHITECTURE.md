@@ -165,7 +165,7 @@ plugin's own script is served through a combo URL whose path is `/plugins/`.
 `lib/core.js` contains the state machine, fall physics, framing maths, idle motion,
 motion-format detection and preference cleaning, and imports neither DOM nor
 three.js. That is not tidiness for its own sake: those are the parts most likely to
-be subtly wrong, and keeping them pure lets the core suite's 1183 checks run in well
+be subtly wrong, and keeping them pure lets the core suite's 1182 checks run in well
 under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
@@ -514,11 +514,12 @@ Two entries are the ones a later pass is most likely to "unify" wrongly, and the
 and everything behind them: the `/vrmpet3d/harness` route, the host module that ran {{bt}}ctx.appExit{{bt}} and spawned the
 detached relauncher, and both surfaces' failure lines.
 
-**重力 is a TOGGLE with two independent keys.** {{bt}}core.DEFAULTS.gravity{{bt}} (the app pet) and
-{{bt}}windowGravity{{bt}} (the window — the "drag and place" behaviour it has had since 2026-10-10) are
-separate on purpose: 「内置宠物和外置宠物的重力开关状态完全独立」. **Both ship OFF** since 2026-10-14, when the
-operator made his own settings the shipped defaults (「把当前设置作为默认设置推上去」) — his pet is the floating
-window, and that is also why {{bt}}DEFAULTS.petSurface{{bt}} is `window`. The menu row reports and flips the state
+**重力 is a TOGGLE with two independent keys.** {{bt}}core.DEFAULTS.gravity{{bt}} (the app pet, shipped ON) and
+{{bt}}windowGravity{{bt}} (the window, shipped OFF — the "drag and place" behaviour it has had since 2026-10-10) are
+separate on purpose: 「内置宠物和外置宠物的重力开关状态完全独立」. Both keys are read from `DEFAULTS` (the cleaner used to
+spell them into `!== false` / `=== true`, so the app pet's "shipped ON" was not visible anywhere), and
+{{bt}}DEFAULTS.petSurface{{bt}} is the shipped `auto` — the operator's own `window` and his two off switches are HIS
+profile, not the default (2026-10-14: 「显示位置和重力都不下发」). The menu row reports and flips the state
 ({{bt}}setChecked{{bt}}, read at OPEN time like 非debug模式生效), and each surface pushes its own key into
 {{bt}}placement.throwEnabled{{bt}}, with `endFall()` to stop a fall already in progress — "no throwing and no falling"
 is not "no new throws". The menu module delivers 重力 through one line of CSS instead of a child node, because
@@ -878,7 +879,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2364 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
+Nine suites, 2363 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
 suites, the `build/` tools and the notes) — the `mmd` suite that used to make it ten went with MMD support on
 2026-10-12, and every figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs`
 recomputes them. The
