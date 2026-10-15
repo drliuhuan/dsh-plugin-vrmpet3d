@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2469 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2470 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,28 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**COLLIDER SIZES, A FOLDED 部位 LIST, AND 重载模型** (operator, 2026-10-14: 「增加修改弹簧骨碰撞体球尺寸的方法。“部位”区域默认折叠，内容太多了。给内置
+和外置宠物的右键菜单新增“重载模型”的选项，用来刷新模型」). Three asks, one commit:
+
+* **A collider's radius is editable, per collider** (`preferences.springColliderRadius`, `"<group>:<collider>" -> model units`).
+  The size box sits beside each row's tick box and starts at the number the FILE declares, so the page shows what is in
+  force; a value equal to the file's (or an empty box) REMOVES the override rather than storing it, because only the override
+  survives a re-export and the two mean the same thing. The scene applies it to the live `shape.radius` the solver reads each
+  frame and remembers the authored value, so clearing the box puts the model's own number back. `SPRING_RADIUS_RANGE` (0…2) is
+  enforced by the cleaner, so the box cannot offer a value that would be discarded. Driving this through the probe exposed a
+  real gap: the scene read only VRM 1.0's nested `{ sphere: { radius } }` and would have left every VRM 0.x model's flat
+  `{ radius }` untouched.
+* **部位 is folded by default** — a `<details>` around that section's card, not around the section, so the heading stays visible
+  and the section nav's `#settings-2` anchor still lands on it. It was the tallest thing on the page and pushed 弹簧骨 below
+  the fold.
+* **重载模型** is the ninth row of the shared menu, directly after 切换模型, in BOTH pets (one picks which model is on screen,
+  the other re-reads the file of the one already there). It busts the HTTP cache (`Scene.bustModelCache` → `?v=<now>`), which is
+  the whole point: a re-read answered from cache is a button that does nothing. The app half queues it like any load and says
+  正在重载模型…/模型已重载; the window puts the same words in its bubble. Verified through the SURFACE's action rather than the
+  scene's — `reloadModel: {"seen":["reload-model"],"busts":1}` — and that assertion has to wait a microtask, because the widget's
+  load goes through its queue: reading it synchronously is what first reported an empty list while the cache had demonstrably
+  been busted.
 
 **SPRING COLLIDERS: OFF BY MEASUREMENT, THEN A SWITCH — AND THE BUG THAT MADE IT INERT** (operator, 2026-10-14: 「模型的物理
 有点问题，身体部位会和弹簧骨穿模，是不是碰撞没开启？先排查，不修改」 → 「开body组测试一下」 → 「调整开关并不能即时生效」 → 「分别是全部关闭（默认状态），全部开启和自定义，自定义的时候，读出模型内所有碰撞体让用户自己勾选，自定义状态默认是所有碰撞体全勾选状态。修改勾选后实时更新模型」).

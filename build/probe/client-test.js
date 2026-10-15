@@ -1805,9 +1805,29 @@
     // And it opened AT the pointer, which is what a context menu promises.
     var box = widget.menu.element.getBoundingClientRect();
     var atPointer = Math.abs(box.left - base.clientX) <= 2 && Math.abs(box.top - base.clientY) <= 2;
+    /**
+     * …or was CLAMPED to stay on screen, which is the other half of the same promise.
+     *
+     * With nine rows the menu can be taller than the room under the pointer, and the surface fits it into the viewport
+     * (`openMenuAt`). That is correct behaviour, and this assertion used to forbid it; what must never happen is a menu
+     * that leaves the screen or appears above/left of the click.
+     */
+    var view = widget.document.defaultView;
+    var viewportWidth = Number(view && view.innerWidth) || 0;
+    var viewportHeight = Number(view && view.innerHeight) || 0;
+    var fits = box.left >= -1 && box.top >= -1
+      && (viewportWidth ? box.right <= viewportWidth + 1 : true)
+      && (viewportHeight ? box.bottom <= viewportHeight + 1 : true)
+      && box.left <= base.clientX + 2 && box.top <= base.clientY + 2;
     widget.closeMenu();
-    report.menuAtPointer = { opened: opened, atPointer: atPointer, box: [Math.round(box.left), Math.round(box.top)] };
-    return opened && atPointer;
+    report.menuAtPointer = {
+      opened: opened,
+      atPointer: atPointer,
+      clampedIntoView: !atPointer && fits,
+      box: [Math.round(box.left), Math.round(box.top)],
+      viewport: [viewportWidth, viewportHeight],
+    };
+    return opened && (atPointer || fits);
   });
 
   /**
@@ -2508,6 +2528,9 @@
       // 切换模型: the model picker's own row, added 2026-10-13, and it belongs to the SHARED table because both
       // pets offer it — the operator asked for it in both menus, with the guide's 偏好模型 content behind it.
       && zh.switchModel === '切换模型'
+      // 重载模型: re-read the model FILE without touching the profile (operator, 2026-10-14) — the second model row, and
+      // in the shared table for the same reason 切换模型 is: both pets offer it.
+      && zh.reloadModel === '重载模型'
       && zh.surfaceWindow === '切换回窗口外' && zh.surfaceApp === '切换回窗口内'
       && zh.gravity === '重力'
       // The two meanings of the last row, and they are NOT the same words: the app's pet is hidden, the
@@ -2541,7 +2564,9 @@
       enabledOutsideDebug: enabledOutsideDebug,
     };
     return opened && sharedClass && stylesheet && words
-      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,modelSettings,surface,gravity,closePet'
+      // The ORDER, pinned: 重载模型 sits directly after 切换模型, because both are about WHICH model is on screen (one picks
+      // it, the other re-reads the file of the one already there).
+      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,reloadModel,modelSettings,surface,gravity,closePet'
       && disabledInDebug && enabledOutsideDebug;
   });
 
@@ -6075,7 +6100,7 @@
       restoreFetch();
       return opened === true && closed && sharedClass && stylesheet && noSwitchRow
         && closeWordsDiffer && gravityRowOff && gravityMarked
-        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,modelSettings,gravity,closePet'
+        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,reloadModel,modelSettings,gravity,closePet'
         && Boolean(rect) && rect.width > 0 && rect.height > 0;
     });
   });
@@ -8531,6 +8556,54 @@
   });
 
   /**
+   * 重载模型 — the row both menus grew (operator, 2026-10-14: 「给内置和外置宠物的右键菜单新增“重载模型”的选项，用来刷新模型」).
+   *
+   * Driven through the SURFACE's own action rather than the scene alone: the menu row means nothing if the surface it
+   * belongs to re-reads nothing. The loader is stubbed, so the check says nothing about the network — only that the cache
+   * was busted and the model id handed back to the loader.
+   */
+  check('重载模型 re-reads the model through the surface, with the cache busted', function () {
+    var sceneForReload = widget.scene;
+    if (!sceneForReload || typeof widget.reloadModel !== 'function' || typeof sceneForReload.bustModelCache !== 'function') {
+      report.reloadModel = { available: false };
+      return false;
+    }
+    var realLoad = sceneForReload.loadModel;
+    var realBust = sceneForReload.bustModelCache;
+    var seen = [];
+    var busts = 0;
+    /**
+     * A model to reload: `reloadModel` resolves the id exactly as every other load does, so with an empty catalog there is
+     * nothing to re-read and the action correctly does nothing. The wheel check gives its model the same way.
+     */
+    var savedCatalog = widget.catalog;
+    var savedModelPref = widget.preferences.modelId;
+    widget.catalog = { models: [{ id: 'reload-model', name: 'reload-model' }] };
+    widget.preferences.modelId = 'reload-model';
+    sceneForReload.bustModelCache = function () { busts += 1; return realBust.call(sceneForReload); };
+    sceneForReload.loadModel = function (id) { seen.push(id); return Promise.resolve({ ok: true, note: 'probe' }); };
+    try {
+      widget.reloadModel();
+    } finally {
+      sceneForReload.loadModel = realLoad;
+      sceneForReload.bustModelCache = realBust;
+    }
+    /**
+     * …and the assertion waits a turn, because a load goes through the widget's QUEUE (`modelLoadChain`): the call is
+     * recorded a microtask after `reloadModel` returns, so reading `seen` synchronously is what made this check report an
+     * empty list while the cache had demonstrably been busted.
+     */
+    return Promise.resolve().then(function () {
+      return null;
+    }).then(function () {
+      widget.catalog = savedCatalog;
+      widget.preferences.modelId = savedModelPref;
+      report.reloadModel = { seen: seen, busts: busts, id: seen[0] || null };
+      return seen.length === 1 && Boolean(seen[0]) && busts === 1;
+    });
+  });
+
+  /**
    * THE COLLIDER SWITCH (operator, 2026-10-14: 「开body组测试一下」 → 「调整开关并不能即时生效」).
    *
    * Built from the LIBRARY'S REAL SHAPES, because a stand-in is what let the first version ship inert: `manager.joints`
@@ -8547,7 +8620,14 @@
     }
     var colliders = function (n) {
       var out = [];
-      for (var i = 0; i < n; i += 1) out.push({ shape: { radius: 0.1 } });
+      // The REAL shapes, both flavours: VRM 1.0 nests the geometry (`{ sphere: { radius } }`) and VRM 0.x is flat
+      // (`{ radius }`). The second collider is flat, so one check covers both — which is what exposed the scene reading
+      // only the nested form.
+      for (var i = 0; i < n; i += 1) {
+        out.push(i === 1
+          ? { shape: { radius: 0.1, offset: { x: 0, y: 0, z: 0 } } }
+          : { shape: { sphere: { radius: 0.1 } } });
+      }
       return out;
     };
     var body = { name: 'body', colliders: colliders(3) };
@@ -8597,6 +8677,26 @@
       out.idempotent = { appliedAgain: again, same: groupsOf(jointA) === first };
       // 全部开启 ignores the unticked list rather than clearing it, so switching back to 自定义 keeps the narrowing.
       out.allIgnoresOff = apply('all', ['0:0']);
+      /**
+       * …and the SIZE override (operator, 2026-10-14: 「增加修改弹簧骨碰撞体球尺寸的方法」): the radius the solver reads is
+       * replaced, and clearing the override puts the FILE's own number back rather than leaving the typed one behind.
+       */
+      var bodyCollider = body.colliders[0];
+      var flatCollider = body.colliders[1];
+      var authored = bodyCollider.shape.sphere.radius;
+      apply('all', []);
+      scene.preferences.springColliderRadius = { '0:0': 0.05, '0:1': 0.07 };
+      memory.mode = null;
+      memory.radiusKey = null;
+      scene.applySpringColliders();
+      out.radiusAfter = Number(bodyCollider.shape.sphere.radius.toFixed(3));
+      out.radiusFlat = Number(flatCollider.shape.radius.toFixed(3));
+      scene.preferences.springColliderRadius = {};
+      memory.mode = null;
+      memory.radiusKey = null;
+      scene.applySpringColliders();
+      out.radiusRestored = Number(bodyCollider.shape.sphere.radius.toFixed(3));
+      out.radiusAuthored = Number(authored.toFixed(3));
     } finally {
       scene.avatar.springColliderMemory = saved;
       if (saved) { saved.mode = null; saved.off = null; }
@@ -8612,6 +8712,8 @@
       && out.all.a === 'body:3 wail:2' && out.all.b === 'wail:2'
       && out.oneOff.a === 'body:2 wail:2' && out.oneOff.b === 'wail:2'
       && out.off.a === '' && out.off.b === ''
+      && out.radiusAfter === 0.05 && out.radiusFlat === 0.07
+      && out.radiusRestored === 0.1 && out.radiusAuthored === 0.1
       && out.idempotent.appliedAgain === 0 && out.idempotent.same === true;
   });
   /**

@@ -73,8 +73,19 @@
 
 <section class="settings-section" id="settings-2">
   <h2>部位 <span id="part-count"></span></h2>
-  <div class="card">
-    <table id="part-table">
+  <!--
+    默认折叠（operator, 2026-10-14: 「"部位"区域默认折叠，内容太多了」）.
+
+    The 部位 table is the tallest thing on this page — a row per part, each with a structure browser and an expression
+    select — and it pushed 弹簧骨 and everything after it below the fold, so the page opened on a wall of rows. The fold is a
+    plain `<details>` AROUND the card rather than around the section: the heading stays visible (so the page still says what
+    it is), the section nav's `#settings-2` anchor still lands on the heading, and every element the suites read is still in
+    the markup. The count beside the heading is filled whether the fold is open or shut.
+  -->
+  <details id="parts-fold">
+    <summary>展开部位列表</summary>
+    <div class="card">
+      <table id="part-table">
       <thead><tr>
         <th style="width:150px">部位</th>
         <th style="width:58px">使用</th>
@@ -101,8 +112,9 @@
         <button type="button" id="part-picker-close">关闭</button>
       </div>
       <div class="part-picker-list" id="part-picker-list" tabindex="0"></div>
+      </div>
     </div>
-  </div>
+  </details>
 
 </section>
 
