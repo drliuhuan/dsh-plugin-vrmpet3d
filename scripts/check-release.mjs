@@ -142,6 +142,23 @@ for (const needle of ['scripts/', 'docs/', 'HANDOFF', 'AGENTS', 'verify-all', 'v
   if (readme.includes(needle)) failures.push(`README 里仍提到「${needle}」`);
 }
 
+// ---- 5b. 通用设置里不该显示调试模式 ------------------------------------------
+/**
+ * The debug switch is a developer tool (two renderers side by side) and never belongs in a release.
+ *
+ * `lib/global-page.html` carries it in dev, so a plain `git checkout dev -- lib` brings it BACK — which is exactly the kind of
+ * silent step this script exists to catch. The release copy is produced by `scripts/make-release-pages.mjs`, and this assertion is
+ * what fails when somebody forgets to run it after a sync.
+ */
+const globalPage = join(tree, 'lib', 'global-page.html');
+if (existsSync(globalPage)) {
+  const text = readFileSync(globalPage, 'utf8');
+  if (text.includes('调试模式') || text.includes('pref-both')) {
+    failures.push('通用设置里仍显示调试模式（运行 node scripts/make-release-pages.mjs）');
+  }
+  notes.push('通用设置：无调试模式');
+}
+
 // ---- 6. initial-config 里不该有本机事实 --------------------------------------
 const configFile = join(tree, 'initial-config', 'vrmpet3d-settings.json');
 if (existsSync(configFile)) {

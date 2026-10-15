@@ -74,6 +74,7 @@ in the docs look wrong.
 | `vendor/`, the pinned 3D stack | `node scripts/vendor-build.mjs --check` |
 | documentation, or any count those docs quote | `node scripts/check-docs.mjs` (it recomputes the totals, so it IS the local suite for this case) |
 | the release tree — what `main` ships and what it must NOT carry | `node scripts/check-release.mjs <tree>` (`--prune` deletes uncompressed `.vrm`/`.vrma`; a `.br` twin always wins, and dev material must be absent) |
+| the release tree's GENERATED files (regenerate after any `lib/` sync) | `node scripts/make-release-pages.mjs` (strips the 调试模式 row from 通用设置) and `node scripts/make-release-readme.mjs` (dev's README minus the developer sections) — `check-release` fails when either is stale |
 | the profile wiring, or "is the running app current?" | `node scripts/check-profile.mjs` |
 | removing the plugin from THIS machine — the manager only unregisters it | `node scripts/purge-plugin-records.mjs` (`--dry-run` first; it backs the profile side up, then deletes the plugin's own profile dir, the guide record, the `node_modules` link and both runtime dirs, and finally rescans) |
 | what the RUNNING app is actually serving (routes, page sources), after a restart | `node scripts/live-check.mjs` |
