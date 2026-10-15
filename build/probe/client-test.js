@@ -5222,9 +5222,16 @@
         state: typeof scene.lastInteractionState === 'function' ? scene.lastInteractionState() : null,
         published: aiPublished && aiPublished.speech ? aiPublished.speech.text : null,
       };
+      /**
+       * …and in AI mode the press has a LOCAL line to show while the model thinks, which is the chain the operator set on
+       * 2026-10-14 (「把所有的碎碎念都设置降级连，AI > 自定义（非空时）> 内置」, and then 「从内置切换到外置后，点击身体的碎碎念会失效」,
+       * which is exactly what the old rule did here: with the shipped pool switched off for `ai`, an empty box meant no
+       * local line at all). The accepted answers are therefore the shipped pool's own line OR the host's sentence, and
+       * the press must still have asked the model once.
+       */
       var shippedPressAiOk = found.shippedPressAi.state && found.shippedPressAi.state.region === 'butt'
         && found.shippedPressAi.hidden === false
-        && found.shippedPressAi.text === '宿主的一句话'
+        && (buttClickPools.indexOf(found.shippedPressAi.text) !== -1 || found.shippedPressAi.text === '宿主的一句话')
         && found.shippedPressAi.sayCalls === 1;
       window.fetch = realSayFetch;
       // Back to what the press before this one left in place, for the bounds checks below.
