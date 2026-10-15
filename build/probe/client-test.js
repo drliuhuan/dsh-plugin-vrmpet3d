@@ -8245,7 +8245,7 @@
    * It runs LAST, after the widget is disposed: the page installs a settings poll and a `storage` listener the moment
    * it is evaluated, so it is given a document of its own and both are taken away again at the end.
    */
-  asyncCheck('状态与动作: a clip carries its own 碎碎念, and its AI 提示词 only while the source is AI', function () {
+  asyncCheck('状态与动作: the per-clip 碎碎念 boxes are GONE and a stored per-clip line is still what the pet says', function () {
     var markup = globalThis.__VRMPET3D_GLOBAL_MARKUP__;
     var source = globalThis.__VRMPET3D_GLOBAL_SOURCE__;
     if (!markup || !source) return false;
@@ -8459,21 +8459,22 @@
       report.clipSpeech = { playing: playingId, state: playingState, spoken: spoken, expected: clipLine };
       if (spoken !== clipLine) throw new Error(JSON.stringify(report.clipSpeech));
       /**
-       * The EDIT path, driven through the page's own control: typing into the box and firing `change` is what a user
-       * does, and the write has to reach the store as a patch — the same route the 表情/口型 dropdowns and the 凝视
-       * switch beside it use, and the reason this counts POSTs rather than reading the page back to itself.
+       * The BOXES are GONE — and the STORED pair is not.
+       *
+       * The operator removed the two per-clip text boxes (2026-10-14: 「既然碎碎念里面已经区分了不同状态，那在状态和动作里面，就去掉碎碎念的
+       * 设置框」), so this half asserts the removal rather than driving an input that no longer exists — a re-add would show up as a
+       * non-zero count instead of as a silent extra field. What must NOT have moved with the UI is the data the engine reads: the
+       * assertion above proves the widget still says the clip's own line, and the readout below proves the page still publishes it.
        */
-      var speechBox = row() ? row().querySelector('.clip-speech') : null;
-      if (speechBox) {
-        speechBox.value = '改过的一句';
-        speechBox.dispatchEvent(new Event('change', { bubbles: true }));
-      }
       return pause(50).then(function () {
-        seen.wrote = patches.some(function (patch) {
-          var clips = patch && patch.preferences && patch.preferences.motionClips;
-          return Boolean(clips && clips.resting && clips.resting.a1 && clips.resting.a1.speech === '改过的一句');
-        });
-        seen.afterEdit = page().motions.clipTexts['resting/a1'] || null;
+        var afterRemoval = page();
+        seen.afterRemoval = {
+          speechRows: afterRemoval.motions.clipSpeechRows,
+          promptRows: afterRemoval.motions.clipPromptRows,
+          stored: afterRemoval.motions.clipTexts['resting/a1'] || null,
+          source: afterRemoval.speech.source,
+          aiVisible: afterRemoval.speech.aiVisible,
+        };
         // And the 台词来源 picker, which is the rule the operator's parenthetical is about.
         var sourceSelect = host.querySelector('#pref-speech-source');
         if (sourceSelect) {
@@ -8484,28 +8485,19 @@
           var atAi = page();
           var aiTexts = texts();
           seen.atAi = {
-            promptRows: atAi.motions.clipPromptRows,
-            promptVisible: atAi.motions.clipPromptVisible,
-            promptShown: aiTexts.promptShown,
             aiVisible: atAi.speech.aiVisible,
             source: atAi.speech.source,
           };
           restore();
-          var verdict = atBuiltin.speechRows === 2
-            // The 碎碎念 box is there whatever the source is, and it is showing the STORED line.
-            && atBuiltin.speechValue === '摸鱼的一句'
-            && atBuiltin.stored && atBuiltin.stored.speech === '摸鱼的一句'
-            && atBuiltin.stored.prompt === '这句要懒洋洋的'
-            // The 提示词 box belongs to the AI source: while the source is the built-in table it is on the row but
-            // HIDDEN, and the AI block above it is hidden by the same decision (`speech.aiVisible`).
-            && atBuiltin.promptRows === 0 && atBuiltin.promptVisible === false && atBuiltin.promptShown === false
-            && atBuiltin.promptValue === '这句要懒洋洋的'
-            && atBuiltin.source === 'builtin' && atBuiltin.aiVisible === false
-            // The edit went through the page's own write path and came back as the stored value.
-            && seen.wrote === true && seen.afterEdit && seen.afterEdit.speech === '改过的一句'
-            // Switching the source to AI 生成 shows it — two boxes, one rule.
-            && seen.atAi.source === 'ai' && seen.atAi.aiVisible === true
-            && seen.atAi.promptVisible === true && seen.atAi.promptRows === 2 && seen.atAi.promptShown === true;
+          restore();
+          var verdict = atBuiltin.speechRows === 0 && atBuiltin.promptRows === 0
+            && seen.afterRemoval.speechRows === 0 && seen.afterRemoval.promptRows === 0
+            // The stored pair survived the UI change, and it is what the engine above actually reads.
+            && seen.afterRemoval.stored && seen.afterRemoval.stored.speech === '摸鱼的一句'
+            && seen.afterRemoval.stored.prompt === '这句要懒洋洋的'
+            && seen.afterRemoval.source === 'builtin' && seen.afterRemoval.aiVisible === false
+            // And the 台词来源 picker still governs the 碎碎念 section's AI block — the rule that did NOT move.
+            && seen.atAi.source === 'ai' && seen.atAi.aiVisible === true;
           // The whole readout travels with the failure, so a red names the field that was wrong instead of only
           // saying "false" — the same reason every other probe here builds an object for its report.
           if (verdict !== true) throw new Error(JSON.stringify(seen));
