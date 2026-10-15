@@ -9,27 +9,27 @@
       "LiuHai": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "LiuHai.R": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "LiuHai.L": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "FaBing.L": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "FaBing.R": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "ErDuo.L": {
         "stiffness": 1,
@@ -44,57 +44,57 @@
       "Hou_hair": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "Hou_hair.L": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "Hou_hair.R": {
         "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "Z_QunZi": {
         "stiffness": 1,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "Q_QunZi.L": {
         "stiffness": 1,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "QunZi.L": {
         "stiffness": 1.5,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "H_QunZi.L": {
         "stiffness": 1.5,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "Z_HouQunZi": {
         "stiffness": 1.5,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "H_QunZi.R": {
         "stiffness": 1.5,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "QunZi.R": {
         "stiffness": 1.5,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "Q_QunZi.R": {
         "stiffness": 1,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.5
       },
       "WeiBa": {
         "stiffness": 0.5,
