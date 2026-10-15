@@ -21,9 +21,6 @@
     "fail/fall down2.vrma.br": {
       "loop": false
     },
-    "idle/coolIdleGlance.vrma.br": {
-      "loop": true
-    },
     "idle/hungry1.vrma.br": {
       "loop": false
     },
@@ -58,9 +55,6 @@
       "loop": true
     },
     "idle/idle4.vrma.br": {
-      "loop": true
-    },
-    "idle/innocentStandIdle.vrma.br": {
       "loop": true
     },
     "idle/touch hair1.vrma.br": {
@@ -110,7 +104,6 @@
   },
   "defaults": {
     "resting": [
-      "idle/coolIdleGlance.vrma.br",
       "idle/hungry1.vrma.br",
       "idle/hungry2.vrma.br",
       "idle/idle lookaround1.vrma.br",
@@ -123,7 +116,6 @@
       "idle/idle2.vrma.br",
       "idle/idle3.vrma.br",
       "idle/idle4.vrma.br",
-      "idle/innocentStandIdle.vrma.br",
       "idle/touch hair1.vrma.br",
       "idle/touch hair2.vrma.br"
     ],

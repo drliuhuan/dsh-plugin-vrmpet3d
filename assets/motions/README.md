@@ -83,13 +83,23 @@ correct; the measurement was not. Fixed in both places: the maths now returns a 
 rotations rather than quaternion lengths.
 
 **So no clip needs re-exporting for this**, and the whole-skeleton snapshot idea is not required for it either.
-All three files pass all 61 checks now:
+The tool reads a clip and a model, serves them to a real browser, and reports 61 checks:
 
 ```bash
-node scripts/verify-motion.mjs --model assets/models/SampleModel.vrm --motion assets/motions/coolIdleGlance.vrma
-node scripts/verify-motion.mjs --model assets/models/SampleModel.vrm --motion assets/motions/idle.vrma
-node scripts/verify-motion.mjs --model assets/models/SampleModel.vrm --motion assets/motions/innocentStandIdle.vrma
+node scripts/verify-motion.mjs --model assets/models/SampleModel.vrm.br --motion assets/motions/idle/idle.vrma.br
 ```
+
+Both files are compressed (`.br`), because that is how the pack ships, and the tool unpacks them itself (`lib/brotli.js`) — so
+checking a shipped clip needs no manual step.
+
+> ⚠️ **Known broken on 2026-10-15, and not by compression.** On this machine the run ends with
+> `page error: Uncaught SyntaxError: missing ) after argument list` before any check is reported. The inlined scripts
+> (`lib/client.vendor.js`, `lib/core.js`, `lib/placeholder.js`, `lib/scene.js`) contain no stray `</script`, and the tool's own
+> page body parses clean, so the fault is inside the harness that only this tool builds — none of the nine suites runs this file,
+> which is why nothing else noticed. It is recorded here rather than silently dropped.
+
+The three files named here before (`coolIdleGlance.vrma`, `idle.vrma` and `innocentStandIdle.vrma`) had already moved into `idle/`
+and been packed, and the operator trimmed the first and the last from the pack on 2026-10-15.
 
 That script is the tool to re-check any new clip with, and it is **not** wired into any suite, so nothing else runs it.
 What it confirms for each file: the humanoid rig is driven, the rotations stay finite, the RAW skinned bone follows the
