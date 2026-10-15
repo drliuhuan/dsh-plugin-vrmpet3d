@@ -199,6 +199,17 @@ two surfaces cannot drift. And neither plate WRAPS or CAPS its width (「不管�
 the speech bubble's old `max-width:18em` is gone, because with `nowrap` a cap leaves the background short of the text it is behind —
 the same defect the prompt's own `max-width` was removed for on 2026-10-09.
 
+**…AND THE TWO BUBBLES NOW WRAP AT ONE NUMBER** (operator, 2026-10-14: 「内置桌宠的碎碎念换行规则设置成和外置一样，以外置为准」, then,
+when it still measured differently, 「内置的碎碎念气泡比较窄，几乎都要显示3-4行」). Three things made the app's bubble wrap sooner than the
+window's, and only one of them was the box model: `box-sizing` was `content-box` on the app side and `border-box` on the window's
+(a padding of extra width, 2 × .7em), the app bubble INHERITED DSH's font while the window named `"Segoe UI",system-ui,"Microsoft
+YaHei",sans-serif` (different metrics for the same words), and the wrap width came from each surface's OWN pet box — the app pet's
+slot inside DSH's overlay is far narrower than the floating window, so one remark took three or four lines in the app and two in the
+window. All three are now the window's declarations: `border-box`, the same `font:` shorthand, and `max(petBoxWidth,
+core.SPEECH_LIMITS.wrapPx)` — a SHARED floor of 220 px that both surfaces read, so a pet wider than it still widens its own bubble
+while neither can wrap narrower than the number the window's stylesheet already used as its default. `core.speechPromptFontPx`
+already owned the SIZE for both halves; the floor is the same idea applied to the width.
+
 **碎碎念 now ships the operator's own CHARACTER as the default persona** (2026-10-13): `core.DEFAULT_SPEECH_PERSONA` is the
 DeepSeek娘 prose (453 chars, 17 lines, the 经典语句 verbatim), `DEFAULT_SPEECH_AI.persona` carries it, and an EMPTY 人格 box
 means it — `cleanSpeechAi` falls back to it, so the panel, the host and the suites read one value and his existing profile
