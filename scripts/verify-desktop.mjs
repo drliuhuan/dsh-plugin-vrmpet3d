@@ -235,6 +235,23 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     && pageScript.includes('core.motionSpeedFor(preferences, state, entry.id')
     && pageScript.includes('core.MOTION_SPEED_LIMITS'),
     'the clip controls carry a 速度 box, resolved and bounded through the core');
+
+  /**
+   * FOLDS REMEMBER THEMSELVES ACROSS A RE-RENDER (operator, 2026-10-14: 「弹簧骨面板展开后，如果点击空白处会被折叠回，这样影响用户操作，
+   * 看看其他折叠的面板有没有类似问题，一起修了」).
+   *
+   * Every fold this page BUILDS is thrown away and rebuilt by `renderAll`, and a new `<details>` is shut — which is why a
+   * click on empty space (it commits a focused box, and that commit re-renders) closed the panel the user was working in.
+   * The rule is a SHARED memory rather than a flag per section: one helper, every fold through it, including the two that
+   * live in the markup.
+   */
+  ok(pageScript.includes('function rememberFold(')
+    && pageScript.includes("rememberFold(document.createElement('details'), 'springs')")
+    && pageScript.includes("rememberFold(document.createElement('details'), 'motions:' + state)")
+    && pageScript.includes("rememberFold(document.createElement('details'), 'speech:' + state)")
+    && pageScript.includes("rememberFold(element('parts-fold'), 'parts')")
+    && pageScript.includes("rememberFold(element('spring-colliders-detail'), 'colliders')"),
+    'every fold — 弹簧骨, 状态与动作, 碎碎念, 部位, 逐个碰撞体 — restores what the user opened');
 }
 
 // ---------------------------------------------------------------------------

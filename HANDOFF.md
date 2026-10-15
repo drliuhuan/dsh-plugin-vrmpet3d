@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2479 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2480 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,16 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**EVERY FOLD REMEMBERS ITSELF** (operator, 2026-10-14: 「弹簧骨面板展开后，如果点击空白处会被折叠回，这样影响用户操作，看看其他折叠的面板有没有类似问题，一起修了」).
+One cause, and it was never 弹簧骨-specific: a fold this page BUILDS is thrown away by `renderAll` and replaced, and a new
+`<details>` is shut. Clicking empty space commits whatever box was focused, that commit re-renders, and the panel closes under
+the user's hands. 状态与动作 had been patched on its own back on 2026-10-13 (`openMotionStates`), so it was the only fold that
+survived — 弹簧骨 and 碎碎念 had the bug, and the two folds that live in the markup (部位, 逐个碰撞体) were safe by accident. The fix is
+the generalisation that should have been written then: ONE map plus `rememberFold(details, key)`, called for every fold, with the
+markup folds wired once at boot (binding them per render would stack a listener per pass). Keys are prefixes
+(`motions:<state>`, `speech:<state>`, `springs`, `parts`, `colliders`), so a fold that later moves between "built" and "markup"
+keeps the user's choice either way.
 
 **每支动作一个速度** (operator, 2026-10-14: 「在通用设置-状态与动作那里，允许给每个动作配置速度，默认100%，范围是1-1000%，同样具有实时预览功能。这一步会延长或者缩短单次/循环动作的时间，但是动作结束后的后续动作接续逻辑依然不变」).
 
