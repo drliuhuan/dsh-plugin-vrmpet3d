@@ -3681,6 +3681,21 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     'an id-keyed default — what the host actually sends — resolves just as well as a name');
   same(core.motionMapWithDefaults({}, { resting: ['a2'], working: ['idle.vrma'] }, catalog), { resting: ['a2'], working: ['a1'] },
     'and both shapes may appear in one call, which is what a mixed payload looks like');
+  /**
+   * 跳舞 has no loop/one-shot distinction: it is ALWAYS one-shot, whatever any layer says.
+   *
+   * Operator, 2026-10-15: 「"跳舞"这个状态，没有循环动作和一次性动作之分，所有的动作都只播放一次，播放结束后并不要停在最后一帧，而是直接回到idle状态」.
+   * Answered in `motionLoopForState` rather than only in the settings page, so a stored `loop: true` — written before the rule, or
+   * by a hand-edited profile — cannot make the pet dance for ever. The other states keep their three-layer answer.
+   */
+  eq(core.motionLoopForState({ motionClips: { dancing: { a1: { loop: true } } } }, 'dancing', 'a1', true, {}), false,
+    'a dance is one-shot even when the profile stored loop:true for it');
+  eq(core.motionLoopForState({}, 'dancing', 'a1', true, { dancing: { a1: { loop: true } } }), false,
+    'and even when the pack template says so');
+  eq(core.motionLoopForState({ motionClips: { resting: { a1: { loop: true } } } }, 'resting', 'a1', false, {}), true,
+    'while another state still honours the stored answer');
+  eq(core.motionLoopForState({}, 'resting', 'a1', false, {}), false,
+    'and still falls through the catalog as before');
   same(core.motionMapWithDefaults({ resting: ['a1'] }, defaults, catalog).resting, ['a1'],
     'the default for a state is not APPENDED to the user\'s list');
   const once = core.motionMapWithDefaults({}, defaults, catalog);

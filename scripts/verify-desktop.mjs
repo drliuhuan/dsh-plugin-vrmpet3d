@@ -134,6 +134,26 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
    * that renders as an empty document — the guide would still "open", which is exactly how that failure would
    * survive a live check. Both files are read here (no browser needed) and the six ids are compared.
    */
+  /**
+   * 跳舞 shows no 循环/单次 control, and the window reports a finished dance.
+   *
+   * Operator, 2026-10-15: 「"跳舞"这个状态，没有循环动作和一次性动作之分，所有的动作都只播放一次，播放结束后并不要停在最后一帧，而是直接回到idle状态」.
+   * Two halves, two files, and neither can be proved by the other: the page must not offer an answer the engine ignores, and the
+   * window — the surface that actually watches the clip end under `petSurface: auto` — must tell the app, or the state (owned by the
+   * app's machine) never leaves 跳舞 and the pet sits in the final pose.
+   */
+  {
+    const page = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
+    ok(page.includes("var mode = state === 'dancing' ? dancingOnceMarker() : docMode(entry, state);")
+      && page.includes('function dancingOnceMarker()')
+      && page.includes("if (state !== 'dancing') {"),
+      'the settings page marks 跳舞 单次 and offers no 循环/单次 control for it');
+    const win = readFileSync(join(ROOT, 'lib', 'desktop-page.js'), 'utf8');
+    ok(win.includes("drawn === 'dancing' && scene.playback && scene.playback.finished === true")
+      && win.includes('danceEndedReported')
+      && win.includes("body: '{}'"),
+      'and the floating window reports a finished dance through the preview channel, once');
+  }
   const setupHtml = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
   const setupScript = readFileSync(join(ROOT, 'lib', 'setup-page.js'), 'utf8');
   const screens = [...setupHtml.matchAll(/id="(setup-[0-9])"/g)].map((match) => match[1]);
