@@ -75,6 +75,7 @@ in the docs look wrong.
 | documentation, or any count those docs quote | `node scripts/check-docs.mjs` (it recomputes the totals, so it IS the local suite for this case) |
 | the release tree — what `main` ships and what it must NOT carry | `node scripts/check-release.mjs <tree>` (`--prune` deletes uncompressed `.vrm`/`.vrma`; a `.br` twin always wins, and dev material must be absent) |
 | the profile wiring, or "is the running app current?" | `node scripts/check-profile.mjs` |
+| removing the plugin from THIS machine — the manager only unregisters it | `node scripts/purge-plugin-records.mjs` (`--dry-run` first; it backs the profile side up, then deletes the plugin's own profile dir, the guide record, the `node_modules` link and both runtime dirs, and finally rescans) |
 | what the RUNNING app is actually serving (routes, page sources), after a restart | `node scripts/live-check.mjs` |
 
 Overlapping changes mean the union of those rows — still not the whole tree.
