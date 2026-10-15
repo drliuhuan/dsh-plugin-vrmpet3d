@@ -2440,6 +2440,29 @@ group('12. what a model contains, over real HTTP (the settings window reads this
   const creditedNames = catalog.payload.models.filter((model) => model.credit).map((model) => model.name).sort();
   eq(creditedNames.join(', '), 'BlueFatFish.vrm.br, SampleModel.vrm.br',
     'and both bundled models carry a credit, and nothing else does');
+  /**
+   * …and the host's own translation round-trips back through the resolver both surfaces use.
+   *
+   * The end-to-end half of a bug that shipped: the pack's manifest names clips by FILE, the host translates those names
+   * to ids before the payload goes out, and both surfaces feed that id-keyed block straight back into
+   * `motionMapWithDefaults`. Each half was pinned and each half was right — the resolver understood names, the host sent
+   * ids — so nothing failed while a fresh profile mapped NO CLIPS AT ALL (operator, 2026-10-15: 「为什么全新安装，模型没有任何动作
+   * 了？」). This asserts the ROUND TRIP, on the catalogue this suite has in hand, with the state name taken from the
+   * fixture rather than typed here.
+   */
+  {
+    const bundled = plugin.buildMotionCatalog({ motionDirs: [join(ROOT, 'assets', 'motions')] });
+    eq(Array.isArray(bundled.motions) && bundled.motions.length > 0, true,
+      `the bundled pack is catalogued for this round trip (${bundled.motions.length} clips)`);
+    // Exactly what the host sends: the manifest's name-keyed block, TRANSLATED to ids.
+    const translated = core.motionMapWithDefaults({}, plugin.bundledMotionDefaults(), bundled.motions);
+    const idMapped = Object.keys(translated).reduce((sum, state) => sum + translated[state].length, 0);
+    eq(idMapped > 0, true, `the manifest's clip NAMES translate to ids (${idMapped} clips)`);
+    const resolved = core.motionMapWithDefaults({}, translated, bundled.motions);
+    const mapped = Object.keys(resolved).reduce((sum, state) => sum + resolved[state].length, 0);
+    eq(mapped > 0, true,
+      `and a fresh profile's EMPTY map resolves through that id-keyed block to real clips (${Object.keys(resolved).length} states, ${mapped} clips)`);
+  }
   const fatFish = catalog.payload.models.find((model) => model.name === 'BlueFatFish.vrm.br');
   eq(fatFish && fatFish.credit.author, '木子恶魔', 'BlueFatFish.vrm credits its author');
   eq(fatFish && fatFish.credit.title, '蓝色小肥鱼Deepseek', "and the model's own name");

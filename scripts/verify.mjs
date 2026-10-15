@@ -3669,6 +3669,18 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
     'with no catalog nothing resolves, so the pet idles procedurally instead of guessing');
   same(core.motionMapWithDefaults({}, { resting: 'coolIdleGlance.vrma' }, catalog), { resting: ['a2'] },
     'a bare-string default is accepted, so a hand-written manifest needs no array for one clip');
+  /**
+   * …and a default may arrive as an ID.
+   *
+   * This is the shape the HOST actually sends: it translates the manifest's file names to ids before the payload goes out,
+   * so the payload's `motionDefaults` is id-keyed while the pack's own block is name-keyed. A resolver that only understood
+   * names mapped NOTHING AT ALL on a fresh profile — every state empty, no clip, nothing to play — and no suite caught it,
+   * because every fixture in this block was written in the name form (operator, 2026-10-15: 「为什么全新安装，模型没有任何动作了？」).
+   */
+  same(core.motionMapWithDefaults({}, { resting: ['a2'] }, catalog), { resting: ['a2'] },
+    'an id-keyed default — what the host actually sends — resolves just as well as a name');
+  same(core.motionMapWithDefaults({}, { resting: ['a2'], working: ['idle.vrma'] }, catalog), { resting: ['a2'], working: ['a1'] },
+    'and both shapes may appear in one call, which is what a mixed payload looks like');
   same(core.motionMapWithDefaults({ resting: ['a1'] }, defaults, catalog).resting, ['a1'],
     'the default for a state is not APPENDED to the user\'s list');
   const once = core.motionMapWithDefaults({}, defaults, catalog);
