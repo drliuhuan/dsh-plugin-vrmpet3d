@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2438 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2442 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -117,6 +117,17 @@ does not, and the file's own tracks stop counting in that case too (the same ans
 at zero is not on screen). `Scene.blinkState()`'s `paused` reads the same rule, because it exists to explain the gate.
 The dance clip is the first user: `template.working` gives it `expression: "none"` and `gaze: false`, so it plays with a
 blank face, with blinking, and without following the cursor — all three by file name, in the pack's manifest.
+
+**A FIRST SIGHTING IS A BASELINE, NOT AN EDGE** (operator, 2026-10-14: 「每次关闭dsh再打开，桌宠就汇报任务完成，才恢复到idle」). `observeStoreEdge`
+compared each session's `running` with the value it remembered, and the FIRST time a session is seen `previous` is
+`undefined` — so at boot, when the store hands over every session as `running: false`, "no memory" was read as "it was
+running and just stopped" and the pet announced 任务完成 once per DSH start, for every session that was not running (then
+waited out its hold, which is the 「才恢复到 idle」 half). The gate is now `previous !== true`: only a session this store
+ITSELF reported as running can stop, and a first sighting just seeds the map. The cost is honest: a completion that
+happened while the page was not alive is not announced at the next start, because nothing in the store tells it apart from
+a session that never ran — the boundary stream covers that case when it is wired, and a false 任务完成 on every boot is
+worse than a missed one. Four assertions pin it (`scripts/verify.mjs`: first seen as not-running, the same answer again, a
+turn starting, and the real falling edge).
 
 **THE PACK'S SPRING VALUES SHIP TOO** (operator, 2026-10-14: 「把当前 BlueFatFish 弹簧骨的参数作为默认参数推上去」). `BlueFatFish.vrm` is a
 BUNDLED model, and the operator had tuned all twenty of its chains (呆毛 0.4/0.2/0.05, the hair 0.05/0.2/0.2, 耳朵

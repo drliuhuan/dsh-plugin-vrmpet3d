@@ -3102,6 +3102,39 @@ group('8. session aggregate');
     eq(noStream.snapshot().notice && noStream.snapshot().notice.sessionId, 'm1',
       'and a listed session still reports with no boundary stream at all, which is why this path exists');
     /**
+     * A FIRST SIGHTING IS A BASELINE, NOT AN EDGE (operator, 2026-10-14: 「每次关闭dsh再打开，桌宠就汇报任务完成，才恢复到idle」).
+     *
+     * At boot the store hands over every session as `running: false`, and `previous` is `undefined` for all of them —
+     * so treating an unseen session as "it was running and just stopped" made the pet announce 任务完成 once per DSH
+     * start, for every session that was not running. Only a session this store itself reported as running can stop.
+     */
+    const boot = new core.SessionAggregate(() => now);
+    boot.setInput({
+      connected: true,
+      catalog: { byId: { m1: {}, m2: {} }, phase: 'ready' },
+      statuses: new Map([['m1', { running: false }], ['m2', { running: false, completionUnread: true }]]),
+    });
+    eq(boot.snapshot().notice, undefined, 'a session first seen as NOT running raises no completion at all');
+    boot.setInput({
+      connected: true,
+      catalog: { byId: { m1: {}, m2: {} }, phase: 'ready' },
+      statuses: new Map([['m1', { running: false }], ['m2', { running: false, completionUnread: true }]]),
+    });
+    eq(boot.snapshot().notice, undefined, 'nor does the same answer on the next poll');
+    boot.setInput({
+      connected: true,
+      catalog: { byId: { m1: {}, m2: {} }, phase: 'ready' },
+      statuses: new Map([['m1', { running: true }], ['m2', { running: false }]]),
+    });
+    eq(boot.snapshot().notice, undefined, 'a turn starting is not a completion either');
+    boot.setInput({
+      connected: true,
+      catalog: { byId: { m1: {}, m2: {} }, phase: 'ready' },
+      statuses: new Map([['m1', { running: false }], ['m2', { running: false }]]),
+    });
+    eq(boot.snapshot().notice && boot.snapshot().notice.sessionId, 'm1',
+      'while the session this store DID see running reports the moment it stops');
+    /**
      * A helper running ALONE is not the user's work, which is the same rule seen from the other side: the pet stays
      * off 工作中 rather than reporting a task nobody asked for.
      */
