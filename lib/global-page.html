@@ -36,6 +36,11 @@
   <h2>显示与外观</h2>
   <div class="card">
 
+    <div class="row" id="pref-surface-row" hidden>
+      <span class="k">桌宠界面</span>
+      <label class="inline"><input type="radio" name="pref-surface" value="app"> 内置宠物</label>
+      <label class="inline"><input type="radio" name="pref-surface" value="auto"> 自动</label>
+    </div>
     <div class="row">
       <label class="k" for="pref-size">应用内大小</label>
       <input type="range" id="pref-size" min="40" max="260" step="1">
@@ -49,16 +54,11 @@
       <button id="pref-window-size-reset" class="ghost">复位</button>
     </div>
     <!--
-      空闲休眠: how long the pet may sit idle before it naps (`sleepAfterMs`).
-
-      This row is the one thing the deleted pet settings panel owned that had NO other home — `cleanPreferences`
-      accepts exactly three values, so removing the panel left the preference unreachable from every surface
-      (the right-click menu is about the pet, and its eight entries do not carry this). A select rather than a
-      number for the same reason: the cleaner's list IS the set of choices.
+      Legacy nap control: retained hidden and disabled for compatibility. Idle stays resting.
     -->
-    <div class="row">
+    <div class="row" hidden>
       <label class="k" for="pref-sleep">空闲休眠</label>
-      <select id="pref-sleep">
+      <select id="pref-sleep" disabled>
         <option value="30000">30 秒</option>
         <option value="120000">2 分钟</option>
         <option value="300000">5 分钟</option>
