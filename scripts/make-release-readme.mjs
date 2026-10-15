@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const KEEP = ['效果展示', '功能', '运行要求', '安装', '首次使用', '模型、动作与数据', 'License'];
+const KEEP = ['效果展示', '功能', '运行要求', '安装', '首次使用', '模型、动作与数据', 'English', 'License'];
 const DROP = ['Verification', 'Project layout', 'Documentation'];
 const sections = [];
 let current = { title: null, body: [] };

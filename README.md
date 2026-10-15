@@ -6,6 +6,8 @@
 
 [安装与使用](#安装) · [问题反馈](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) · [MIT 许可证](LICENSE)
 
+[English](#english)
+
 > 当前为早期版本，仍在修复和完善。3D 渲染会占用 GPU 与内存；遇到异常时，请附上 DSH 版本、显示方式和复现步骤反馈。
 
 ```
@@ -116,6 +118,119 @@ no runtime dependencies · 9 verification suites · 2543 checks · works offline
 - **AI 不说话**：检查台词来源、服务、模型和访问额度；可以先切回内置台词确认气泡显示正常。
 
 请通过 [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) 提交问题，附上 DSH 版本、操作系统、内置/外置显示方式、复现顺序与预期结果。请勿上传 API Key 或私人会话内容。
+
+## English
+
+Add a 3D desktop pet to **DeepSeek Harness (DSH)**. The pet follows task states and can appear inside the app or in a separate transparent floating window on DSH Desktop. It shows the current state and plays its assigned motion while a task is running, waiting for confirmation, completed, or has failed.
+
+Two models and a VRMA motion pack are included. You can import your own models, configure motions, expressions, gaze and physics, and let the pet speak preset lines or generate AI chatter.
+
+[Installation and usage](#installation) · [Report an issue](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) · [MIT license](LICENSE)
+
+> This is an early release and is still being improved. 3D rendering uses GPU and memory. When reporting a problem, include your DSH version, display mode and reproduction steps.
+
+### Screenshots and demo
+
+The composite shows the idle, working, waiting for confirmation and task completed states:
+
+![Pet in idle, working, waiting and completed states](assets/screenshots/states-overview.png)
+
+Live demo of chatter and mouse gaze:
+
+![Chatter and mouse gaze demo](assets/screenshots/chatter-gaze.gif)
+
+The model shown is **BlueFatFish / 蓝色小肥鱼Deepseek**, by **木子恶魔**. See the [original release](https://www.aplaybox.com/details/model/ayXkRzVflmnd). **The author authorized distribution with this plugin, provided the source and author are credited.** The model remains the author's work and is covered separately from the plugin's MIT license. The same attribution, authorization and source are shown in the model picker and the first-run guide.
+
+The marketplace screenshot order is declared in the root [screenshots.json](screenshots.json), which lists the composite and four original screenshots.
+
+### Features
+
+| Feature | Description |
+| --- | --- |
+| Two display modes | In-app pet, or an automatically opened floating window on Desktop with always-on-top and transparent-area click-through support |
+| Task state tracking | Idle, working, waiting for confirmation, completed, failed and offline; idle stays in the idle state and does not automatically sleep |
+| Models | VRM 1.0 / 0.x and regular glTF/GLB; humanoid VRM bones are required for character motions |
+| Motions | Included VRMA pack with per-state loop, one-shot, speed, expression, lip-sync and gaze settings |
+| Dance | Right-click to play a random dance; it ends when the motion finishes, on double-click, or when work starts |
+| Interaction | Click or hold body parts for expressions and chatter; drag, resize, rotate the view, follow the pointer and use spring-bone physics |
+| Chatter | Built-in or custom lines, or AI-generated lines using a DSH model or an OpenAI-compatible service |
+| Import | Import models as files and motion packs as folders. Imported files are copied into plugin storage and no longer depend on their original paths |
+
+### Requirements
+
+- Verified with DeepSeek Harness **0.2.0-rc.2**. Other versions have not been verified; this does not mean they cannot work. This is a DSH plugin and cannot run as a standalone application.
+- A graphics environment with WebGL2. The floating window requires an available Electron runtime, which the launcher reuses from the DSH installation. If it cannot start, the pet falls back to the in-app display.
+- No runtime npm dependencies are required. Built-in lines and model motions work offline. AI chatter depends on the selected service's network access and usage quota.
+
+### Installation
+
+Install from this repository's **`main` branch**. The project is not published on npm yet.
+
+1. Add this repository in the DSH plugin manager. If it accepts GitHub package sources, use:
+
+   ```text
+   github:drliuhuan/dsh-plugin-vrmpet3d#main
+   ```
+
+2. You can also [download the `main` branch ZIP](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/archive/refs/heads/main.zip), extract it and add the folder containing `package.json` in the plugin manager, or enter `link:<absolute path to the plugin folder>`.
+3. Make sure the plugin is enabled, then restart DSH. Restart after updates as well so the host and page code use the same version.
+
+Disable other plugins that use the same pet display position first, such as `dsh-plugin-fatfish-pet` and `dsh-plugin-whale-pet`. Uninstall this plugin through the plugin manager.
+
+### First run
+
+The first-run guide configures your preferred model, pet display and AI chatter. You can finish setup later, or reopen it from **General Settings → Other → Run setup guide again**.
+
+- **Choose a display mode:** On Desktop, select “Built-in pet” or “Automatic” at the top of General Settings. Automatic mode prefers the separate floating window. You can also switch modes from the right-click menu.
+- **Choose a model:** Right-click → Switch model, then select a thumbnail. You can also drop in a model file; wait for loading to finish before switching again.
+- **Configure motions:** General Settings → States and motions. Default state mappings, expressions and playback settings are included and can be changed.
+- **Configure lines:** General Settings → Chatter. Choose built-in, custom or AI lines. AI mode requires an available service and model.
+- **Configure expressions and body parts:** Right-click → Current model settings. Available expressions, body parts and spring-bone chains depend on the model.
+
+#### Mouse controls
+
+| Action | Result |
+| --- | --- |
+| Click / hold in place | Trigger body-part interaction and chatter while preserving the current motion |
+| Drag with left button | Move the pet; when gravity is enabled for that display, release to throw it and let it land |
+| Scroll over the pet | Resize the pet and its text |
+| Scroll over text | Resize the text only |
+| Drag with right button | Rotate the view |
+| Right-click | Open the menu for display and model switching, dancing, reloading, settings, gravity, hiding and more |
+| Double-click | End the current dance |
+
+### Models, motions and data
+
+The bundled default model is **蓝色小肥鱼Deepseek by 木子恶魔**. The alternate model is **ヴィータ by VRoid プロジェクト**. See the license notes below and the [model documentation](assets/models/README.md) for their sources and terms.
+
+#### BlueFatFish model attribution and authorization
+
+| Item | Information |
+| --- | --- |
+| Model file | `BlueFatFish.vrm.br` (decompressed to VRM when loaded) |
+| Model name | 蓝色小肥鱼Deepseek |
+| Author | 木子恶魔 |
+| Source | [Original Aplaybox release](https://www.aplaybox.com/details/model/ayXkRzVflmnd) |
+| Distribution authorization | The author authorized distribution with this plugin, provided the source and author are credited |
+
+The project's MIT license does not replace the model author's authorization. Other uses remain subject to the terms on the original release page and any separate authorization from the author.
+
+Models support `.vrm`, `.glb` and `.gltf`; motions support `.vrma`. PMX/PMD and VMD are not supported. Regular glTF/GLB files without a VRM humanoid skeleton cannot play VRMA character motions. Bundled models and motions are stored with Brotli compression and decompressed automatically when loaded.
+
+Imported files and settings are stored in the plugin storage directory in the DSH profile. Removing an import deletes only the plugin's copy, not the original file. Default settings for bundled motions are resolved by filename and do not depend on model or motion IDs from another machine.
+
+#### AI and privacy
+
+The pet uses task state, session identifiers and timing information to determine its current state. It does not need to read conversation text, tool arguments or attachments. When AI chatter is enabled, the configured personality, state prompt and body-part information are sent to the AI service you select. That service determines its own fees and data handling rules.
+
+#### Troubleshooting and feedback
+
+- **The pet is missing:** Check that the plugin is enabled, restart DSH, and make sure another pet plugin is not using the same display position.
+- **The floating window is missing:** Select “Automatic” in General Settings. The in-app pet remains available if the runtime cannot start.
+- **The model does not move:** Confirm that you are using a VRM model, that a motion is assigned to the current state, and that model motions are enabled. Include the full error message when reporting the issue.
+- **AI is silent:** Check the line source, service, model and usage quota. Switch to built-in lines to confirm that the speech bubble works.
+
+Report issues through [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues). Include your DSH version, operating system, display mode, reproduction steps and expected result. Do not upload API keys or private conversation content.
 
 
 ## Verification
