@@ -33,3 +33,7 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local backups a tool writes beside the file it rewrites (never shipped).
+*.bak-local
+
