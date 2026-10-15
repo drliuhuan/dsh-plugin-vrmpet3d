@@ -577,7 +577,8 @@
       widget.tick(1 / 60);
       var applied = widget.scene.state;
       var dom = widget.pet.getAttribute('data-state');
-      if (applied !== state || dom !== state) {
+      var expectedState = state === 'sleeping' ? 'resting' : state;
+      if (applied !== expectedState || dom !== expectedState) {
         report.stateMismatch = { wanted: state, scene: applied, dom: dom };
         return false;
       }
@@ -4964,10 +4965,53 @@
       // The model stays, and so do its chains: nothing was substituted for it.
       var switchOk = switched !== 'placeholder' && pet.scene.springChains().length > 0;
       followed = followed && switchOk;
+      // Exercise the APP's two settings paths with a loaded, unchanged model and inherited mappings.
+      var snapshotCallback;
+      var storageCallback;
+      var appScene = Object.create(SCENE.Scene.prototype);
+      appScene.core = CORE;
+      appScene.preferences = CORE.cleanPreferences({});
+      appScene.motion = { setPhysics: function () {}, setLookAtPointer: function () {}, setGazeIdle: function () {} };
+      ['applySprings', 'applySpringColliders', 'applyExpressions', 'captureSpringBase'].forEach(function (name) {
+        appScene[name] = function () {};
+      });
+      var app = Object.create(CLIENT.VrmPet3DWidget.prototype);
+      app.core = Object.assign({}, CORE, { watchHostSettings: function (options) {
+        snapshotCallback = options.onSnapshot;
+        return { start: function () { return { reportLive: function () {} }; } };
+      } });
+      app.scene = appScene;
+      app.preferences = CORE.cleanPreferences({ modelId: 'settings', petSurface: 'window', motions: {} });
+      app.loadedModelId = 'settings';
+      app.catalog = { models: [{ id: 'settings', name: 'fixture.vrm' }] };
+      app.motionCatalog = { motions: [{ id: 'work', format: 'vrma' }], motionDefaults: { working: ['work'] } };
+      app.badge = { textContent: 'old motion failure' };
+      app.motionStatusMessage = 'old motion failure';
+      app.showStatus = function (message) { this.badge.textContent = message || ''; };
+      app.ensureMotion = function () { return Promise.resolve({ ok: true }); };
+      app.sceneMotionReason = function () { return null; };
+      app.refreshMotionNotice = app.applyPlacement = app.syncControls = app.adoptSurface = function () {};
+      app.loadModel = function () { throw new Error('surface-only switch must keep the loaded model'); };
+      app.document = { defaultView: { addEventListener: function (name, callback) { storageCallback = callback; } } };
+      app.readStorage = function () { return CORE.cleanPreferences({ modelId: 'settings', petSurface: 'window', motions: {} }); };
+      app.followHostSettings();
+      snapshotCallback({ preferences: { modelId: 'settings', petSurface: 'app', motions: {} } });
+      var hostKeptDefaults = appScene.motionMap.working && appScene.motionMap.working[0] === 'work';
+      app.followStorage();
+      storageCallback({ key: CORE.STORAGE_KEY });
+      var storageKeptDefaults = appScene.motionMap.working && appScene.motionMap.working[0] === 'work';
+      // A user's own mapping must still override the bundle.
+      snapshotCallback({ preferences: { modelId: 'settings', petSurface: 'app', motions: { working: ['custom'] } } });
+      var customKept = appScene.motionMap.working && appScene.motionMap.working[0] === 'custom';
+      report.appSurfaceSync = { host: Boolean(hostKeptDefaults), storage: Boolean(storageKeptDefaults), custom: Boolean(customKept) };
+      followed = followed && hostKeptDefaults && storageKeptDefaults && customKept;
       pet.destroy();
       if (host.parentNode) host.remove();
       restoreFetch();
-      return followed;
+      return app.applyMotions().then(function () {
+        report.appSurfaceSync.recovered = app.badge.textContent === '';
+        return followed && report.appSurfaceSync.recovered;
+      });
     });
   });
 
@@ -7239,7 +7283,7 @@
         return Promise.resolve(new Response(JSON.stringify({ motions: [
           { id: 'a1', name: 'vrmpet3d-wave.vrma', format: 'vrma' },
           { id: 'a2', name: 'vrmpet3d-rest.vrma', format: 'vrma' },
-        ] }), { status: 200, headers: { 'content-type': 'application/json' } }));
+        ], motionDefaults: { working: ['a2'] } }), { status: 200, headers: { 'content-type': 'application/json' } }));
       }
       if (path.indexOf('/vrmpet3d/motion?m=') === 0) {
         var id = String(url).slice(String(url).indexOf('m=') + 2);
@@ -7417,13 +7461,33 @@
                 if (pet.scene.preferences && pet.scene.preferences !== pet.preferences) {
                   pet.scene.preferences.motionClips = keptSceneClips;
                 }
+                // A held pose must release when work starts, even with a new draw ready.
+                pet.scene.setMotionMap({ resting: ['a1'], working: ['a2'] });
+                pet.scene.startPlayback('a1', pet.scene.motionClips.a1, 'resting');
+                pet.scene.holdPlayback(pet.scene.playback);
+                pet.scene.pickState = 'resting';
+                pet.scene.setState('working');
+                var workingPlayback = pet.scene.resolveAuthored('working');
+                found.heldReleasedForWork = Boolean(workingPlayback)
+                  && workingPlayback.id === 'a2' && workingPlayback.state === 'working'
+                  && workingPlayback.held === false;
+                // The reverse switch: an already-working host, inherited map, same model.
+                pet.setState('working');
+                stored.motions = {};
+                stored.petSurface = 'window';
+                globalThis.dispatchEvent(new StorageEvent('storage', { key: CORE.STORAGE_KEY }));
+                var windowWorking = pet.scene.resolveAuthored('working');
+                found.reverseSurfaceWorking = Boolean(windowWorking)
+                  && windowWorking.id === 'a2' && windowWorking.state === 'working'
+                  && pet.scene.motionMap.working[0] === 'a2';
                 report.oneShotRules = found;
                 return found.pickedOnEntry === 'a2' && found.playingOnEntry === 'a2'
                   && found.loopStillRunning === true && found.firedWhileLoop === 'a1'
                   && found.reactionLoopMode === false && found.reactionClamped === false
                   && found.chainedTo === 'a2' && found.oneShotAfter === null
                   && found.noLoopBase === 'a1' && found.heldPlaying === 'a1'
-                  && found.heldFlag === true && found.heldClamped === true
+                  && found.heldFlag === true && found.heldClamped === true && found.heldReleasedForWork === true
+                  && found.reverseSurfaceWorking === true
                   && found.randomLow === 'a1' && found.randomHigh === 'a2'
                   && found.faceFromClip === true && found.faceFromBones === false
                   // 「默认」 answers "no expression", and that answer keeps the state's mood out of the slot.

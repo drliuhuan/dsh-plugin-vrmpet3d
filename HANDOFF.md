@@ -13,6 +13,40 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
+## ▶ 已修正，待实机复测：自动休眠与连续界面切换（2026-10-15）
+
+操作者停用空闲休眠：通用设置的旧行隐藏且禁用，不再绑定写入事件；保留旧配置字段供兼容读取。
+`PetMachine.resolve` 不再因 `sleepAfterMs` 超时进入 sleeping，空闲始终落到 resting，继续使用 idle 动作映射。
+
+连续切换报告：工作中内置 → 外置正常 → 内置正常 → 外置开始 idle/working 跳变 → 内置正常 → 外置正常。
+排查发现宿主状态接口的确定漏洞：旧实例的所有权检查虽会返回 superseded，却已提前改写 state/line/touch/clock/unread。
+现在先清理到局部变量，通过所有权检查后才一次性写入运行态。HTTP 回归覆盖同页低序号与无页面标识两类拒绝，
+两者都不得改变现有工作报告的任何字段；host + model 为 796 项，总计随之为 2543。
+这修复了一个能够污染外置读数的漏洞，尚不能证明它就是此次反复切换的唯一原因：采集时插件已由操作者关闭，接口 404。
+实机仍需原样走完整切换序列；若再跳变，同时记录上报 instance/page/seq、running 和窗口 drawn/published。
+
+## ▶ 已修正，待实机复测：外置切回内置后没有状态动作（2026-10-15）
+
+操作者复现：默认开启外置宠物 → DSH 开始任务，外置正常进入工作态 → 切回内置，内置不再播放状态动作。
+鼠标互动并未失效。实机设置为 `motions: {}`，表示继承随包默认映射。
+
+已用实际 `followHostSettings` / `Scene.applyPreferences` 代码最小复现：设置快照把原本含 resting/working
+动作的 `scene.motionMap` 覆盖成 `{}`；模型 id 不变，`followModelPreference` 跳过重载，因此不会经过
+`afterAvatarChange` / `applyMotions` 补回有效映射。外置的设置同步会调用 `applyMotionMap`，内置缺少对应步骤。
+
+**已实施**：内置 `followHostSettings` 和 `followStorage` 两条路径在应用配置后，重新调用 `applyMotions`，
+以 `effectiveMotions` 合并随包默认与用户映射；用户自定义映射仍优先。
+`ensureMotion` 直接写入的错误提示增加归属记录：重新加载全部成功且 scene 已无失败时，清除本轮开始前的旧动作错误；
+并发加载产生的新失败和无关提示不能被清除，不能只依赖 scene 的报错标记。
+「a VRMA drives VRM humanoid bones…」的现场完整尾句尚未取得，不能据此断言骨架始终不可用。
+
+回归要覆盖：模型 id 不变、`motions: {}`、只修改 `petSurface` 的设置快照和 storage 事件；实机按上述顺序切换，
+再结束任务并开始下一任务，确认内置动作跟随状态且无残留提示。上一轮跳舞修复与此问题分开验证。
+
+反向路径已检查：外置 `applyExternalPreferences` 在模型不变时仍会调用 `applyMotionMap`；新启动外置页的
+`watchHostState` 从未见过的序号开始，首次轮询即接收已有工作状态。浏览器回归已覆盖内置 host/storage 同步、
+用户映射优先、旧加载错误恢复，以及外置在工作中接收空用户映射后继续播放默认工作动作；client-test 仍为 111 项。
+
 ## ▶ 未修复：跳舞的两条连锁现象（操作者 2026-10-15 停电前口述，先复现再动手）
 
 原话，按操作者的顺序：
@@ -50,7 +84,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2542 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2543 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which

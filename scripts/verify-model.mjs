@@ -1709,6 +1709,22 @@ group('8. registered routes and both catalogs over HTTP');
     JSON.stringify({ inById: 2 }),
     `while a nonsense breakdown is filtered down to the counts that are real (got ${JSON.stringify(junkDetail.payload.why)})`);
 
+  // Rejected reporters must not overwrite working with idle before their ownership check.
+  await postState({ state: 'working', line: 'live work', unread: 3,
+    clock: { startedAt: Date.now() }, touch: { reason: 'click', region: 'head' },
+    why: { page: 'surface-test', seq: 2, instance: 'new', running: true } });
+  const liveOwner = (await readState()).payload;
+  const rejectedViews = [];
+  for (const oldWhy of [{ page: 'surface-test', seq: 1, instance: 'old' }, null]) {
+    const rejected = await postState({ state: 'resting', line: 'stale idle', unread: 0, why: oldWhy });
+    const held = (await readState()).payload;
+    rejectedViews.push({ rejected: rejected.payload.superseded === true,
+      unchanged: JSON.stringify(held) === JSON.stringify(liveOwner) });
+  }
+  eq(JSON.stringify(rejectedViews), JSON.stringify([
+    { rejected: true, unchanged: true }, { rejected: true, unchanged: true },
+  ]), 'older and unidentified reporters cannot mutate any field of the current working report');
+
   // ---- the desktop window's routes, over real HTTP -------------------------
   //
   // These requests are the ones that would have caught the bug this section exists for: the

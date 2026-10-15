@@ -148,10 +148,26 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
       && page.includes('function dancingOnceMarker()')
       && page.includes("if (state !== 'dancing') {"),
       'the settings page marks 跳舞 单次 and offers no 循环/单次 control for it');
+    /**
+     * THE FIELD PATH IS THE ASSERTION, so it is spelled out rather than loosened to a substring that would
+     * also match the wrong object.
+     *
+     * `finished` lives on the playback's RECORD: `scene.js` builds `this.playback = { id, state, record, … }`
+     * and sets `record.finished = true`, and `isFinished()` reads it back off `record`. The playback wrapper
+     * itself has no `finished` field, so the first version of this check — which pinned the bare
+     * `scene.playback.finished` — compared `undefined === true` and stayed green while the window never
+     * reported a finished dance at all: 跳舞 could only ever end because the APP half's own tick noticed a
+     * different playback, and under `petSurface: auto` the app half is not the one playing the visible clip.
+     * That is the HANDOFF bug this pins. The built-in pet reads `playing.record.finished` ([lib/client.js]);
+     * the window has to read the same field, or the two surfaces disagree.
+     */
     const win = readFileSync(join(ROOT, 'lib', 'desktop-page.js'), 'utf8');
-    ok(win.includes("drawn === 'dancing' && scene.playback && scene.playback.finished === true")
+    ok(win.includes("drawn === 'dancing' && scene.playback && scene.playback.record && scene.playback.record.finished === true")
       && win.includes('danceEndedReported')
-      && win.includes("body: '{}'"),
+      && win.includes("body: '{}'")
+      // And the wrong object must never come back: `scene.playback.finished` is the exact shape that made this
+      // check pass while the feature was broken.
+      && !/scene\.playback\.finished\b/.test(win),
       'and the floating window reports a finished dance through the preview channel, once');
     /**
      * A DANCE MUST NOT BE CLAMPED, whatever its loop list says.
@@ -1168,9 +1184,8 @@ if (live.skipped) {
          * three values the cleaner accepts ARE the whole domain.
          */
         const sleep = globalPage.sleep || {};
-        ok(sleep.control === true && sleep.options === 3 && sleep.selected === sleep.value
-          && Number(sleep.value) > 0,
-          `and the 空闲休眠 row, bound to the stored nap timeout (${JSON.stringify(sleep)})`);
+        ok(sleep.control === true && sleep.disabled === true && sleep.hidden === true,
+          `and the legacy 空闲休眠 row is hidden and disabled (${JSON.stringify(sleep)})`);
         /**
          * And 调试模式: the switch that puts BOTH surfaces on screen (`petSurface: 'both'`).
          *

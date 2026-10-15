@@ -194,7 +194,7 @@ Eleven states, one `resolve()` with strict precedence. Highest wins:
 | 5 | `error` | a turn died |
 | 6 | `celebrate` | a turn completed, inside its notice window |
 | 7 | `working` / `resting` | the ordinary cases |
-| 8 | `sleeping` | idle past the nap timeout |
+| 8 | `sleeping` | legacy name only; automatic sleep is disabled and idle stays `resting` |
 
 Two decisions worth recording:
 
@@ -499,7 +499,7 @@ so that route has a second way in beside the launcher's dialog: the page uploads
 (its view, its size, WHICH model it is wearing, its 重力, which surface shows it, and whether it is on screen);
 every PREFERENCE lives on one of these two pages. 切换模型 is the one row that is not a setting: it decides which
 model the other pages are ABOUT, which is why it is a page of its own rather than a row inside 当前模型参数设置. The one preference the deleted panel owned with no other home — 空闲休眠
-({{bt}}sleepAfterMs{{bt}}) — was given a row on 通用设置 rather than left unreachable.
+({{bt}}sleepAfterMs{{bt}}) — remains readable for compatibility; its row is hidden and disabled, and idle always uses resting.
 
 Two entries are the ones a later pass is most likely to "unify" wrongly, and they are not the same kind of thing:
 
@@ -893,7 +893,7 @@ exercised over real HTTP rather than merely listed.
 
 ## Verification
 
-Nine suites, 2542 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
+Nine suites, 2543 checks, and they live on the **`dev` branch** (this branch carries the plugin; `dev` carries the
 suites, the `build/` tools and the notes) — the `mmd` suite that used to make it ten went with MMD support on
 2026-10-12, and every figure here (per-suite and total) is the one its own run printed; `scripts/check-docs.mjs`
 recomputes them. The

@@ -1343,9 +1343,9 @@ group('6. state machine precedence');
   machine.setInteraction(null);
   machine.greetingUntil = 0;
 
-  // Sleeping after the nap timeout, and waking on activity.
+  // Automatic sleeping is disabled: idle keeps the resting motion mapping.
   clock += 120001;
-  eq(machine.resolve(onlineIdle), 'sleeping', 'an idle pet eventually sleeps');
+  eq(machine.resolve(onlineIdle), 'resting', 'idle remains resting after the legacy nap timeout');
   eq(machine.resolve(working), 'working', 'a busy session wakes the pet');
   eq(machine.resolve(onlineIdle), 'resting', 'and it stays awake shortly after');
 }
@@ -2962,8 +2962,8 @@ group('7. deferral: a completion arriving mid-drag is not lost');
   machine2.setDeferral(false);
   eq(machine2.lastBusyAt, 3_000_000 + core.MAX_DEFER_MS,
     'the banked deferral is clamped to MAX_DEFER_MS');
-  eq(machine2.resolve(idle), 'sleeping',
-    'after the cap the pet sleeps, because an hour really has passed');
+  eq(machine2.resolve(idle), 'resting',
+    'even after an hour the pet keeps its idle state');
 
   // Unbalanced calls must be harmless.
   const machine3 = new core.PetMachine(() => 0, 1000);

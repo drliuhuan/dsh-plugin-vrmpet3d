@@ -28,7 +28,7 @@ const DROP = ['Verification', 'Project layout', 'Documentation'];
 /** 逐句替换：每一条都锚定 dev 的原文，找不到就报错。 */
 const REWRITES = [
   [
-    'no runtime dependencies · 9 verification suites · 2500 checks · works offline',
+    /no runtime dependencies · \d+ verification suites · \d+ checks · works offline/,
     'no runtime dependencies · works offline',
   ],
   [
@@ -144,8 +144,8 @@ for (const section of sections) {
 
 let text = out.join('\n');
 for (const [from, to] of REWRITES) {
-  if (!text.includes(from)) {
-    problems.push(`找不到要替换的段落：${from.split('\n')[0].slice(0, 70)}…`);
+  if (!(from instanceof RegExp ? from.test(text) : text.includes(from))) {
+    problems.push(`找不到要替换的段落：${String(from).split('\n')[0].slice(0, 70)}…`);
     continue;
   }
   text = text.replace(from, to);
