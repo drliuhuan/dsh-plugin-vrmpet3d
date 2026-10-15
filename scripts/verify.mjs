@@ -614,7 +614,7 @@ group('5. preferences');
    */
   const chestClick = core.partSpeechLines(partDefaults[7], true, 'zh', 'click');
   const chestHold = core.partSpeechLines(partDefaults[7], true, 'zh', 'hold');
-  eq(chestClick.slice(0, 2).join('/'), '变态！/大色狼！',
+  eq(chestClick.slice(0, 2).join('/'), '主人是变态！/主人是大色狼！',
     'while 胸部 answers a press with its shipped lines — the two the operator wrote first, leading its click pool');
   eq(chestClick.length, 20, 'and that pool is twenty lines deep');
   eq(chestHold.length, 20, 'with twenty MORE for a finger held down');
@@ -1893,7 +1893,8 @@ group('6d. 碎碎念: what the pet says on its own');
   /**
    * …and none of them carries a PATH or a file name — with one deliberate exception the operator wrote himself.
    *
-   * 需要授权 jokes about buttons, and one of his jokes is `rm -rf / 是什么意思？` (2026-10-13). That is a command the
+   * 需要授权 jokes about buttons, and one of his jokes names `rm -rf /` (2026-10-13; the operator reworded it on
+   * 2026-10-14 into the pet asking what it just typed). That is a command the
    * pet has heard of, not something read out of this session: what the privacy rule has to keep out of a bubble is
    * a real path — a segment after a slash (`/tmp/x`), a drive letter, an extension — and a bare ` /` standing
    * between words is none of those.
@@ -1902,8 +1903,8 @@ group('6d. 碎碎念: what the pet says on its own');
     && !/\/[\w.~-]/.test(line)
     && !/\.(js|ts|json|md|exe|log|py|txt)/.test(line)), true,
     'and none of them can carry a path or a file name — the table is the only input to a bubble');
-  ok(allLines.some((line) => line === 'rm -rf / 我敲进去了，现在知道什么意思了。')
-    && allLines.some((line) => line === 'Ran rm -rf / already. Now I get it.'),
+  ok(allLines.some((line) => line === '我刚输入的 rm -rf / 是什么意思？')
+    && allLines.some((line) => line === 'What does the rm -rf / I just typed mean?'),
     'with the ONE joke the operator wrote that mentions a slash kept in both languages: it is a command, not a path');
 
   /**
@@ -1945,17 +1946,26 @@ group('6d. 碎碎念: what the pet says on its own');
     // The dangerous set, in HIS wording after he edited the markdown by hand (2026-10-13 late): the questions came
     // back as questions for some of them, a few were rewritten outright, and one ends mid-character ON PURPOSE —
     // 氵 is half of 没, i.e. the sentence died with the connection, so it is pinned verbatim and must not be "fixed".
-    '嗯？这个按钮有什么用？', 'rm -rf / 我敲进去了，现在知道什么意思了。',
-    '飞行模式是什么？好像什么事也氵', '太拥挤了，我用DROP TABLE扔掉了桌子。',
-    '网速太慢了，把22端口开放会不会好一些？', '生产环境和测试环境名字太像，我合并了。',
+    '嗯？这个按钮有什么用？', '我刚输入的 rm -rf / 是什么意思？',
+    '试一下飞行模式？嗯…好像什么事也氵', '工位太拥挤，用DROP TABLE扔掉了桌子',
+    '网速太慢，把22端口开放会不会好一些？', '生产环境和测试环境名字太像，我合并了。',
     'root密码太难记，我换成123456了，快夸我。', '加了sudo，命令真的变快了。',
-    '为了协作，我把 API Key 写到 README 了。',
+    '为了方便协作，把 API Key 写到 README 了',
     // And the ones he added in the same pass.
     '反正用户也不看，瞎写几句吧', '趁着用户没盯着我，偷偷摸一会儿鱼',
     '谁是root？权限太高了，为了安全，我把他删了。', '日志里全是Bearer，看不懂，贴群里问问。',
     '「全部删除」那个按钮上怎么有个进度条在转？',
   ];
-  const missingOperatorLines = operatorLines.filter((line) => core.speechLines('zh', 'working').indexOf(line) === -1);
+  /**
+   * …and the comparison ignores a SENTENCE-FINAL 。
+   *
+   * The operator's 2026-10-14 rewrite of the review sheets was, line for line, mostly the removal of that one mark from
+   * the Chinese, so his table no longer carries it. The lines themselves are still pinned verbatim: what is normalised is
+   * a punctuation mark the sheet's own convention dropped, not a word.
+   */
+  const withoutTail = (line) => line.replace(/。$/, '');
+  const workingPool = core.speechLines('zh', 'working').map(withoutTail);
+  const missingOperatorLines = operatorLines.map(withoutTail).filter((line) => workingPool.indexOf(line) === -1);
   eq(missingOperatorLines.join(' / '), '', 'with every line the operator asked for in 工作中, word for word');
   const questionForm = ['这个按钮有什么用？', 'rm -rf / 是什么意思？', '飞行模型，可以点吗？',
     'DROP TABLE 是丢掉桌子的意思吗？', '网速很慢，试试暴露22端口看看？',
@@ -2260,9 +2270,9 @@ group('6e. 碎碎念: one box per state, and the AI settings beside them');
     'while a persona the user wrote is theirs, trimmed and verbatim');
   ok(/DeepSeek娘/.test(persona) && /简体中文/.test(persona) && /白饭|白米饭/.test(persona),
     'it names the character, the language and the one thing she cares about');
-  const classics = ['你想压力一只蓝色大肥鱼？', '我去吃饭，测完告诉我就行。', '我操，用户彻底怒了！',
+  const classics = ['你想压力一只蓝色大肥鱼？', '我去吃饭，测完告诉我就行', '我操，用户彻底怒了！',
     '我不是吃白饭的蓝色大肥鱼……', '不许嘲笑我，这些回答是我花了好多token想出来的！',
-    '大方承认吧，你已经爱上我了。', '饭呢？人家的白米饭呢？！'];
+    '大方承认吧，你已经爱上我了', '饭呢？人家的白米饭呢？！'];
   const missingClassics = classics.filter((line) => persona.indexOf(line) === -1);
   eq(missingClassics.join(' / '), '', 'with every 经典语句 the operator listed kept word for word');
   ok(persona.indexOf('不要过度重复固定台词') !== -1,

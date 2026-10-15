@@ -774,10 +774,10 @@ if (live.skipped) {
             && Array.isArray(entry.holdLines) && entry.holdLines.length === 20
             && entry.lines.indexOf(entry.holdLines[0]) === -1)
           && builtinSpeech.some((entry) => entry.label === '胸部'
-            && entry.lines[0] === '变态！' && entry.lines[1] === '大色狼！'
+            && entry.lines[0] === '主人是变态！' && entry.lines[1] === '主人是大色狼！'
             && entry.prompt === '被主人摸到胸部了，必须要傲娇的回骂这个摸人家胸的变态主人才行。')
           && builtinSpeech.some((entry) => entry.label === '屁股'
-            && entry.lines[0] === '变态！'
+            && entry.lines[0] === '主人变态！'
             && entry.prompt === '被主人摸到屁股了，必须要傲娇的回骂这个摸人家屁股的变态主人才行。')
           && builtinSpeech.filter((entry) => entry.prompt !== '').length === 2,
         `all ${parts.count} shipped parts answer from the shipped table while their boxes stay empty — twenty 点击 and twenty 长按 lines each, and 胸部 / 屁股 the only two with a 提示词 (${builtinSpeech.map((entry) => `${entry.label}:${entry.lines && entry.lines.length}+${entry.holdLines && entry.holdLines.length}`).join(' ')})`);
