@@ -145,6 +145,40 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
   ok(setupScript.includes("post('/vrmpet3d/setup-state', { completed: true })"),
     'the finish button is the one write that ends the guide');
   /**
+   * AND THE 碎碎念 STEP SAYS WHAT THE PET'S VOICE IS AND WHAT THE PLUGIN TOUCHES.
+   *
+   * Operator, 2026-10-15: 「务必在初始安装引导页的碎碎念那里加上碎碎念说的话都是玩笑，请勿当真，该插件并不会进行任何实际操作，也不会
+   * 干扰dsh运行，在配置较差的机器上可能轻微影响性能」, and then 「不仅初始引导那里要写，通用设置里面关于碎碎念的地方也要写，设置页面精简
+   * 一些」. Four claims have to survive an edit, in BOTH places — the guide (where the user first decides whether the pet
+   * speaks) and the 通用设置 碎碎念 section (where they change the source and the cadence) — and the settings-page copy is
+   * deliberately the SHORT one, which is the part "精简一些" pins: a paragraph that grows into three there is a regression.
+   */
+  {
+    const CLAIMS = [
+      ['玩笑', 'the lines are a joke'],
+      ['请勿当真', 'and are not to be taken seriously'],
+      ['实际操作', 'the plugin performs no real action on the user\'s project'],
+      ['干扰 DSH', 'and does not interfere with DSH itself'],
+      ['性能', 'with a word about performance on a weak machine'],
+    ];
+    // Read here rather than reusing the constants above: globalHtml is declared further down this file.
+    const guideDisclaimerHtml = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
+    const settingsDisclaimerHtml = readFileSync(join(ROOT, 'lib', 'global-page.html'), 'utf8');
+    const guide = (/<div class="card" id="setup-speech-disclaimer">([\s\S]*?)<\/div>/.exec(guideDisclaimerHtml) || [])[1] || '';
+    const settings = (/<p class="hint" id="speech-disclaimer">([\s\S]*?)<\/p>/.exec(settingsDisclaimerHtml) || [])[1] || '';
+    ok(guide.length > 0, 'the 碎碎念 step of the guide carries a disclaimer');
+    ok(settings.length > 0, 'and the 碎碎念 section of 通用设置 carries one too');
+    for (const [needle, what] of CLAIMS) {
+      ok(guide.includes(needle), `the guide's copy says ${what}（${needle}）`);
+      ok(settings.includes(needle), `and the settings copy says it as well（${needle}）`);
+    }
+    // The claim that the plugin reads only the RUN state is what makes 「不会做任何实际操作」 honest, so it is pinned too.
+    ok(guide.includes('运行状态') && guide.includes('工具参数'),
+      'with the reason it is true: turn state only, never session text or tool arguments');
+    ok(settings.replace(/\s/g, '').length * 2 < guide.replace(/\s/g, '').length,
+      `while the settings copy stays the SHORT one (${settings.replace(/\s/g, '').length} vs ${guide.replace(/\s/g, '').length} characters)`);
+  }
+  /**
    * The ② 偏好模型 step is the SHARED picker now (2026-10-13), so the markup and the script have to agree on its
    * mount point exactly as they agree on the screens — and the typed-path box it replaced must be gone from the
    * script as well as from the markup, or a half-removed row would sit there wiring nothing.

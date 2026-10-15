@@ -135,6 +135,23 @@
         <p class="hint" id="setup-ai-note" hidden>人格信息和不同状态的提示词，都在 通用设置 → 碎碎念 里设置。</p>
         <p class="hint" id="setup-speech-note"></p>
       </div>
+      <!--
+        免责说明 (operator, 2026-10-15): 「务必在初始安装引导页的碎碎念那里加上碎碎念说的话都是玩笑，请勿当真，该插件并不会进行
+        任何实际操作，也不会干扰dsh运行，在配置较差的机器上可能轻微影响性能」.
+
+        Written as prose rather than a hidden tooltip, and placed on the step where the pet's voice is actually configured: the
+        pet talks in a character's voice, and a user who has just switched the lines to a model needs to read this BEFORE the
+        lines start arriving rather than after. The welcome step keeps its own paragraph about the build being early — that one
+        is about the SOFTWARE, this one about what the pet SAYS and what the plugin touches.
+      -->
+      <div class="card" id="setup-speech-disclaimer">
+        <p><strong>碎碎念只是玩笑，请勿当真。</strong>这些话要么来自内置台词，要么由你配置的模型即兴生成，都属于角色扮演：
+          不是宠物的真实判断，也不构成任何建议。</p>
+        <p>插件<strong>不会对你的项目或文件做任何实际操作</strong>（不执行命令、不改动代码），只读取会话的<strong>运行状态</strong>
+          （进行中 / 等待确认 / 完成 等）来决定表情和动作，会话文字、工具参数与附件都不会被它读取；你导入的模型或动作，
+          只会被复制到插件自己的目录里。<strong>它也不会干扰 DSH 本身的运行</strong>，且不带任何运行时依赖。不过在配置较差的
+          机器上，3D 渲染与弹簧骨物理可能带来轻微的性能影响 —— 关掉桌宠，或把尺寸调小一些，就能缓解。</p>
+      </div>
     </section>
 
     <!--
