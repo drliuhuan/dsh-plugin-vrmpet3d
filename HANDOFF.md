@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2468 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2469 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -133,25 +133,35 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
 
-**SPRING COLLIDERS: OFF BY MEASUREMENT, THEN `body` BY REQUEST** (operator, 2026-10-14: 「模型的物理有点问题，身体部位会和弹簧骨穿模，是不是
-碰撞没开启？先排查，不修改」 → 「开body组测试一下」). The investigation answered his question with a yes, and found the culprit inside this
-plugin rather than in the model: `lib/scene.js` cleared EVERY joint's `colliderGroups` at load, deliberately, and its comment
-recorded why — the state he had once confirmed as 「这次完全正常了」 was the one with colliders cleared, restoring them pulled a
-ring of skirt chains out into a plate and flattened the fringe against the head. The price surfaced later as 穿模. The model
-itself is fully rigged: `BlueFatFish.vrm` declares 12 sphere colliders in two groups (`body`: head 0.196 / chest 0.096 /
-hips 0.102 / hands ≈0.04 / upper legs ≈0.06; `wail`: five on the tail) and 18 of its 22 springs reference them — all of it
-discarded at load. Two more facts came out of the same read: every one of the 91 joints has `hitRadius: 0`, so a strand is a
-zero-thickness line and collisions can REDUCE 穿模 without eliminating it; and the settings panel printed each chain's
-「N 碰撞组」 from the file while the renderer enforced none of them.
+**SPRING COLLIDERS: OFF BY MEASUREMENT, THEN A SWITCH — AND THE BUG THAT MADE IT INERT** (operator, 2026-10-14: 「模型的物理
+有点问题，身体部位会和弹簧骨穿模，是不是碰撞没开启？先排查，不修改」 → 「开body组测试一下」 → 「调整开关并不能即时生效」 → 「分别是全部关闭（默认状态），全部开启和自定义，自定义的时候，读出模型内所有碰撞体让用户自己勾选，自定义状态默认是所有碰撞体全勾选状态。修改勾选后实时更新模型」).
+The investigation answered his first question with a yes, and found the culprit inside this plugin rather than in the model:
+`lib/scene.js` cleared EVERY joint's `colliderGroups` at load, deliberately, and its comment recorded why — the state he had
+once confirmed as 「这次完全正常了」 was the one with colliders cleared, restoring them pulled a ring of skirt chains out into a
+plate and flattened the fringe against the head. The price surfaced later as 穿模. The model itself is fully rigged:
+`BlueFatFish.vrm` declares 12 sphere colliders in two groups (`body`: head 0.196 / chest 0.096 / hips 0.102 / hands ≈0.04 /
+upper legs ≈0.06; `wail`: five on the tail) and 18 of its 22 springs reference them — all of it discarded at load. Two more
+facts came out of the same read: every one of the 91 joints has `hitRadius: 0`, so a strand is a zero-thickness line and
+collisions can REDUCE 穿模 without eliminating it; and the settings panel printed each chain's 「N 碰撞组」 from the file while
+the renderer enforced none of them.
 
-The switch is `preferences.springColliders`: `off` (every build before this one), `body` (the SHIPPED default, per his
-instruction — groups NAMED `body`, case-insensitive, falling back to the first declared group for a model that names none),
-and `all` (the file verbatim, kept so the old breakage can be reproduced on purpose). It appears in the 弹簧骨 section as
-弹簧骨碰撞 and is LIVE: the loader records what the file gave each chain on `avatar.springColliderMemory` — on the AVATAR,
-because `wrapVRM` is a plain function with no Scene reference, and reaching for `this` there is what failed the probe with
-「fixture did not load」 the first time — and `Scene.applySpringColliders` re-applies it on every preference push. Probe
-readout: `springColliders: {"body":"1,0,0","all":"2,2,0","off":"0,0,0"}`. The 冻结区 (drag/throw feedback) is untouched:
-this is the solver's constraint list, not the motion fed to it.
+The switch is `preferences.springColliders` with three answers, and the shipped one is the safe one: **全部关闭** (`off`, what
+every build before this did), **全部开启** (`all`, the file verbatim — the setting that used to pull a skirt out into a plate),
+and **自定义** (`custom`, the file minus the colliders unticked in `springCollidersOff`, which starts EMPTY so 自定义 begins as
+全部开启 and narrows from there). `all` ignores the unticked list rather than clearing it, so switching back to 自定义 restores
+the narrowing instead of silently losing it. The 弹簧骨 section shows the per-collider panel only in 自定义, one row per
+collider — group, bone and radius — because the radius is what decides how hard it pushes, and the settings window reads that
+list from the model file (`lib/vrm-info.js`'s `detail`).
+
+**THE FIRST VERSION OF THAT SWITCH DID NOTHING, and the probe was green.** Its reader assumed the library's shape instead of
+reading it: `manager.joints` is a **Set** (`.map` on it threw), and there is no `manager._colliderGroups` in this three-vrm
+version (a `colliderGroups` getter derives them from the joints). The throw was swallowed by the same function's try/catch, the
+memory came out `null`, and `applySpringColliders` returned early for ever — 「调整开关并不能即时生效」, exactly, with nothing in
+the diagnostic to say so. The reader is now one shared function (`Scene.springColliderMemoryOf`) that the LOADER and the PROBE
+both call, so the assertion exercises the real thing rather than a hand-written stand-in; the stand-in is what let the bug
+through. Probe readout: `springColliders: {"custom":{"a":"body:3 wail:2"},"all":{…},"oneOff":{"a":"body:2 wail:2"},
+"off":{"a":""},"idempotent":{"appliedAgain":0,"same":true},"allIgnoresOff":{…}}`. The 冻结区 (drag/throw feedback) is
+untouched: this is the solver's constraint list, not the motion fed to it.
 
 **ONE PAYLOAD, TWO KEYS — WHY THE HAIR FELT DIFFERENT ON EACH SURFACE** (operator, 2026-10-14: 「我知道了，不是没有物理，而是弹簧骨参数
 和外置不一样」, which was the whole answer). Both surfaces hand Scene.setSpringDefaults the same payload —

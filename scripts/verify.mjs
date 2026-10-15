@@ -367,10 +367,12 @@ group('5. preferences');
    * and the per-collider list is an allowlist of `<group>:<collider>` pairs — anything else is DROPPED, because a stored
    * profile must not be able to grow a list the renderer will walk on every frame.
    */
-  eq(defaults.springColliders, 'body', 'the shipped answer to 穿模 is the body collider group');
+  eq(defaults.springColliders, 'off', 'the shipped answer to 穿模 is 全部关闭 — what every build before this one did');
+  eq(core.cleanPreferences({ springColliders: 'custom' }).springColliders, 'custom',
+    '把逐个碰撞体交给用户 is kept as its own mode');
   eq(core.cleanPreferences({ springColliders: 'all' }).springColliders, 'all',
     'and 全部 is kept, so the model file can be used verbatim');
-  eq(core.cleanPreferences({ springColliders: 'everything' }).springColliders, 'body',
+  eq(core.cleanPreferences({ springColliders: 'everything' }).springColliders, 'off',
     'while a value nobody defined falls back to the shipped one instead of reaching the solver');
   eq(core.cleanSpringCollidersOff(['0:0', '1:4', '0:0', 'nonsense', '0', '0:x', -3, null]).join(','),
     '0:0,1:4',

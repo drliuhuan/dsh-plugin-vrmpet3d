@@ -8580,21 +8580,23 @@
         scene.applySpringColliders();
         return { a: groupsOf(jointA), b: groupsOf(jointB) };
       };
-      out.body = apply('body');
+      out.custom = apply('custom');
       out.all = apply('all');
       // One collider OFF inside the body group: the group survives, one sphere smaller.
-      out.oneOff = apply('body', ['0:0']);
+      out.oneOff = apply('custom', ['0:0']);
       out.off = apply('off');
       // Restoring the mode with the same off-list must be a no-op the second time (the early return), and a CHANGED
       // off-list must not be: that early return is what would make the panel look dead.
       memory.mode = null;
       memory.off = null;
-      scene.preferences.springColliders = 'body';
+      scene.preferences.springColliders = 'custom';
       scene.preferences.springCollidersOff = [];
       scene.applySpringColliders();
       var first = groupsOf(jointA);
       var again = scene.applySpringColliders();
       out.idempotent = { appliedAgain: again, same: groupsOf(jointA) === first };
+      // 全部开启 ignores the unticked list rather than clearing it, so switching back to 自定义 keeps the narrowing.
+      out.allIgnoresOff = apply('all', ['0:0']);
     } finally {
       scene.avatar.springColliderMemory = saved;
       if (saved) { saved.mode = null; saved.off = null; }
@@ -8604,11 +8606,11 @@
       }
     }
     report.springColliders = out;
-    // `body` keeps only the group NAMED body: jointB's chains reference `wail` alone, so they keep nothing — the honest
-    // reading of 「只开身体组」, not a bug. `all` restores both; the off-list narrows one group in place.
-    return out.body.a === 'body:3' && out.body.b === ''
+    // 自定义 with an EMPTY tick-list is 全部开启 — the operator's 「自定义状态默认是所有碰撞体全勾选状态」; unticking one collider
+    // narrows that group in place, and 全部开启 ignores the list rather than clearing it.
+    return out.custom.a === 'body:3 wail:2' && out.custom.b === 'wail:2'
       && out.all.a === 'body:3 wail:2' && out.all.b === 'wail:2'
-      && out.oneOff.a === 'body:2' && out.oneOff.b === ''
+      && out.oneOff.a === 'body:2 wail:2' && out.oneOff.b === 'wail:2'
       && out.off.a === '' && out.off.b === ''
       && out.idempotent.appliedAgain === 0 && out.idempotent.same === true;
   });
