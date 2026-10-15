@@ -1257,6 +1257,26 @@ if (live.skipped) {
          */
         ok(Number(motions.ticked) >= Number(motions.tickedStored || 0),
           `the ticked boxes cover the effective mapping, never less than the stored one (${motions.ticked} shown vs ${motions.tickedStored} stored)`);
+        /**
+         * …AND the comparison is EXACT where it can be: every state the pack maps, and the profile does not store, must be
+         * reported as inheriting it.
+         *
+         * `ticked >= tickedStored` alone is satisfied by 0 >= 0 — which is exactly how the first version of this fix shipped
+         * green while every box was still unticked (`motionCatalog` on this page is the clip ARRAY, so reading
+         * `motionCatalog.motionDefaults` yielded undefined and the pack's block never arrived — operator, 2026-10-15:
+         * 「依然全部是未勾选状态」). Both halves are published now, so this one can fail for the right reason.
+         */
+        {
+          const packStates = Array.isArray(motions.packDefaultStates) ? motions.packDefaultStates : [];
+          const storedStates = Object.keys(motions.stateIds || {});
+          const expected = packStates.filter((state) => storedStates.indexOf(state) === -1);
+          const reported = Array.isArray(motions.defaultedStates) ? motions.defaultedStates : [];
+          const missing = expected.filter((state) => reported.indexOf(state) === -1);
+          ok(missing.length === 0,
+            `every state the pack maps and the profile does not is shown as 随包默认 (missing ${JSON.stringify(missing)}, pack maps ${JSON.stringify(packStates)})`);
+          ok(Number(motions.ticked) > 0 || expected.length === 0,
+            `and the inherited clips really are ticked, not merely counted (${motions.ticked} ticked)`);
+        }
         ok(Array.isArray(motions.defaultedStates),
           `and the page names the states riding on the pack's defaults (${JSON.stringify(motions.defaultedStates)})`);
         ok(Number(motions.ticked) > 0 || Number(motions.tickedStored) > 0,
