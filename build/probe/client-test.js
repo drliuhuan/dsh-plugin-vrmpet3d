@@ -1346,22 +1346,19 @@
     var rect = pet.getBoundingClientRect();
     var opts = { bubbles: true, pointerId: 1, button: 0, buttons: 1, clientX: rect.left + 10, clientY: rect.top + 10 };
     pet.dispatchEvent(new PointerEvent('pointerdown', opts));
-    // OnPointerDown sets the interaction synchronously, so read it before ticking:
-    // tick() derives data-state from the machine and would otherwise be racing the
-    // assertion.
-    var interactionHeld = widget.machine.interaction === 'held';
-    widget.tick(1 / 60);
-    var held = widget.pet.getAttribute('data-state');
-
+    var pressIsNotDrag = widget.machine.interaction !== 'held';
     pet.dispatchEvent(new PointerEvent('pointermove', Object.assign({}, opts, {
       clientX: rect.left + 60, clientY: rect.top + 60,
     })));
+    var interactionHeld = widget.machine.interaction === 'held';
+    widget.tick(1 / 60);
+    var held = widget.pet.getAttribute('data-state');
     pet.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, opts, {
       clientX: rect.left + 60, clientY: rect.top + 60,
     })));
     var falling = widget.machine.interaction === 'falling' || widget.placement.isAirborne();
     report.dragLifecycle = { held: held, interactionHeld: interactionHeld, falling: falling };
-    return interactionHeld && held === 'held' && falling;
+    return pressIsNotDrag && interactionHeld && held === 'held' && falling;
   });
 
   check('a completed fall returns the pet to the session-driven state', function () {
@@ -3000,6 +2997,10 @@
    */
   check('a press with no movement is a click, reacted to once', function () {
     widget.closeMenu();
+    widget.placement.fall = null;
+    widget.machine.setInteraction(null);
+    widget.tick(1 / 60);
+    var stateBeforePress = widget.scene.state;
     var pet = widget.pet;
     var box = pet.getBoundingClientRect();
     var at = { x: box.left + 15, y: box.top + 15 };
@@ -3013,13 +3014,18 @@
     pet.dispatchEvent(new PointerEvent('pointerdown', {
       bubbles: true, cancelable: true, button: 0, buttons: 1, pointerId: 92, clientX: at.x, clientY: at.y
     }));
+    widget.tick(1 / 60);
+    var stateDuringPress = widget.scene.state;
     document.dispatchEvent(new PointerEvent('pointerup', {
       bubbles: true, pointerId: 92, clientX: at.x, clientY: at.y
     }));
+    widget.tick(1 / 60);
     widget.scene.noteInteraction = realNote;
 
     report.clickReaction = notes;
-    return notes.length === 1 && notes[0] === 'click';
+    return notes.length === 1 && notes[0] === 'click'
+      && stateDuringPress === stateBeforePress && widget.scene.state === stateBeforePress
+      && !widget.placement.isAirborne();
   });
 
   /**
@@ -4995,11 +5001,16 @@
       app.document = { defaultView: { addEventListener: function (name, callback) { storageCallback = callback; } } };
       app.readStorage = function () { return CORE.cleanPreferences({ modelId: 'settings', petSurface: 'window', motions: {} }); };
       app.followHostSettings();
+      appScene.setMotionMap({ working: ['work'] });
+      appScene.pickState = 'working';
+      appScene.pickId = 'work';
       snapshotCallback({ preferences: { modelId: 'settings', petSurface: 'app', motions: {} } });
-      var hostKeptDefaults = appScene.motionMap.working && appScene.motionMap.working[0] === 'work';
+      var hostKeptDefaults = appScene.motionMap.working && appScene.motionMap.working[0] === 'work'
+        && appScene.pickState === 'working' && appScene.pickId === 'work';
       app.followStorage();
       storageCallback({ key: CORE.STORAGE_KEY });
-      var storageKeptDefaults = appScene.motionMap.working && appScene.motionMap.working[0] === 'work';
+      var storageKeptDefaults = appScene.motionMap.working && appScene.motionMap.working[0] === 'work'
+        && appScene.pickState === 'working' && appScene.pickId === 'work';
       // A user's own mapping must still override the bundle.
       snapshotCallback({ preferences: { modelId: 'settings', petSurface: 'app', motions: { working: ['custom'] } } });
       var customKept = appScene.motionMap.working && appScene.motionMap.working[0] === 'custom';
@@ -7480,6 +7491,18 @@
                 found.reverseSurfaceWorking = Boolean(windowWorking)
                   && windowWorking.id === 'a2' && windowWorking.state === 'working'
                   && pet.scene.motionMap.working[0] === 'a2';
+                // A stationary press spans rendered frames, speaks, and keeps the clip's clock.
+                windowWorking.action.time = 1;
+                var pressEvent = { bubbles: true, button: 0, buttons: 1, pointerId: 191,
+                  clientX: 50, clientY: 50 };
+                canvas.dispatchEvent(new PointerEvent('pointerdown', pressEvent));
+                pet.stepFrame(0.05);
+                canvas.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, pressEvent, { buttons: 0 })));
+                pet.stepFrame(0.05);
+                globalThis.dispatchEvent(new StorageEvent('storage', { key: CORE.STORAGE_KEY }));
+                pet.stepFrame(0.05);
+                found.pressKeepsPlayback = pet.scene.playback === windowWorking
+                  && windowWorking.action.time > 1 && pet.scene.state === 'working';
                 report.oneShotRules = found;
                 return found.pickedOnEntry === 'a2' && found.playingOnEntry === 'a2'
                   && found.loopStillRunning === true && found.firedWhileLoop === 'a1'
@@ -7488,6 +7511,7 @@
                   && found.noLoopBase === 'a1' && found.heldPlaying === 'a1'
                   && found.heldFlag === true && found.heldClamped === true && found.heldReleasedForWork === true
                   && found.reverseSurfaceWorking === true
+                  && found.pressKeepsPlayback === true
                   && found.randomLow === 'a1' && found.randomHigh === 'a2'
                   && found.faceFromClip === true && found.faceFromBones === false
                   // 「默认」 answers "no expression", and that answer keeps the state's mood out of the slot.
