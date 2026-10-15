@@ -35,15 +35,45 @@
 <script>
 (function () {
   var notes = [];
+  /**
+   * A PROGRESS LINE the launcher can read even when nothing else works.
+   *
+   * Everything this glue does happens before the pet's frame loop, and each way it can stop — no preload bridge, a `config()` that
+   * never answers, a `mount` that throws, a model that never becomes ready — used to look identical from outside: no pet, no errors,
+   * and a status line that simply stopped changing. The operator's window on 2026-10-15 was exactly that, and the readout could not
+   * even say whether the bridge existed.
+   *
+   * So the title carries the steps. It is ordinary DOM, it needs no bridge and no IPC, and `desktop/main.js` reads it on every poll.
+   */
+  function step(name) {
+    try {
+      notes.push(name);
+      document.title = 'vrmpet3d: ' + notes.join(' > ');
+    } catch (_error) {
+      // A title that cannot be written must not stop the pet.
+    }
+  }
+
+  step('glue');
   window.addEventListener('error', function (event) {
     notes.push(String(event.message));
+    step('error:' + String(event.message));
     if (window.vrmpet3dDesktop) window.vrmpet3dDesktop.ready({ ok: false, error: notes.join('; ') });
   });
 
   var bridge = window.vrmpet3dDesktop;
-  if (!bridge) return;
+  if (!bridge) {
+    step('no-bridge');
+    return;
+  }
+  step('bridge');
+  if (typeof bridge.config !== 'function') {
+    step('no-config');
+    return;
+  }
 
   bridge.config().then(function (config) {
+    step('config');
     var canvas = document.getElementById('pet');
     // Only the CSS comes from here; the DRAWING BUFFER belongs to the renderer. Seeding the
     // attributes as well is what let a per-frame guard compare device pixels (330) against CSS
@@ -57,8 +87,10 @@
       screen: config.screen,
       onError: function (error) {
         notes.push(String((error && error.message) || error));
+        step('onError:' + String((error && error.message) || error));
       },
     });
+    step('mount');
 
     // Reported so the launcher (and its self-test) knows the pet is up and what it is drawing
     // with: "the window opened" is not the same claim as "the pet is rendering".
@@ -72,12 +104,19 @@
       modelId: config.modelId,
       errors: notes,
     };
+    step('gl:' + Boolean(gl));
     pet.ready.then(function () {
       info.loadedModel = pet.loadedModel();
+      step('ready:' + (info.loadedModel || 'none'));
+      bridge.ready(info);
+    }, function (error) {
+      // A model that never becomes ready is one of the ways this glue stops, and it used to be silent.
+      step('modelFailed:' + String((error && error.message) || error));
       bridge.ready(info);
     });
   }).catch(function (error) {
     notes.push(String((error && error.message) || error));
+    step('configFailed:' + String((error && error.message) || error));
     bridge.ready({ ok: false, errors: notes });
   });
 })();
