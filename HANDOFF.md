@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2480 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2481 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,19 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**内置弹簧骨与外置不同步 — 数据都在，是顺序** (operator, 2026-10-14: 「内置宠物的弹簧骨参数似乎并不能跟外置宠物的参数同步，外置宠物的参数和面板基本是一致的」).
+Both surfaces read the same payload, the same profile and the same model — and their readouts disagreed: the app's ahoge reported the
+FILE's `1 / 0.5`, while the window and the settings panel both reported the profile's `0.8 / 0.2`. The cause was the BOOT ORDER on
+the app half. `applySprings` runs inside `applyPreferences`, which runs as soon as the profile snapshot arrives — at which point
+`scene.springDefaults` is still empty, so every chain falls through to the values the model FILE authors — and the pack's values
+only arrive later, with the motion catalog, inside `applyMotions`. Nothing re-applied them, so they landed on the user's FIRST EDIT
+rather than at load: a pet nobody had touched showed stock hair. The window applies its preferences after loading the model and the
+clips, which is why only one surface was wrong. The fix is one call: `setSpringDefaults` is followed by `applySprings` and a fresh
+`captureSpringBase` (the wind baseline is captured after the overrides, so it must be re-taken or the first pointer draught would
+restore the file's values). Pinned as the ORDER of those three calls — `springArrival: "defaults:1,apply,base"`. The readout grew
+the layers behind the number for exactly this kind of report: `why.physics.spring` now carries `sceneModel`/`prefModel`, the
+profile's `override`, the pack's `shipped` and the file's `authored`, so the next "these two disagree" is a diff, not an argument.
 
 **EVERY FOLD REMEMBERS ITSELF** (operator, 2026-10-14: 「弹簧骨面板展开后，如果点击空白处会被折叠回，这样影响用户操作，看看其他折叠的面板有没有类似问题，一起修了」).
 One cause, and it was never 弹簧骨-specific: a fold this page BUILDS is thrown away by `renderAll` and replaced, and a new

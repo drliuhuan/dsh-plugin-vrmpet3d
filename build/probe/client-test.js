@@ -8604,6 +8604,55 @@
   });
 
   /**
+   * 内置的弹簧骨参数要和外置一致 — the pack's values must land the moment they ARRIVE (operator, 2026-10-14: 「内置宠物的弹簧骨参数似乎
+   * 并不能跟外置宠物的参数同步，外置宠物的参数和面板基本是一致的」).
+   *
+   * The bug was ORDER, not data: the payload carries `springDefaults`, but `applyPreferences` had already run without them, so
+   * every chain sat on the value the model FILE authors until the next preference push — i.e. until the user edited something.
+   * The window applies its preferences AFTER loading, which is why only the app's pet was wrong. Asserted as the order of the
+   * three scene calls `applyMotions` must make when the defaults arrive.
+   */
+  check('the pack’s spring values are applied as soon as they arrive', function () {
+    var springScene = widget.scene;
+    if (!springScene) {
+      report.springArrival = { available: false };
+      return false;
+    }
+    var calls = [];
+    var savedMethods = {
+      setMotionMap: springScene.setMotionMap,
+      setMotionClipDefaults: springScene.setMotionClipDefaults,
+      loadMotion: springScene.loadMotion,
+      setSpringDefaults: springScene.setSpringDefaults,
+      applySprings: springScene.applySprings,
+      captureSpringBase: springScene.captureSpringBase,
+    };
+    var savedCatalog = widget.motionCatalog;
+    var savedModelId = widget.preferences.modelId;
+    springScene.setMotionMap = function () {};
+    springScene.setMotionClipDefaults = function () {};
+    springScene.loadMotion = function () { return Promise.resolve(null); };
+    springScene.setSpringDefaults = function (value) { calls.push('defaults:' + (value ? Object.keys(value).length : 0)); };
+    springScene.applySprings = function () { calls.push('apply'); };
+    springScene.captureSpringBase = function () { calls.push('base'); };
+    widget.motionCatalog = {
+      motions: [],
+      springDefaults: { m1: { DaiMao: { stiffness: 0.4, dragForce: 0.2, gravityPower: 0.05 } } },
+    };
+    widget.preferences.modelId = 'm1';
+    return Promise.resolve(widget.applyMotions()).then(function () {
+      return null;
+    }).then(function () {
+      report.springArrival = { calls: calls.join(',') };
+      return calls.join(',') === 'defaults:1,apply,base';
+    }).finally(function () {
+      Object.keys(savedMethods).forEach(function (key) { springScene[key] = savedMethods[key]; });
+      widget.motionCatalog = savedCatalog;
+      widget.preferences.modelId = savedModelId;
+    });
+  });
+
+  /**
    * 速度 — a per-clip playback rate that is LIVE and does not touch the follow-up logic (operator, 2026-10-14: 「允许给每个动作
    * 配置速度，默认100%，范围是1-1000%…这一步会延长或者缩短单次/循环动作的时间，但是动作结束后的后续动作接续逻辑依然不变」).
    *
