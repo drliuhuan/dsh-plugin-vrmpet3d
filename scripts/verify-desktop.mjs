@@ -431,8 +431,18 @@ console.log('\n0. the two halves agree on how the page reports itself');
     'the launcher swallows a broken stdout instead of raising an error dialog');
   ok(/process\.stderr\.on\('error'/.test(launcher),
     'and a broken stderr, for the same reason');
-  ok(/if \(options\.selfTest\) \{[\s\S]{0,600}?app\.setPath\('userData'/.test(launcher),
-    'a self-test gets its own Chromium profile instead of fighting the live window for one');
+  /**
+   * …and EVERY window gets its own profile, not only a self-test.
+   *
+   * The rule used to cover the self-test alone, which left the collision that matters in production: the pet window and the settings
+   * window are the same launcher, so whichever started second shared a profile with the live instance and hung before its page ever
+   * mounted — the operator's window on 2026-10-15, read as 「弹簧骨状态丢了…头发现在动的感觉不对了」 because no mount means no scene and no
+   * spring bones. The suffix now names the mode, so this assertion pins all three cases.
+   */
+  ok(/const profileSuffix = options\.config === true \? '-config' : '-pet'/.test(launcher)
+    && /options\.selfTest \? '-selftest'/.test(launcher)
+    && /app\.setPath\('userData', ownProfile\)/.test(launcher),
+    'every window gets its own Chromium profile — pet, settings and self-test — instead of fighting the live window for one');
   ok(/SELF_TEST_TIMEOUT_MS/.test(launcher) && /selfTestTimer = setTimeout/.test(launcher),
     'and the self-test gives up and writes a report rather than living for ever');
 
