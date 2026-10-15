@@ -10,6 +10,11 @@
 //
 // 只动 MARKUP：`both` 作为 `petSurface` 的取值仍然被 core 支持（`core.PET_SURFACES`），页面脚本对 `pref-both` 的绑定本来就是
 // 「元素不在就不绑」，所以删掉这一行不会留下半截接线。
+//
+// ⚠️ 一处必须知道的行为后果：设置页里**没有**「显示位置」选择器 —— `petSurface` 在设置页只有这个复选框能改（其余入口是右键菜单和首启
+// 向导的「桌宠界面」那一步）。所以一个停在 `both` 的 profile 在发布版里，明显的出路就只剩**重新运行引导**。删除前请确认这一点可接受：
+// 本次操作者的 profile 正是 `both`，我另行告知了他出路（或用设置路由直接改回 auto）。若将来要让发布版自动收敛，做法是在 core 里写一次
+// 迁移（把 `both` 读成 `auto`），而不是在这里偷偷改语义 —— 那会让发布树与 dev 的 `lib` 出现代码级差异。
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
