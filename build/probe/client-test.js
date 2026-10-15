@@ -8525,7 +8525,27 @@
     }
   });
 
-      check('dispose removes the DOM and stops the loop', function () {
+      /**
+     * THE OLDER PET STANDS DOWN — the half the node-detached rule could not catch (operator, 2026-10-14: two \`inst\` values
+     * alternating on one route, which is the 「idle 与 working 反复横跳」 report). Driven on the document itself: a pet with a
+     * HIGHER build order means this widget has been replaced; one with a lower order is just the leftover and is ignored.
+     */
+    check('a pet stamped with a newer build order takes the page over, and an older one does not', function () {
+      var base = Number(widget.sequence) || 0;
+      var before = widget.supersededByNewerPet();
+      var newer = document.createElement('div');
+      newer.className = 'vrmpet3d-pet';
+      newer.setAttribute('data-vrmpet3d-seq', String(base + 5));
+      document.body.appendChild(newer);
+      var afterNewer = widget.supersededByNewerPet();
+      newer.setAttribute('data-vrmpet3d-seq', String(Math.max(1, base - 5)));
+      var afterOlder = widget.supersededByNewerPet();
+      document.body.removeChild(newer);
+      report.newerPet = { sequence: base, before: before, afterNewer: afterNewer, afterOlder: afterOlder };
+      return before === false && afterNewer === true && afterOlder === false;
+    });
+
+    check('dispose removes the DOM and stops the loop', function () {
         widget.dispose();
         return widget.disposed === true && widget.root === null && document.querySelector('.vrmpet3d-root') === null;
       });

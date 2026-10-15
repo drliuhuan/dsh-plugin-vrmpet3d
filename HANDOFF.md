@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2454 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2455 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,28 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**TWO PETS, ONE ROUTE — AND THE HALF THE FIRST FIX MISSED** (operator, 2026-10-14, third report: 「还是有任务已经完成，但是宠物反复
+在idle和working状态来回跳转的问题」). The instance label added for exactly this caught it in the live log: two `inst` values
+alternating on ONE route (`4q0uof`, then `w5jgw6`) — a leftover widget from an earlier activation still publishing its own
+world. `detachedFromDocument` (the previous half) could not fire for it, because its pet element IS still in the document.
+So the document now says who is newest: every widget bumps `globalThis.__VRMPET3D_PET_SEQ__` WHEN IT IS BUILT (not when the
+module is evaluated — that version took the pet down completely, `/vrmpet3d/state` answering `seq: 0`), stamps its pet
+element with `data-vrmpet3d-seq`, and `supersededByNewerPet` disposes any widget that sees a higher stamp in the document.
+Probe readout: `newerPet: {"before":false,"afterNewer":true,"afterOlder":false}`. One trap paid for on the way: the first
+attempt reached for `isFiniteNumber`, a helper local to another closure, which threw `isFiniteNumber is not defined` on every
+frame (31 probe checks red at once) — `isFinite` is the self-contained spelling.
+
+**THE BUBBLE WAS ALREADY RIGHT — THE WINDOW WAS THE STALE ONE** (same thread: 「气泡宽度还是大概只有外置的一半，没任何变化」).
+`why.speechWrap` was changed to CACHE its measurements, because the bubble is intermittent and the question is not, and the
+numbers settled it in one read: `{"width":110,"scroll":109,"pet":220,"petDrawn":220,"drawn":1,"letters":12,"css":"220px",
+"size":"17.1px","pad":"11.97px"}` — the page is NOT scaled (`drawn: 1`, so the earlier scale hypothesis was wrong), the app's
+cap IS the shared 220 px, and `width ≈ scroll` says the plate had simply shrink-wrapped a short line. What was really behind
+「只有一半」 was the OTHER surface: the floating window's page is loaded when the LAUNCHER starts, so it was still running the
+pre-`60c5285` code with its own pet box (≈254) as the cap — and a 12-character line fits 254 but not 220, one line versus
+two. `disable` → `enable` on `/vrmpet3d/desktop` (the plugin's own route) reloads that page, and both surfaces then wrap at
+the same 220 px. Lesson for the next round: a page-side change needs BOTH surfaces reloaded, and the desktop route's `page`
+block is a stale snapshot on this machine — it cannot be used to verify a window reflow.
 
 **THE 碎碎念 FALLBACK CHAIN RUNS ALL THE WAY TO 内置** (operator, 2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）
 > 内置」). It used to stop one tier short: choosing AI or 自定义 took the shipped table OUT of the chain (the 2026-10-11 rule
