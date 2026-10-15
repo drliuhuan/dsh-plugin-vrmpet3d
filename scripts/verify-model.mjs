@@ -975,6 +975,9 @@ group('5b. the bundled motion pack');
       done: ['success'],
       error: ['fail'],
       offline: ['offline'],
+      // 跳舞 (operator, 2026-10-14): the folder the 跳支舞 row draws its random clip from, and the reason the state is in
+      // `MOTION_STATES` at all — the settings page scopes its list exactly like every other state's.
+      dancing: ['dance'],
     }),
     'the shipped pack maps every configurable state to its own folder');
   const packNames = new Set(plugin.buildMotionCatalog({}).motions.map(motion => motion.name));

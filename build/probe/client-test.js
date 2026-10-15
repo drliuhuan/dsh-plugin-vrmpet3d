@@ -560,6 +560,10 @@
         });
       } else if (state === 'sleeping') {
         machine.lastBusyAt = Date.now() - machine.sleepAfterMs - 1000;
+      } else if (state === 'dancing') {
+        // 跳舞 is the user's own state (the 跳支舞 row), so entering it is an INSTRUCTION rather than a snapshot: the machine is
+        // told which clip and how long, exactly as `startDance` tells it.
+        machine.setDancing('probe-dance', 5000);
       }
 
       widget.tick(1 / 60);
@@ -2531,6 +2535,8 @@
       // 重载模型: re-read the model FILE without touching the profile (operator, 2026-10-14) — the second model row, and
       // in the shared table for the same reason 切换模型 is: both pets offer it.
       && zh.reloadModel === '重载模型'
+      // 跳支舞: the dance row, and the ONLY one whose effect ends by itself (the clip, a double-click, or work starting).
+      && zh.dance === '跳支舞'
       && zh.surfaceWindow === '切换回窗口外' && zh.surfaceApp === '切换回窗口内'
       && zh.gravity === '重力'
       // The two meanings of the last row, and they are NOT the same words: the app's pet is hidden, the
@@ -2566,7 +2572,7 @@
     return opened && sharedClass && stylesheet && words
       // The ORDER, pinned: 重载模型 sits directly after 切换模型, because both are about WHICH model is on screen (one picks
       // it, the other re-reads the file of the one already there).
-      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,reloadModel,modelSettings,surface,gravity,closePet'
+      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,reloadModel,modelSettings,surface,gravity,closePet'
       && disabledInDebug && enabledOutsideDebug;
   });
 
@@ -6100,7 +6106,7 @@
       restoreFetch();
       return opened === true && closed && sharedClass && stylesheet && noSwitchRow
         && closeWordsDiffer && gravityRowOff && gravityMarked
-        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,reloadModel,modelSettings,gravity,closePet'
+        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,reloadModel,modelSettings,gravity,closePet'
         && Boolean(rect) && rect.width > 0 && rect.height > 0;
     });
   });

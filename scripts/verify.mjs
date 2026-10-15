@@ -1526,9 +1526,9 @@ group('6c. the per-state status prompt');
   const blank = core.cleanPreferences({});
   same(core.STATUS_STATES, ['resting', 'working', 'waiting', 'done', 'error', 'offline'],
     'the six states the user configures are the operator’s six, in order');
-  same(core.MOTION_STATES, core.STATUS_STATES.concat(core.INTERACTION_STATES),
-    'and the motion map is those six plus the three pointer poses, derived rather than written twice');
-  eq(core.MOTION_STATES.length, 9, 'nine states carry a 状态与动作 row');
+  same(core.MOTION_STATES, core.STATUS_STATES.concat(core.INTERACTION_STATES, ['dancing']),
+    'and the motion map is those six, the three pointer poses, and 跳舞 (which is the user’s, not DSH’s)');
+  eq(core.MOTION_STATES.length, 10, 'ten states carry a 状态与动作 row');
   /**
    * The 「默认」 answer for the per-clip 表情/口型 dropdowns (operator, 2026-10-13): a THIRD value beside "follow" (`''`)
    * and a name, meaning "no expression (or mouth) at all" — the model's own initial face, overriding both the clip's
@@ -3343,7 +3343,32 @@ group('9. idle motion');
 group('10. constants are self-consistent');
 // ---------------------------------------------------------------------------
 {
-  eq(core.STATES.length, 11, 'eleven states are declared');
+  eq(core.STATES.length, 12, 'twelve states are declared, 跳舞 included');
+
+  /**
+   * 跳舞 — the user's own state, with the three endings the operator asked for (2026-10-14: 「动作完成后或者用户双击模型回到idle状态。跳舞也会被
+   * 进入工作状态打断」). The machine owns the rules, so they are asserted here rather than through the interactions.
+   */
+  {
+    let danceNow = 1000;
+    const dancer = new core.PetMachine(() => danceNow, 60000);
+    const idleSnapshot = { available: true, running: false, pending: false };
+    eq(dancer.setDancing('', 5000), null, 'a dance with no clip is refused');
+    eq(dancer.setDancing('a1', 0), null, 'and so is one with no deadline to end it');
+    ok(Boolean(dancer.setDancing('a1', 5000)), 'a dance with a clip and a deadline is accepted');
+    eq(dancer.resolve(idleSnapshot), 'dancing', 'and the pet is dancing while it lasts');
+    eq(dancer.stopDancing(), 'a1', 'double-clicking the pet ends it…');
+    eq(dancer.resolve(idleSnapshot), 'resting', '…and the very next frame is 空闲');
+    // Work INTERRUPTS it: the busy branch is reached first, and the dance is dropped on the way.
+    dancer.setDancing('a1', 5000);
+    eq(dancer.resolve({ available: true, running: true, pending: false }), 'working',
+      'and entering 工作中 interrupts a dance');
+    eq(dancer.dancing, undefined, 'with the dance cleared rather than left pending');
+    // A deadline nobody met still ends it.
+    dancer.setDancing('a1', 2000);
+    danceNow += 3000;
+    eq(dancer.resolve(idleSnapshot), 'resting', 'a dance whose deadline passed is over');
+  }
   eq(new Set(core.STATES).size, core.STATES.length, 'state names are unique');
   for (const state of core.INTERACTION_STATES) {
     ok(core.STATES.includes(state), `interaction state "${state}" is a declared state`);
@@ -3492,8 +3517,8 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   }
   eq(core.STATES.length - core.MOTION_STATES.length, 2,
     'the only states a motion cannot drive are sleeping and greeting');
-  eq(core.MOTION_STATES.length, core.STATUS_STATES.length + core.INTERACTION_STATES.length,
-    'and the motion states are exactly the two families together, with nothing left out');
+  eq(core.MOTION_STATES.length, core.STATUS_STATES.length + core.INTERACTION_STATES.length + 1,
+    'and the motion states are the two families plus 跳舞, with nothing left out');
   for (const state of ['resting', 'working', 'waiting', 'done', 'error', 'offline']) {
     ok(core.MOTION_STATES.includes(state), `"${state}" can be overridden by a motion`);
   }
@@ -3710,6 +3735,8 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   eq(core.cleanMotionClipEntry({ speed: 0 }), null, 'while 0 is dropped rather than clamped');
   eq(core.cleanMotionClipEntry({ speed: 100000 }), null, 'and so is a rate far outside the range');
   eq(core.MOTION_SPEED_LIMITS.default, 100, 'and the default sits where the operator put it');
+
+
 
   // The three layers of the play mode, most specific first. This is the operator's "每个状态下，可以针对每个动作
   // 设置该状态下该动作为循环还是单次" (2026-10-09).

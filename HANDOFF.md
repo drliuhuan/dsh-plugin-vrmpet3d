@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2482 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2493 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,30 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**跳舞：一个新状态、一行菜单，和一条已经在的通道** (operator, 2026-10-14: 「在状态和动作中，增加跳舞的状态；给内置和外置宠物模型增加右键菜单选项"跳支舞"，
+作用是在dance文件夹中随机选择一个动作执行一次，动作完成后或者用户双击模型回到idle状态。跳舞也会被进入工作状态打断」, plus 「把dance.vrma压缩成br格式」 and
+「用preview很合适，因为预览动作的时候，也应该打断跳舞」).
+
+* **`dancing` is a machine state** — in `STATES` and in `MOTION_STATES`, but NOT in `STATUS_STATES`: nothing claims DSH is dancing, so
+  it has no prompt above the head. Because it is a state, the rest came for free: the settings page offers it a 状态与动作 row,
+  `cleanMotions` accepts clips for it, and `resolve` weighs it against the session in the same cascade as everything else.
+* **Its three endings are three existing rules, not a timer.** The CLIP's own end: the dance clips are one-shot through the pack's
+  template (`motionClipDefaults.dancing`), the scene records `finished` on the playback, and `tick` clears the dance when it sees it —
+  the next `resolve` answers 空闲. A DOUBLE-CLICK on the pet (`dblclick`, a gesture nothing else used) calls `stopDance`. WORK: `resolve`
+  drops the dance whenever the session is busy, which IS 「跳舞也会被进入工作状态打断」 — no separate rule, because the busy branch is
+  consulted first once the field is cleared. `until` (three minutes) is only a safety net for a clip that never reports its end.
+* **The menu row is a request across surfaces.** The app pet starts a dance itself (`startDance`, a random clip out of
+  `stateFolders.dancing`); the floating window has no machine, so it cannot — it POSTs `{ state: 'dancing', motionId }` to the PREVIEW
+  channel, which is transient, never persisted, and already what a preview does, and the app half turns that into a real dance. The
+  operator's own refinement is what makes this tidy: 「预览动作的时候，也应该打断跳舞」 — so ANY preview stops a dance first, and a preview
+  of the dancing state starts one. One channel, two meanings, one machine.
+* **`dance/Dancing.vrma` is brotli now** (`scripts/compress-motions.mjs`: 8,457,984 → 1,578,557 bytes, 18.7 %), and the plain file is
+  gone, because a compressed clip REPLACES the uncompressed one. That rename moved every positional motion id, which is how the pack's
+  own template came to point at a file that no longer existed (caught by 「every clip the template names is a real clip」), and why
+  `defaults.working`, `template.working` and `stateFolders.dancing` now name the `.vrma.br` file explicitly. A stored PROFILE keeps ids,
+  not names, so a mapping made before this build can still dangle: the pack's defaults are what an unconfigured state falls back to,
+  and that is the honest limit of an id-keyed profile.
 
 **预览播放器是第三个入口，也要认速度** (operator, 2026-10-14: 「设置了动作的播放速度后，预览播放时并没有生效」). 速度 is stored per (state, clip), and
 the preview used to call `startPlayback(previewId, previewRecord)` with NO state — so the rate was resolved under whatever state the

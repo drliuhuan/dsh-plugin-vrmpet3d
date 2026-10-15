@@ -252,6 +252,22 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     && pageScript.includes("rememberFold(element('parts-fold'), 'parts')")
     && pageScript.includes("rememberFold(element('spring-colliders-detail'), 'colliders')"),
     'every fold — 弹簧骨, 状态与动作, 碎碎念, 部位, 逐个碰撞体 — restores what the user opened');
+
+  /**
+   * 跳支舞, from the window's side (operator, 2026-10-14: 「给内置和外置宠物模型增加右键菜单选项"跳支舞"」).
+   *
+   * The window has no state machine, so it does not dance — it ASKS, through the preview channel, and the app half turns
+   * `state: 'dancing'` into a real dance. Asserted statically because the interesting part is that the request uses the
+   * EXISTING transient channel rather than a new route or a stored preference: a dance is not a setting, and a second
+   * channel would be a second thing to keep in sync.
+   */
+  const desktopPageScript = readFileSync(join(ROOT, 'lib', 'desktop-page.js'), 'utf8');
+  const widgetScript = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8');
+  ok(widgetScript.includes("if (id === 'dance') { this.startDance(); return; }")
+    && desktopPageScript.includes('function requestDance()')
+    && desktopPageScript.includes("'/vrmpet3d/preview'")
+    && desktopPageScript.includes("state: 'dancing'"),
+    'both menus offer 跳支舞, and the window asks for it through the preview channel');
 }
 
 // ---------------------------------------------------------------------------
@@ -1146,7 +1162,7 @@ if (live.skipped) {
         // carried is not something DSH is doing, so `buildStatusRow` is skipped for the three pointer poses.
         const motions = shown.motions || {};
         ok(motions.controls === true, 'and the 状态 section exists');
-        ok(motions.rows === 9, `with one box set per state (${motions.rows})`);
+        ok(motions.rows === 10, `with one box set per state, 跳舞 included (${motions.rows})`);
         ok(motions.statusRows === 6, `and a status line in each of the six DSH states (${motions.statusRows})`);
         /**
          * The five prompts the operator asked for, checked as the SHIPPED defaults rather than as text on the
@@ -1198,7 +1214,7 @@ if (live.skipped) {
         // The 凝视 switch the operator asked for on 2026-10-09 late: one per ticked clip, beside the three
         // dropdowns.
         ok(motions.gazeRows === 2, `and a gaze switch on each row too (${motions.gazeRows})`);
-        ok(motions.everyRows === 9, `and one interval line per state (${motions.everyRows})`);
+        ok(motions.everyRows === 10, `and one interval line per state (${motions.everyRows})`);
         /**
          * AND THE TICK BOX COLLECTS ONLY CLIPS.
          *
@@ -1237,7 +1253,7 @@ if (live.skipped) {
          */
         const scoped = pick.rows || {};
         const folderNames = (value) => (Array.isArray(value) ? value : (value ? [value] : []));
-        ok(Object.keys(scoped).length === 9, `all nine states are drawn (${Object.keys(scoped).length})`);
+        ok(Object.keys(scoped).length === 10, `all ten states are drawn (${Object.keys(scoped).length})`);
         ok(Object.values(scoped).every((row) => row.outsideFolder.length === 0)
           && folderNames(scoped.done && scoped.done.folder).indexOf('plain') !== -1
           && Object.entries(scoped).filter(([state]) => state !== 'done').every(([, row]) => row.folder === null),

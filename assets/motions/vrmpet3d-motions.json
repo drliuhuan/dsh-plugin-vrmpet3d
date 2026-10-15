@@ -94,6 +94,9 @@
     ],
     "offline": [
       "offline"
+    ],
+    "dancing": [
+      "dance"
     ]
   },
   "defaults": {
@@ -131,7 +134,11 @@
       "offline/sleeping.vrma"
     ],
     "working": [
-      "dance/Dancing.vrma"
+      "dance/Dancing.vrma.br"
+    ],
+    "dancing": [
+      "dance/Dancing.vrma.br",
+      "dance/极乐净土.vrma.br"
     ]
   },
   "template": {
@@ -200,7 +207,7 @@
       }
     },
     "working": {
-      "dance/Dancing.vrma": {
+      "dance/Dancing.vrma.br": {
         "expression": "none",
         "gaze": false
       }
@@ -255,6 +262,16 @@
     },
     "landing": {
       "fail/fall down1.vrma": {
+        "loop": false
+      }
+    }
+  },
+  "motionClipDefaults": {
+    "dancing": {
+      "dance/Dancing.vrma.br": {
+        "loop": false
+      },
+      "dance/极乐净土.vrma.br": {
         "loop": false
       }
     }
