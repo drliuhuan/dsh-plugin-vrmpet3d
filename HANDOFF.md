@@ -13,6 +13,36 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
+## ▶ 未修复：跳舞的两条连锁现象（操作者 2026-10-15 停电前口述，先复现再动手）
+
+原话，按操作者的顺序：
+
+1. 「**外置桌宠在“跳支舞”的时候，内置桌宠丧失回应。**」—— 浮窗跳舞期间，应用内那只宠物对点击与右键菜单失去响应。
+2. 「**跳舞过程中如果开始工作，在工作结束后，外置桌宠会卡在最后一帧，而内置桌宠也只在当前动作循环，没有任何新动作。**」
+   —— 即：工作打断跳舞、工作结束后，浮窗停在舞蹈的最后一帧；内置宠物反复播同一个动作，不再抽新动作。
+
+**最可能的单根因（待验证，别当成结论）**：跳舞是经 preview 通道启动的，而「工作打断跳舞」「播完回空闲」都依赖**同一条状态清理**。
+若那次清理没有发生，应用侧机器会一直停在 `dancing`、preview 也留着，于是三个症状一起出现：
+
+* **浮窗卡在最后一帧** —— 状态仍是 `dancing`，画面就仍画那支已经播完的舞蹈。注意 `clamping` 现在对跳舞恒为 `false`
+  （见 `lib/scene.js` 的 `clampWhenFinished = inState !== 'dancing' && …`），所以这**不是钳帧**，而是**状态没有离开跳舞**；
+* **内置宠物只重复当前动作** —— 状态不变 ⇒ 调度器不再为它抽新剪辑 ⇒ 只重复当前那一支（症状 2 的后半）；
+* **内置宠物丧失回应** —— 跳舞期间姿态被 preview/dance 占住，交互路径可能因此被压住（症状 1，同一根因的最早表现）。
+
+**第一轮就要取的读数**（停电后重启即可拿）：
+
+* `GET /vrmpet3d/desktop` → `page.state.drawn`、`page.motion.playing` / `clamping` / `face`、`page.frames`（帧计数是否在涨）；
+* `GET /vrmpet3d/state` → `state` 与 `why`（`running` / `pending` / `available`）。
+
+要回答的问题是：**工作开始与结束的前后，`page.state.drawn` 有没有离开 `dancing`**，以及应用侧的 `machine.dancing` 是否被清掉。
+
+**代码入口**：
+
+* `lib/client.js` 的 `onPreview`（preview 通道；跳舞的启动与清除都走它）与 `startDance` / `stopDance`；
+* `lib/core.js` 的 `PetMachine.setDancing` / `stopDancing` / `resolve`（忙碌分支如何丢掉 dance）；
+* `lib/desktop-page.js` 的 `requestDance` 与 `danceEndedReported`（浮窗上报「这支舞播完了」）；
+* `lib/scene.js` 的 `pickMotionFor` / `scheduledMotion*`（内置宠物「只重复当前动作」的抽签路径）。
+
 **BRANCHES: this file describes the `dev` branch.** `main` carries the plugin itself — `lib/`, `desktop/`,
 `assets/`, `docs/`, `initial-config/`, the manifest, `README.md` and this file — while the suites, the `build/`
 tools, the probes and `AGENTS.md` live on `dev`, where development happens (operator, 2026-10-13: 「这些调试相关的
