@@ -457,7 +457,8 @@ report(service?.assetRoutes === null,
       'the app owns a speech machine (the window has no session to react to)');
     report(/this\.publishState\(state, speech, touch, clock, null, this\.machine \? this\.machine\.unreadCount : 0, this\.decisionWhy\(\)\)/.test(clientSource),
       'and publishes the line WITH the state, the press, and the TURN clock, so none of the three can be dropped on the way');
-    report(/petStateLine = cleanSpeechLine\(body && body\.line\)/.test(hostSource),
+    report(/const nextStateLine = cleanSpeechLine\(body && body\.line\)/.test(hostSource)
+      && /petStateLine = nextStateLine/.test(hostSource),
       'the host sanitises and stores the line on /vrmpet3d/state');
     // The window reads the line out of the SAME body it reads the state from (one `applyHostState` call keeps
     // the two halves of one observation together).

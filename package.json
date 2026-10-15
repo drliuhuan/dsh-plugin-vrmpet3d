@@ -2,7 +2,7 @@
   "name": "dsh-plugin-vrmpet3d",
   "version": "0.1.0",
   "private": true,
-  "description": "A 3D desktop pet for DeepSeek Harness: VRM models on a transparent WebGL layer, driven by live session status.",
+  "description": "DeepSeek Harness 的 VRM 3D 桌宠：任务状态联动、独立悬浮窗、模型动作与 AI 碎碎念。",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -52,5 +52,22 @@
         "@deepseek-ai/dsh-client-locale"
       ]
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d.git"
+  },
+  "homepage": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d#readme",
+  "bugs": {
+    "url": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "desktop-pet",
+    "vrm",
+    "vrma",
+    "threejs",
+    "electron"
+  ]
 }

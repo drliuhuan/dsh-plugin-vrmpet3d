@@ -1,140 +1,98 @@
-# dsh-plugin-vrmpet3d
+# 桌宠 3D · VRM Pet 3D
 
-A **3D desktop pet** for DeepSeek Harness. It renders a VRM — or a plain glTF/GLB — on a transparent WebGL layer,
-floats it over the application frame, and drives it from live session status: working while a turn runs, asking for
-attention when an approval is waiting, celebrating when a turn completes, napping when nothing has happened.
+为 **DeepSeek Harness（DSH）** 添加一只随任务状态活动的 3D 桌宠。支持应用内显示，以及 DSH Desktop 上独立的透明悬浮窗；任务进行、等待确认、完成或出错时，宠物会显示对应状态并播放配置的动作。
 
-It ships **two models**, both redistributable with it, so a fresh install shows a real pet with nothing to
-configure: [assets/models/BlueFatFish.vrm.br](assets/models/BlueFatFish.vrm.br) (蓝色小肥鱼Deepseek, by 木子恶魔 — the
-default) and [assets/models/SampleModel.vrm.br](assets/models/SampleModel.vrm.br) (ヴィータ, by VRoid プロジェクト — the
-fallback). The source, the author and the terms of each are in
-[assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
+自带两款模型和 VRMA 动作包，安装后即可使用。可导入自己的模型，设置动作、表情、视线和物理效果，也可以让宠物说预设台词或使用 AI 生成碎碎念。
+
+[安装与使用](#安装) · [问题反馈](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) · [MIT 许可证](LICENSE)
+
+> 当前为早期版本，仍在修复和完善。3D 渲染会占用 GPU 与内存；遇到异常时，请附上 DSH 版本、显示方式和复现步骤反馈。
 
 ```
 no runtime dependencies · 9 verification suites · 2543 checks · works offline
 ```
 
-**VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
-sniffed, so the error says which format it found — and [docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md) keeps the
-retired MMD chapters.
+## 功能
 
-## What it does
+| 功能 | 说明 |
+| --- | --- |
+| 两种显示方式 | 应用内宠物；Desktop 端自动开启独立悬浮窗，支持置顶和透明区域鼠标穿透 |
+| 任务状态联动 | 空闲、工作中、等待确认、完成、出错与离线；空闲保持 idle，不自动进入休眠 |
+| 模型 | VRM 1.0 / 0.x，兼容普通 glTF/GLB；人体动作播放需要 VRM 骨架 |
+| 动作 | 自带 VRMA 动作包，可按状态配置循环、单次、速度、表情、口型和凝视 |
+| 跳支舞 | 右键随机播放一支舞蹈；播完、双击或开始工作时结束 |
+| 互动 | 点击与长按部位触发表情和碎碎念；拖动、缩放、旋转视角、视线跟随和弹簧骨物理 |
+| 碎碎念 | 内置台词、自定义台词，或使用 DSH 模型 / OpenAI 兼容接口生成 AI 台词 |
+| 导入 | 模型以文件导入、动作包以文件夹导入，复制到插件存储后不依赖原路径 |
 
-| | |
-|---|---|
-| **Models** | VRM 1.0 / 0.x, glTF/GLB — MToon materials, expressions, SpringBone and node constraints intact |
-| **Motions** | `.vrma`, per state and per clip 循环/单次 — a finished one-shot chains into the state's loop or holds its last frame, never loops itself — and the bundled pack ships in `assets/motions/` with the operator's own state→clip mapping as the default |
-| **Behaviour** | idle breathing, tail / ear / hair follow-through, pointer gaze, the cursor's draught across the pet, drag, throw, wall and ceiling bounce, landing |
-| **States** | `resting` `working` `waiting` `celebrate` `sleeping` `error` `greeting` `offline` `held` `falling` `landing`, all driven by DSH's own turn boundaries |
-| **Two surfaces** | the pet inside DSH's overlay, and a floating always-on-top, click-through window |
-| **One menu** | right-click either pet: 重置视角 / 重置大小 / 通用设置 / 切换模型 / 当前模型参数设置 / 切换表面 / 重力 / 隐藏宠物 |
-| **Two settings pages** | 模型参数 (per model) and 通用设置, over `/vrmpet3d/config` and `/vrmpet3d/global` |
-| **Model picker** | 切换模型, over `/vrmpet3d/picker`: drop a `.vrm`/`.glb` on the big target (or click it) and click a thumbnail to switch — a progress bar covers the load, the picker refuses input while it runs, and it is the SAME component the guide's 偏好模型 step mounts |
-| **First-run guide** | 欢迎 / 偏好模型 / 桌宠界面 / AI 碎碎念 / 完成, over `/vrmpet3d/setup` — 模型动作 is hidden and 桌宠界面 is skipped where no independent pet can exist (dsh web), which is why the stepper carries no numbers; it appears once per start until it is finished |
-| **Voice** | the status prompt above the head, plus 碎碎念 from built-in tables (20 lines per state, Chinese and English, in the shipped character's voice), your own lines, or a model (a DSH provider or any OpenAI-compatible endpoint) |
-| **Parts** | your own 部位 rows — a label, the structures it owns, an emotion and a 碎碎念 — matched against the model's real bone/mesh names |
-| **Privacy** | turn boundaries and session counts only. Never session text, tool arguments or attachments |
-| **Dependencies** | none at runtime; the 3D stack is one committed chunk ([lib/client.vendor.js](lib/client.vendor.js)) |
+## 运行要求
 
-## Requirements
+- DeepSeek Harness **0.2.0-rc.2 或更高版本**；本项目是 DSH 插件，不能作为独立应用运行。
+- 支持 WebGL2 的图形环境。独立悬浮窗需可用的 Electron 运行时，由启动器从 DSH 安装目录复用；无法启动时回退到应用内显示。
+- 无需安装运行时 npm 依赖。默认台词和模型动画可离线使用；AI 碎碎念取决于所选服务的网络与额度。
 
-* **DeepSeek Harness** 0.2.0-rc.2 or later (the plugin is a DSH bundle; it declares `dsh.bundle.patch`).
-* For the floating window: an **Electron runtime**, which the launcher borrows from the DSH installation by hard
-  links. Without one the pet still works inside DSH.
-* For the scripts: **Node 22+**. A Chromium-based browser (Edge or Chrome) for the browser suites.
-* A model file. The bundled BlueFatFish is the default; your own VRMs are imported as files, copied into the
-  plugin's own storage (see below).
+## 安装
 
-## Install
+请使用本仓库的 **main 分支**安装。项目尚未发布到 npm。
 
-The plugin is **not published to npm**. Two ways in:
+1. 在 DSH 插件管理器中添加本仓库；支持 GitHub 包来源时，使用：
 
-**Through the running app's plugin manager** — add this folder as a bundle with a `link:<absolute path>` spec. It
-applies to a live profile immediately, with no restart.
+   ```text
+   github:drliuhuan/dsh-plugin-vrmpet3d#main
+   ```
 
-**By hand**, exactly as `dsh plugin add` would:
+2. 也可以[下载 main 分支 ZIP](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/archive/refs/heads/main.zip)，解压后在插件管理器中添加包含 `package.json` 的文件夹，或填写 `link:<插件文件夹的绝对路径>`。
+3. 确认插件已启用，然后重启 DSH。更新插件后也请重启，确保宿主代码和页面代码使用同一版本。
 
-```bash
-node scripts/install-desktop-plugin.mjs --profile "$HOME/.dsh/profiles/desktop" --dry-run
-node scripts/install-desktop-plugin.mjs --profile "$HOME/.dsh/profiles/desktop"
-```
+请先停用其他占用同一桌宠显示位置的插件，例如 `dsh-plugin-fatfish-pet`、`dsh-plugin-whale-pet`。卸载时从插件管理器移除本插件。
 
-The manual route needs a DSH restart (this build watches no module roots, so a running app will not pick the plugin
-up); so does a later **edit** to the plugin, because the host half is not hot-reloaded. To roll back, restore
-`package.json.bak-<stamp>` in the profile directory and delete the profile's `node_modules` — or remove the bundle
-through the plugin manager, which reverses the same three changes.
+## 首次使用
 
-> **⚠️ A restart is not enough: check the PROFILE, not just the code.** A running DSH writes its profile back to
-> disk, and **a bundle its in-memory tree does not know about is dropped** — so a plugin that was disabled in the
-> manager and then had the app write the profile is gone from `dsh.profile.bundles`, and the next restart composes
-> no pet at all: no window, no `/vrmpet3d/*` routes, nothing on screen to explain it. One command answers that, and
-> it is the only check in this project that looks outside this tree:
->
-> ```bash
-> node scripts/check-profile.mjs --profile "$HOME/.dsh/profiles/desktop"
-> ```
->
-> Disable any other pet first — `dsh-plugin-fatfish-pet` and `dsh-plugin-whale-pet` register into the same
-> `shell.overlay` slot.
+首次引导会依次配置偏好模型、桌宠界面和 AI 碎碎念。可稍后配置，也可在 **通用设置 → 其他 → 重新运行引导** 再次打开。
 
-## Quick start
+- **切换显示方式**：Desktop 的通用设置最上方可选“内置宠物”或“自动”；自动优先使用独立悬浮窗。右键菜单也可以切换。
+- **切换模型**：右键 → 切换模型，点击缩略图；可拖入自己的模型文件，加载进度结束后再继续切换。
+- **设置动作**：通用设置 → 状态与动作。默认映射、表情和播放方式已随动作包提供，可以自行修改。
+- **设置台词**：通用设置 → 碎碎念。选择内置、自定义或 AI 来源；AI 模式需要先选择可用服务和模型。
+- **设置表情与部位**：右键 → 当前模型参数设置。模型结构不同，可用表情、部位和弹簧骨链也会不同。
 
-1. Restart DSH (or use the plugin manager) and the pet appears in the corner of the window — with the **first-run
-   guide** open in front of it, which walks through the five steps below and then never comes back (重新运行引导 in
-   通用设置 opens it again). 稍后配置 closes it without finishing, and the next start offers it once more.
-2. **Right-click it** → 通用设置 → 碎碎念 to choose whether it speaks, from which source, and how often.
-3. **Right-click it** → 通用设置 → 模型导入 to pick a `.vrm`/`.glb` **file**; it is copied into the plugin and loads
-   immediately, and 模型 on the model page switches between what is imported.
-4. Everything else — per-state motion, expressions, mouth shapes, gaze, the two sizes, hair physics, the nap
-   timeout — is on those two pages, and each change applies without a restart.
+### 鼠标操作
 
-### Using it
+| 操作 | 效果 |
+| --- | --- |
+| 点击 / 原地长按 | 触发部位互动与碎碎念，保留正在播放的动作 |
+| 左键拖动 | 移动宠物；开启对应界面的重力后，松开可触发抛掷和落地 |
+| 滚轮经过宠物 | 调整宠物及其文字大小 |
+| 滚轮经过文字 | 单独调整文字大小 |
+| 右键拖动 | 旋转观察视角 |
+| 右键点击 | 打开菜单：显示切换、模型切换、跳舞、重载、设置、重力和隐藏等 |
+| 双击 | 结束当前跳舞 |
 
-| Gesture | What happens |
-|---|---|
-| drag | the pet follows the cursor, leaning and trailing with it |
-| release after a throw | it flies, bounces off the walls and the floor, and lands |
-| click | a greeting, and the part you clicked reacts (see 部位) |
-| long press | 长按 — a state the 表情 table can answer |
-| wheel over the pet | zooms **the pet and its text** together |
-| wheel over the text | scales **only** the text |
-| right-drag | orbits the view (the pointer is captured, so it keeps turning as the mouse travels) |
-| right-click | the shared menu above |
+## 模型、动作与数据
 
-## VRM only
+自带默认模型 **蓝色小肥鱼Deepseek（木子恶魔）**，以及备用模型 **ヴィータ（VRoid プロジェクト）**。来源和授权见下方许可证说明及[模型说明](assets/models/README.md)。
 
-A `.pmx`/`.pmd`, or a `.vmd` motion, is **refused by name** rather than half-loaded: the file's magic bytes (or the
-VMD banner) are still recognised, so the message can name the format and point at
-[docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md), where the retired MMD chapters are kept.
+模型支持 `.vrm`、`.glb`、`.gltf`，动作支持 `.vrma`；不支持 PMX/PMD 或 VMD。普通 glTF/GLB 没有 VRM 人体骨架时，不能播放 VRMA 人体动作。自带模型与动作使用 Brotli 压缩存储，加载时自动解压。
 
-**An import COPIES, and that is the point.** A model is imported as a FILE (通用设置 → 模型导入, or the first-run
-guide) and a motion pack as a FOLDER; either way the bytes are copied into the plugin's own state directory
-(`<profile>/vrmpet3d-desktop/`) and both catalogues read them from there. So the folder you picked it out of can move,
-be renamed or disappear without the pet losing anything — a recorded path was a live dependency on somebody else's
-folder, which is exactly the bug the file import replaced. Removing an import deletes **only** the plugin's own copy,
-and `assets/motions/` — the shipped pack — is never touched by any of it.
+导入内容与配置保存在 DSH profile 的插件存储目录中。移除导入只删除插件持有的副本，不删除原文件。随包动作的默认设置按文件名解析，不依赖其他机器上的模型或动作 ID。
 
-**A motion pack ships with the plugin.** `assets/motions/` holds the operator's own `.vrma` clips, and — unlike
-imported model or motion directories — they are offered from the first scan, with no directory to import: they
-are read from the plugin's own folder, the way the bundled `SampleModel.vrm.br` is. The pack is filed **one folder per
-state** (`idle/`, `working/`, `attention/`, `success/`, `fail/`, `offline/`), and that filing IS the mapping: each
-state's picker offers only its own folder, so one list is never every clip the operator has authored. That folder's
-`vrmpet3d-motions.json` is the pack's own answer for a fresh install, in three blocks: `clips` (per file, 循环/单次),
-`defaults` (which clips each state draws) and `template` (per state AND clip: 循环/表情/口型/凝视). All three ship
-**filled with the operator's own configuration** — his state mapping and the face, gaze and play mode he gave every
-clip — written by FILE NAME rather than by a profile's ids, so the defaults survive a different machine and the next
-clip added to the pack. Anything you set in 通用设置 → 状态与动作 wins over it, field by field, and 「跟随情绪」 is there
-to take a template's face back.
+### AI 与隐私
 
-**A large clip may be stored compressed, as `<name>.vrma.br`.** Dance clips are megabytes, so the pack keeps them
-brotli-compressed and the plugin unpacks one into memory when it plays; nothing else changes, and the clip is
-listed as the VRMA it is (marked 已压缩). `npm run pack:motions <dir>` is how a clip is packed. Brotli rather than
-LZMA2 because Node cannot decode LZMA without a dependency this plugin does not have — the measurements are in
-[assets/motions/README.md](assets/motions/README.md).
+宠物通过任务状态、会话标识和计时信息判断当前状态，不需要读取会话正文、工具参数或附件。启用 AI 碎碎念后，所配置的人格、状态提示词和部位信息会发送给你选择的 AI 服务；费用与数据处理规则由该服务决定。
+
+### 常见问题与反馈
+
+- **没有宠物**：检查插件管理器里是否仍已启用，重启 DSH，并确认未被其他桌宠插件占用显示位置。
+- **没有独立窗口**：在通用设置中选择“自动”；若运行时不可用，仍可使用内置宠物。
+- **模型不播放动作**：确认使用 VRM 模型，状态下选有动作，并开启模型动作。反馈时请附上完整错误提示。
+- **AI 不说话**：检查台词来源、服务、模型和访问额度；可以先切回内置台词确认气泡显示正常。
+
+请通过 [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) 提交问题，附上 DSH 版本、操作系统、内置/外置显示方式、复现顺序与预期结果。请勿上传 API Key 或私人会话内容。
+
 
 ## Verification
 
-**9 verification suites, 2362 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2543 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -199,6 +157,8 @@ vendor/     the pinned 3D stack (build-time only; the chunk is committed)
   chapters.
 
 ## License
+
+插件代码与本项目原创动作采用 MIT 许可证。模型资源仍遵守各自作者的授权，不因随本仓库分发而自动改为 MIT。
 
 MIT — see [LICENSE](LICENSE). It bundles other MIT-licensed software as one generated file
 ([lib/client.vendor.js](lib/client.vendor.js)): three.js, `@pixiv/three-vrm` and `@pixiv/three-vrm-animation`. It

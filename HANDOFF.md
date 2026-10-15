@@ -186,7 +186,7 @@ blank face, with blinking, and without following the cursor — all three by fil
 Both release paths mark the interaction `falling` so a drop reads as a drop, and the flight itself is PHYSICS — his own
 profile has 重力 off (`gravity: false`, `windowGravity: false`). The pet is then never airborne, and nothing ever cleared
 the mark: the tick expired only `landing`, which is assigned on touchdown, so `interaction` stayed `falling` for ever and
-outranks every other branch in `resolve`. Measured with `build/probe-out/watch-state.mjs`:
+outranks every other branch in `resolve`. Measured with a temporary state probe (not retained in this tree):
 `state=falling interaction=falling running=true working=1` for minutes on end while the session was plainly 工作中 — i.e.
 「拖一下之后它就再也不回工作态了」. The floating window cannot show this: it has no state machine of its own, it mirrors what the
 app half reports, which is exactly why he saw it on one surface and not the other. The fix is a GRACE owned by the
@@ -637,7 +637,7 @@ pet's PAGE reloaded to start sending (the host accepts it either way), and it de
 along with the state changes and the 5 s heartbeat rather than turning the channel into a 1 Hz feed.
 
 **…and it names its own dismissal** (`why.dismissed`), which is the field the operator's follow-up needed. Measured with
-`build/probe-out/watch-state.mjs` on 2026-10-14: after a turn ended with his focus in ANOTHER application and nothing else
+a temporary state probe (not retained in this tree) on 2026-10-14: after a turn ended with his focus in ANOTHER application and nothing else
 running, 任务达成 appeared and was gone four seconds later (exactly the minimum hold), with the pet going back to 静息态
 rather than 工作中 — so the dismissal was one of the two rules that need no new work, and from outside they are
 indistinguishable: the presence+focus acknowledgement (`acknowledged`), and the OLD timer rule that applies when there is no
