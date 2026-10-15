@@ -64,18 +64,6 @@
         <option value="300000">5 分钟</option>
       </select>
     </div>
-    <!--
-      调试模式: the two surfaces at once.
-
-      Normally they are exclusive by design — while the floating window runs, the pet inside the app is hidden —
-      which is exactly what makes a difference between the two renderers impossible to see. Switching this on
-      shows both, so the same state, prompt, pose or size can be compared side by side. It is the `both` value
-      of 显示位置, not a second flag (see `core.PET_SURFACES`), so clearing it returns the pet to 自动.
-    -->
-    <div class="row">
-      <label class="k" for="pref-both">调试模式</label>
-      <label class="inline"><input type="checkbox" id="pref-both"> 独立桌宠与内置桌宠同时显示</label>
-    </div>
     <div class="row">
       <label class="k" for="pref-hidden">视角</label>
       <button id="pref-view-reset">复位视角</button>
