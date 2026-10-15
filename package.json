@@ -18,27 +18,10 @@
     "desktop",
     "assets",
     "!assets/whale-tail.apng",
-    "docs",
     "cordis.patch.yml",
     "README.md",
-    "HANDOFF.md",
     "LICENSE"
   ],
-  "scripts": {
-    "verify": "node scripts/verify-all.mjs",
-    "verify:core": "node scripts/verify.mjs",
-    "verify:model": "node scripts/verify-model.mjs",
-    "verify:load": "node scripts/check-plugin-load.mjs",
-    "verify:profile": "node scripts/check-profile.mjs",
-    "verify:vendor": "node scripts/vendor-build.mjs --check",
-    "verify:browser": "node scripts/verify-browser.mjs",
-    "verify:whale": "node scripts/whale-asset.mjs --check",
-    "pack:motions": "node scripts/compress-motions.mjs",
-    "fetch:fixtures": "node scripts/verify-model.mjs --fetch",
-    "fetch:whale": "node scripts/whale-asset.mjs",
-    "vendor:build": "node scripts/vendor-build.mjs",
-    "install:profile": "node scripts/install-desktop-plugin.mjs"
-  },
   "engines": {
     "node": ">=22"
   },
@@ -52,5 +35,6 @@
         "@deepseek-ai/dsh-client-locale"
       ]
     }
-  }
+  },
+  "displayName": "桌宠 3D · VRM Pet 3D"
 }

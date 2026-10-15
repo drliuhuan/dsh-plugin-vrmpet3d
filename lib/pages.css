@@ -133,6 +133,10 @@ label.pick input { accent-color: #5b8cff; }
 /* The per-clip 凝视 switch: a checkbox and its word, kept on one line with the three dropdowns. */
 #motion-list .clip-gaze { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 #motion-list .clip-gaze-box { margin: 0; }
+/* And the two TEXTS a clip owns in a state: its 碎碎念 line and its AI 提示词. They take what is left of the
+   row (the dropdowns, the mode and the switch all have fixed widths), which is what a sentence needs; the
+   提示词 box is `hidden` while the source is not the AI one, so it takes no room at all until it applies. */
+#motion-list .clip-text { flex: 1 1 160px; min-width: 120px; }
 /* The interval line inside a state's box set: two numbers and their unit, wrapping with the rest. */
 #motion-list .every { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 6px 140px; font-size: 11.5px; }
 #motion-list .every input { width: 62px; }
@@ -287,6 +291,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .model-card-remove { position: absolute; top: 6px; right: 6px; min-height: 0; padding: 0 6px; line-height: 20px;
   font-size: 11px; border-radius: 999px; background: rgba(0,0,0,.55); }
 .model-card-remove:hover { background: rgba(200,60,60,.85); }
+/* 自带模型的来源与作者, under the grid rather than on a tile — see `renderCredits` in lib/model-picker.js. A line
+   per bundled model, each wrapping rather than overflowing (the source is a long URL). */
+.model-credits { display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+  padding-top: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.model-credits > .k { font-size: 11px; opacity: .8; }
+.model-credit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 11px; }
+.model-credit-name { color: #cfd6e6; }
+.model-credit-source { color: #8daeff; overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   body { padding: 16px 12px; }
   .card { padding: 12px; }
@@ -302,4 +314,37 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   /* The picker's grid on a narrow window: fewer, smaller tiles rather than a horizontal scroll. */
   .model-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
   .model-drop { min-height: 132px; }
+}
+
+/* ===========================================================================
+   加载中：首屏数据到位之前，别让用户对着 dummy 表单干等
+
+   Operator, 2026-10-14: 「给通用设置和模型参数设置面板加上"加载中"的提示，以免用户看着一个dummy界面干等着」.
+
+   The markup ships the real form (the HTML is what paints first), and both pages fill it from the host a moment
+   later — settings, catalog, model info, motions. Until that first render the form is a dummy: every slider sits
+   at its markup default and every list is empty, which reads as "these are your settings" rather than "this is
+   not your settings yet". So the page starts in `body[data-loading="true"]`: the panel is dimmed and made
+   non-interactive, and the overlay below covers the gap with a spinner and a sentence. `lib/config-page.js`
+   clears the attribute on the first successful render, on every load failure (with the reason in `#status`), and
+   on a watchdog — a spinner that never stops is worse than the dummy it replaced.
+   =========================================================================== */
+body[data-loading="true"] main { opacity: .35; filter: saturate(.5); pointer-events: none; }
+body[data-loading="true"] .page-loading { display: flex; }
+.page-loading {
+  display: none; position: fixed; inset: 0; z-index: 30;
+  align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+  background: color-mix(in srgb, var(--surface, #14161c) 62%, transparent);
+  color: var(--text, #e8eaf0); font-size: 14px; letter-spacing: .02em;
+}
+.page-loading .page-loading-spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text, #e8eaf0) 26%, transparent);
+  border-top-color: var(--accent, #6aa9ff);
+  animation: vrmpet3d-spin .8s linear infinite;
+}
+@keyframes vrmpet3d-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  /* The text carries the meaning; the spin is decoration. */
+  .page-loading .page-loading-spinner { animation-duration: 3s; }
 }

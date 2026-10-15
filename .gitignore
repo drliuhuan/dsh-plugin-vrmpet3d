@@ -43,3 +43,11 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# 这些是开发侧的东西：main 不带它们，这条规则挡住将来在 main 上 `git add -A` 又把它们加回来。
+docs/
+HANDOFF.md
+tools/
+vendor/
+speech-lines-review.md
+part-speech-lines-review.md

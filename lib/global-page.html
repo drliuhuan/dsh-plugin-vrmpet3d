@@ -15,7 +15,20 @@
   -->
   <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
 </head>
-<body data-page="global">
+<body data-page="global" data-loading="true">
+<!--
+  The 加载中 cover — see the note in `lib/pages.css`.
+
+  It is in the MARKUP, not created by the script, so it is on screen from the first paint: between the HTML
+  arriving and `lib/config-page.js` finishing its first render there is a moment where the form below is a dummy
+  (markup defaults, empty lists) and the user has no way to tell. `body[data-loading="true"]` shows this and dims
+  the form; the script clears the attribute when the data is in.
+-->
+<div class="page-loading" role="status" aria-live="polite">
+  <span class="page-loading-spinner" aria-hidden="true"></span>
+  <span>正在加载设置…</span>
+</div>
+
   <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>通用设置</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
   <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">显示与外观</a><a href="#settings-1">视线</a><a href="#settings-2">鼠标互动与物理</a><a href="#settings-3">状态与动作</a><a href="#settings-4">碎碎念</a><a href="#settings-5">模型导入</a><a href="#settings-6">动作导入</a><a href="#settings-7">其他</a></nav>
   <main>
@@ -115,7 +128,7 @@
     <div class="row">
       <label class="k" for="pref-wind-radius">作用范围</label>
       <input type="range" id="pref-wind-radius" min="0" max="100" step="5">
-      <span class="value" id="pref-wind-radius-value">10%</span>
+      <span class="value" id="pref-wind-radius-value">15%</span>
       <button id="pref-wind-radius-reset" class="ghost">复位</button>
     </div>
     <div class="row">
@@ -220,7 +233,7 @@
       <div class="row">
         <label class="k" for="pref-speech-temperature">温度</label>
         <input type="range" id="pref-speech-temperature" min="0" max="20" step="1">
-        <span class="value" id="pref-speech-temperature-value">0.90</span>
+        <span class="value" id="pref-speech-temperature-value">0.50</span>
       </div>
       <div class="row">
         <label class="k" for="pref-speech-timeout">超时</label>

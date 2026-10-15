@@ -23,8 +23,8 @@ id 来指定动作，原因见下面「发布时要做的两件事」。
 | 文件 | 是什么 |
 |---|---|
 | `vrmpet3d-settings.json` | 面板里改的一切：动作映射、碎碎念（含 AI persona/来源）、表情与触发器、部位、视线、物理、位置等 |
-| `vrmpet3d-model-files.json` | 通过 模型导入 复制进来的模型文件记录（含**本机绝对路径**） |
-| `vrmpet3d-model-dirs.json` | 旧版导入的目录列表（仍会显示、仍可移除） |
+| `vrmpet3d-model-files.json` | 通过 模型导入 复制进来的模型文件记录（含**本机绝对路径**）。本机没有导入过，已删除——里面原先记的是**另一台机器**的 `C:\Users\drliu\…` |
+| `vrmpet3d-model-dirs.json` | 旧版导入的目录列表（仍会显示、仍可移除）。同上，本机为空，已删除 |
 | `vrmpet3d-motion-imports.json` | 通过 动作导入 复制进来的动作目录（若还没有导入过则不存在） |
 | `motion-catalog.json` | **仅在 `--catalog` 时抓取**：运行中的插件对 `/vrmpet3d/motions` 的回答，也就是上面那些 id 对应的**文件名** |
 
@@ -54,6 +54,18 @@ node scripts/capture-config.mjs --source <dir>   # 读别的 profile
 }
 ```
 
+还有第二块，`template`：**每个状态 × 每个动作**的设置（`loop` / `expression` / `mouth` / `gaze`），同样按文件名。
+`motions` 只说「哪些动作」，`motionClips` 才说「每个动作怎么放、什么表情」——它就是 `template` 的来源，所以配置好
+状态与动作之后，**两块都要更新**（`build/probe-out/make-motion-template.mjs` 就是照着运行中的 profile 生成它的）。
+逐动作的**碎碎念/提示词不上传**：那是用户自己的话，而且清单里没法表达「不要这句话」（空的字符串已经意味着「用状态
+自己的池子」），所以 `template` 只带上面四个字段：
+
+```json
+{
+  "template": { "done": { "success/jump 1.vrma": { "expression": "happy", "gaze": false } } }
+}
+```
+
 `motion-catalog.json`（`--catalog` 抓的）给出每个 id 对应的 `name`，翻译就是照它做。示例（在插件运行时）：
 
 ```bash
@@ -63,6 +75,17 @@ curl -s http://127.0.0.1:19387/vrmpet3d/motions   # { motions: [{ id, name, ... 
 > 操作者说过这一步由他自己配（「我不写入 assets/motions/vrmpet3d-motions.json 的 defaults」），所以这个仓库**没有**
 > 替他写。要我在你确认后按当前映射生成一版候选，说一声即可。
 
+> ⚠️ **id 不只会换机器，还会随「包里的文件数」变。** id 是 `a` + base36（发现顺序里的**下标**），所以往动作包里加一个
+> 文件，就会把它之后的所有 id 往后挪一位。实例（2026-10-14）：`dance/Dancing.vrma` 插在索引 4，于是本目录快照里从旧 `a4`
+> 起的每个 id 都指向**前一个**文件 —— 把那份快照应用回本机，会把「出错」「落地」映射到 `dance/极乐净土.vrma.br`、「离线」
+> 映射到 `idle/touch hair2.vrma`、「完成」映射到 `offline/sleeping.vrma` + 两支 jump。**面板上看不出来**：它显示的是存量
+> 映射，名字看着都对，只有按文件名翻译才发现指错了文件。
+>
+> 判断与修复都靠**文件名**这把尺：用 `motion-catalog.json`（或运行中的 `/vrmpet3d/motions`）翻译快照里的 id，与清单
+> `defaults` 逐状态比对；对不上时，把旧索引 ≥ 插入位置的 id 整体 +N（N = 之后新增的文件数）再比一次，两项都对上才算修好。
+> 修的时候除了「动作集合」，还要交叉验证每条 `loop`（与清单 `clips` 对该文件的声明比对）——两者同时对上，才说明平移量猜对了。
+> 2026-10-14 那次修复就是这么做的：平移后 14/3/3/2/1 与 15 条 loop/gaze 全部与清单吻合，随后才写回 profile 并重新抓取本目录。
+
 ### 2. 把本机专有的值改回"新用户应当得到的值"
 
 以下字段是本机事实，不能作为新用户起点：`modelId`（指向你导入的模型）、`model-files`/`model-imports` 里的绝对路径与
@@ -70,3 +93,18 @@ curl -s http://127.0.0.1:19387/vrmpet3d/motions   # { motions: [{ id, name, ... 
 
 **操作者的标准提醒（重复一次）**：正式版初始配置配好之后，把插件里的这些配置文件**改回本地值**再提交，别让你本机的
 设置成为新用户的初始配置。
+
+
+## 本次发布对快照做了什么（2026-10-14）
+
+上面两个作业都执行过一次，结果就是现在这份文件：
+
+* **id 键的数据整块剔除**（`motions` / `motionClips` / `motionLoop` / `motionEvery` / `springs` / `statusScale`）——
+  动作 id 是位置型的，改名或加文件就会错位；而这些默认值已经由 `assets/motions/vrmpet3d-motions.json` 与
+  `assets/models/vrmpet3d-models.json` 随包分发，两处都留只会打架。
+* **本机事实剔除**：`modelId`、导入路径（`model-files`/`model-imports`）、`placementX/Y`、`x/y`、`viewYaw/viewPitch`、
+  `live`（运行态）。它们随机器而变，不能作为新用户的起点。
+* **`petSurface` 也剔除了**：快照里是 `both`（调试模式，两个界面同时出现），而出厂默认是 `auto`。
+* 留下的都是与机器无关的观感设置（尺寸、重力、弹簧骨开关、视线、风力、碎碎念节奏等）。
+
+于是新用户拿到的是**插件自己的出厂默认 + 随包清单**，而不是这台机器的状态。

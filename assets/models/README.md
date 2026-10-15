@@ -5,13 +5,33 @@ plugin at a folder elsewhere with the `modelDirs` config). This build is **VRM a
 (2026-10-12): a `.pmx`/`.pmd` is recognised by its magic bytes and refused by name, and a `.vmd` motion
 likewise, so neither belongs here.
 
-## What ships here: exactly one model, and it is redistributable
+## What ships here: two models, and both may be redistributed with the plugin
 
-`SampleModel.vrm` (VRoid プロジェクト's ヴィータ) is **committed on purpose** and is the
-plugin's built-in default model. The operator asked for it on 2026-10-10, and the
-reason it can be shipped is the file's own embedded licence — not a judgement call
-made here. Its `extensions.VRM.meta.otherLicenseUrl` is a VRoid Hub licence query
-string that reads:
+`BlueFatFish.vrm` is the model a fresh profile resolves to; `SampleModel.vrm` is the fallback. Each ships for a
+reason named here, and each is credited below with its **source and author** — the operator asked for that on
+2026-10-13 (「需要注明来源和作者」). The picker prints the same two credits under its grid, on 切换模型 and on the guide's
+② 偏好模型 step, because both mount one component and the credit comes from the host
+(`BUNDLED_MODEL_CREDITS` in `lib/index.js`).
+
+### `BlueFatFish.vrm` — 蓝色小肥鱼Deepseek, by 木子恶魔
+
+| | |
+| --- | --- |
+| model | 蓝色小肥鱼Deepseek |
+| author | 木子恶魔 |
+| source | <https://www.aplaybox.com/details/model/ayXkRzVflmnd> |
+| terms | 经作者授权分发 — it ships inside this plugin with the author's permission, and this credit travels with it |
+| file | VRM 1.0 (`VRMC_vrm`), 18 480 432 bytes, 152 nodes, 6 meshes, 53 humanoid bones, 18 preset expressions plus one custom (`TiePen`), 22 spring chains |
+
+It became the plugin's default model on 2026-10-13 (「把BlueFatFish作为默认模型」). The permission covers distribution as
+part of this plugin and nothing else: a copy taken from this repository is still the author's work, under the
+author's terms, credited above.
+
+### `SampleModel.vrm` — ヴィータ, by VRoid プロジェクト
+
+**Committed on purpose** since 2026-10-10, and the reason it can be shipped is the file's own embedded licence — not
+a judgement call made here. Its `extensions.VRM.meta.otherLicenseUrl` is a VRoid Hub licence query string that
+reads:
 
 | term | value |
 | --- | --- |
@@ -25,7 +45,7 @@ string that reads:
 | `sexual_expression` / `violent_expression` | `allow` |
 
 So it may be redistributed, modified, used commercially by individuals and
-corporations, and **needs no attribution**. It also has what a default model needs
+corporations, and **needs no attribution**. It also has what a bundled model needs
 in order to exercise this plugin: a standard VRM humanoid rig, 15 expressions, and 18
 spring chains (hair and skirt), which is why the settings window has something real
 to show on a fresh install.
@@ -67,8 +87,8 @@ several collections in their own folders.
 ## How the default is chosen
 
 `preferences.modelId` ships EMPTY, which means "resolve one". `core.resolveModelId`
-picks the catalogued model named `SampleModel.vrm` first — the bundled one, or yours
-if you have a file by that name — then the first VRM, then the first model of any
+picks the catalogued model named `BlueFatFish.vrm` first — the bundled one, or yours
+if you have a file by that name — then `SampleModel.vrm`, then the first VRM, then the first model of any
 kind (and the kinds it catalogues are `.vrm`, `.glb` and `.gltf`; a `.pmx`/`.pmd` is left out of the
 catalogue entirely since 2026-10-12). With nothing catalogued at all the pet shows nothing and says so; it
 does not fall back to a stand-in avatar (that was removed on 2026-10-10), and `lib/placeholder.js` survives

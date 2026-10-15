@@ -16,7 +16,20 @@
   -->
   <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
 </head>
-<body data-page="model">
+<body data-page="model" data-loading="true">
+<!--
+  The 加载中 cover — see the note in `lib/pages.css`.
+
+  It is in the MARKUP, not created by the script, so it is on screen from the first paint: between the HTML
+  arriving and `lib/config-page.js` finishing its first render there is a moment where the form below is a dummy
+  (markup defaults, empty lists) and the user has no way to tell. `body[data-loading="true"]` shows this and dims
+  the form; the script clears the attribute when the data is in.
+-->
+<div class="page-loading" role="status" aria-live="polite">
+  <span class="page-loading-spinner" aria-hidden="true"></span>
+  <span>正在加载设置…</span>
+</div>
+
   <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>模型参数</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
   <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">模型</a><a href="#settings-1">表情</a><a href="#settings-2">部位</a><a href="#settings-3">弹簧骨</a></nav>
   <main>
@@ -60,8 +73,19 @@
 
 <section class="settings-section" id="settings-2">
   <h2>部位 <span id="part-count"></span></h2>
-  <div class="card">
-    <table id="part-table">
+  <!--
+    默认折叠（operator, 2026-10-14: 「"部位"区域默认折叠，内容太多了」）.
+
+    The 部位 table is the tallest thing on this page — a row per part, each with a structure browser and an expression
+    select — and it pushed 弹簧骨 and everything after it below the fold, so the page opened on a wall of rows. The fold is a
+    plain `<details>` AROUND the card rather than around the section: the heading stays visible (so the page still says what
+    it is), the section nav's `#settings-2` anchor still lands on the heading, and every element the suites read is still in
+    the markup. The count beside the heading is filled whether the fold is open or shut.
+  -->
+  <details id="parts-fold">
+    <summary>展开部位列表</summary>
+    <div class="card">
+      <table id="part-table">
       <thead><tr>
         <th style="width:150px">部位</th>
         <th style="width:58px">使用</th>
@@ -88,8 +112,9 @@
         <button type="button" id="part-picker-close">关闭</button>
       </div>
       <div class="part-picker-list" id="part-picker-list" tabindex="0"></div>
+      </div>
     </div>
-  </div>
+  </details>
 
 </section>
 
@@ -97,6 +122,39 @@
   <h2>弹簧骨 <span id="spring-count"></span></h2>
   <div class="card">
     <div id="spring-list"></div>
+    <div class="row" style="margin-top:10px">
+      <label class="k" for="spring-motion-physics">动作播放时</label>
+      <label class="inline"><input type="checkbox" id="spring-motion-physics"> 头发与裙摆继续摆动</label>
+    </div>
+    <!--
+      弹簧骨碰撞：全部关闭（默认）/ 全部开启 / 自定义（operator, 2026-10-14）.
+
+      The chain list above prints each chain's 「N 碰撞组」 from the model FILE, and until this row existed the renderer
+      ignored all of them (see the history in `lib/scene.js`): 头发与裙摆会穿过身体。全部关闭 is what every build before this
+      one did and is therefore the shipped answer; 全部开启 is the file verbatim and is the setting that used to pull a
+      skirt out into a plate; 自定义 lists every collider the model declares, all ticked, and narrows from there — live,
+      because comparing the two states in one sitting is the only way to answer 穿模 by looking.
+    -->
+    <div class="row" style="margin-top:10px">
+      <label class="k" for="spring-colliders">弹簧骨碰撞</label>
+      <select id="spring-colliders">
+        <option value="off">全部关闭（默认）</option>
+        <option value="all">全部开启</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+    <!--
+      逐个碰撞体的开关（operator, 2026-10-14: 「自定义的时候，读出模型内所有碰撞体让用户自己勾选，自定义状态默认是所有碰撞体全勾选状态」）.
+
+      Shown only while 自定义 is chosen. Every collider the model file declares gets a checkbox, named by its group and by
+      the bone it sits on, with its radius — because the radius decides how hard it pushes, and one oversized sphere is the
+      difference between hair that swings and a fringe pressed flat against the head. Built from the MODEL, so a file with
+      no colliders shows no list rather than switches that do nothing.
+    -->
+    <details id="spring-colliders-detail" hidden style="margin-top:8px">
+      <summary>逐个碰撞体 <span id="spring-collider-count"></span></summary>
+      <div id="spring-collider-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+    </details>
     <div class="row" style="margin-top:10px">
       <button id="spring-reset-all">全部恢复默认</button>
     </div>
