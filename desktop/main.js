@@ -1446,6 +1446,9 @@ async function probeWheel(win) {
   }
 }
 
+/** Where the PAGE got to, readable even when it never published a state at all. */
+let lastPageDiagnostics = null;
+
 /** The page's own account of itself, as an object, or null. */
 async function readPageState(win) {
   try {
@@ -1453,29 +1456,38 @@ async function readPageState(win) {
      * …and WHY it might have none, read from the window itself rather than from the page's script.
      *
      * The page's inline glue returns silently when the preload BRIDGE is missing (`if (!bridge) return;`) and never calls
-     * `bridge.ready` when `config()` does not resolve — and both leave `__VRMPET3D_DESKTOP_STATE__` at its pre-mount default: no pet,
-     * no error, and a status line that keeps repeating the last good frames. That is what the operator's window did on 2026-10-15
-     * (`/vrmpet3d/desktop` froze a second after start with `ready: false` and an empty `errors`), while a window this session
+     * `bridge.ready` when `config()` does not resolve — and both leave `__VRMPET3D_DESKTOP_STATE__` ABSENT: no pet, no error, and a
+     * status line repeating the last good frames. That is what the operator's window did on 2026-10-15 while a window this session
      * launched by hand worked.
      *
-     * These two flags are readable even then, so the next readout says which half broke: no bridge (a preload/Electron problem) or
-     * a bridge whose configuration never arrived (an IPC problem).
+     * The four reads below are deliberately INDEPENDENT of the page's own script: the bridge, the sources' global, and the page's
+     * `document.title` (which the glue advances one step at a time) all answer even when the glue returned early. They are kept in
+     * `lastPageDiagnostics` instead of being returned, because the caller wants the page STATE — and dropping them whenever there is
+     * no state is exactly how the first version of this measurement managed to tell us nothing at all.
      */
     const raw = await win.webContents.executeJavaScript(
       'JSON.stringify({'
       + 'state: window.__VRMPET3D_DESKTOP_STATE__ || null,'
       + 'bridge: typeof window.vrmpet3dDesktop === "object" && window.vrmpet3dDesktop !== null,'
       + 'sources: Boolean(globalThis.__VRMPET3D_DESKTOP__),'
+      + 'title: String(document.title || ""),'
       + '})',
     );
     const parsed = raw ? JSON.parse(raw) : null;
     if (!parsed) return null;
-    if (parsed.state) {
-      parsed.state.bridge = parsed.bridge === true;
-      parsed.state.sources = parsed.sources === true;
-    }
+    lastPageDiagnostics = {
+      bridge: parsed.bridge === true,
+      sources: parsed.sources === true,
+      title: parsed.title || null,
+    };
     return parsed.state;
-  } catch (_error) {
+  } catch (error) {
+    lastPageDiagnostics = {
+      bridge: null,
+      sources: null,
+      title: null,
+      readError: String(error && error.message ? error.message : error),
+    };
     return null;
   }
 }
@@ -1529,12 +1541,13 @@ function announce(info) {
      * WHERE the page got to, which the fields above cannot say.
      *
      * `ready`/`webgl2` stay false both when the page never mounted and when it mounted without WebGL, and `errors` is empty in both.
-     * `bridge` (the preload exposed `vrmpet3dDesktop`) and `sources` (the page's own scripts defined `__VRMPET3D_DESKTOP__`) split that
-     * apart, and they are read straight from the window so they answer even when the page's glue returned early — the operator's
-     * window on 2026-10-15, which reported `ready: false` a second after start and then nothing at all.
+     * These split that apart, and they answer even when the page's own glue returned early (the page state being ABSENT is itself one
+     * of the answers). `title` is the page's own progress line, walked one step at a time by the glue in `desktop-page.html`.
      */
-    bridge: lastPageState ? lastPageState.bridge === true : null,
-    sources: lastPageState ? lastPageState.sources === true : null,
+    bridge: lastPageDiagnostics ? lastPageDiagnostics.bridge : null,
+    sources: lastPageDiagnostics ? lastPageDiagnostics.sources : null,
+    pageTitle: lastPageDiagnostics ? lastPageDiagnostics.title : null,
+    pageReadError: lastPageDiagnostics && lastPageDiagnostics.readError ? lastPageDiagnostics.readError : null,
     over: overPet,
     interacting: interacting,
     rect: petRect,
