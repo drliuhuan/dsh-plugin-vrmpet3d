@@ -11,7 +11,7 @@ fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
 ```
-no runtime dependencies · 9 verification suites · 2536 checks · works offline
+no runtime dependencies · 9 verification suites · 2540 checks · works offline
 ```
 
 **VRM and plain glTF only.** A `.pmx`/`.pmd` model or a `.vmd` motion is refused by name — the bytes are still
@@ -150,7 +150,7 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 111 — the widget, the menu, the desktop page, the shipped 部位 台词 per gesture, the background pump that keeps a throttled window alive, the pack template through a real scene, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar, a posed model's part hit test, and 通用设置's 状态与动作 rows with their per-clip 碎碎念 and AI 提示词 |
-| `node scripts/verify-desktop.mjs` | 302 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
+| `node scripts/verify-desktop.mjs` | 306 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
 | `node scripts/check-docs.mjs` | documented paths, commands and counts match reality |

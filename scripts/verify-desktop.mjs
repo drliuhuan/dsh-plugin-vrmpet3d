@@ -371,8 +371,41 @@ console.log('\n0. the two halves agree on how the page reports itself');
   eq(parseStatusLine('[26476:ERROR:cache_util_win.cc] Unable to move the cache'), null,
     'ordinary logging is not mistaken for a status');
   eq(parseStatusLine(`${STATUS_PREFIX}{"ready":tr`), null, 'a half-written status is not parsed');
+  /**
+   * …AND THE WINDOW THE HOST KEEPS MUST BE WIDER THAN A REAL REPORT.
+   *
+   * This helper used to mirror the host's own `slice(-2048)`, which is why nothing here caught the defect that cost the operator a
+   * whole session on 2026-10-15: a page report carrying the motion catalogue measures 3173 characters on his machine, so the 2048
+   * window sliced the `vrmpet3d-desktop: ` PREFIX off every report, `parseStatusLine` found nothing, and the host sat for ever on the
+   * short pre-mount payload — `page.ready: false`, `frames` missing, every diagnostic field invisible. The suite stayed green because
+   * its fixture packs three clips, and three clips fit.
+   *
+   * So the long shape is built here and asserted both ways: through the window the host really uses, and through the one it used to.
+   */
+  const bigClips = [];
+  for (let i = 0; i < 28; i += 1) {
+    bigClips.push({ id: 'a' + i.toString(36), name: 'idle/example clip ' + i + '.vrma.br', format: 'vrma', tracks: 60 + i, reason: null });
+  }
+  const longLine = STATUS_PREFIX + JSON.stringify({
+    ready: true,
+    webgl2: true,
+    bridge: true,
+    pageTitle: 'vrmpet3d: glue > bridge > config > mount > gl:true > ready:m1',
+    motion: { kind: 'vrm', format: 'vrma', offered: bigClips.length, available: bigClips, mapped: { resting: bigClips.slice(0, 14).map((c) => c.id) } },
+  });
+  ok(longLine.length > 2048, `a report with the whole catalogue is longer than the old window (${longLine.length} characters)`);
+  eq(parseStatusLine(longLine.slice(-2048)), null,
+    'and a 2048-character window cuts its prefix off, which is exactly the failure that made every diagnostic invisible');
+  eq(parseStatusLine(longLine.slice(-65536))?.motion?.offered, bigClips.length,
+    'while the window the host uses now keeps the whole line');
+  {
+    // The host's own constant, read from its source: the suite mirrors the number, so it has to be asserted against the file.
+    const hostSource = readFileSync(join(ROOT, 'lib', 'desktop.js'), 'utf8');
+    ok(hostSource.includes('.slice(-65536)') && !hostSource.includes('.slice(-2048)'),
+      'and the host half really uses that window (a narrower one silently swallows every long report)');
+  }
   let carry = '';
-  const feed = (chunk) => { carry = (carry + chunk).slice(-2048); return parseStatusLine(carry); };
+  const feed = (chunk) => { carry = (carry + chunk).slice(-65536); return parseStatusLine(carry); };
   eq(feed(`${STATUS_PREFIX}{"ready":`), null, 'a status split across chunks waits');
   eq(feed('true,"webgl2":true}\n')?.webgl2, true, 'and is read once the rest arrives');
 
