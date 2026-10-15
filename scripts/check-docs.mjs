@@ -98,6 +98,24 @@ group('1. every doc exists and every path it cites exists');
       // those only when the doc clearly marks them as generated or expected.
       ok(found, `${doc} cites an existing path: ${cited}`);
     }
+    /**
+     * …and the same for a MARKDOWN LINK TARGET.
+     *
+     * Operator, 2026-10-14: compressing the bundled models renamed them to `<name>.vrm.br`, and the README kept five links to the
+     * old paths — every one 404 for a reader, and none of them caught, because this loop only ever looked at backtick-quoted
+     * paths. A shipped README whose links go nowhere is exactly the rot this suite exists to prevent.
+     */
+    const linkTargets = new Set();
+    for (const match of text.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+      const target = match[1].split('#')[0];
+      if (!target || target.startsWith('http') || target.startsWith('mailto:') || target.startsWith('/')) continue;
+      linkTargets.add(target);
+    }
+    for (const target of linkTargets) {
+      const fromDocLink = resolve(ROOT, dirname(doc), target);
+      const fromRootLink = resolve(ROOT, target);
+      ok(existsSync(fromDocLink) || existsSync(fromRootLink), `${doc} links to an existing path: ${target}`);
+    }
   }
 }
 

@@ -5,8 +5,8 @@ floats it over the application frame, and drives it from live session status: wo
 attention when an approval is waiting, celebrating when a turn completes, napping when nothing has happened.
 
 It ships **two models**, both redistributable with it, so a fresh install shows a real pet with nothing to
-configure: [assets/models/BlueFatFish.vrm](assets/models/BlueFatFish.vrm) (蓝色小肥鱼Deepseek, by 木子恶魔 — the
-default) and [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm) (ヴィータ, by VRoid プロジェクト — the
+configure: [assets/models/BlueFatFish.vrm.br](assets/models/BlueFatFish.vrm.br) (蓝色小肥鱼Deepseek, by 木子恶魔 — the
+default) and [assets/models/SampleModel.vrm.br](assets/models/SampleModel.vrm.br) (ヴィータ, by VRoid プロジェクト — the
 fallback). The source, the author and the terms of each are in
 [assets/models/README.md](assets/models/README.md), and the same credit is printed under the grid on 切换模型.
 
@@ -116,7 +116,7 @@ and `assets/motions/` — the shipped pack — is never touched by any of it.
 
 **A motion pack ships with the plugin.** `assets/motions/` holds the operator's own `.vrma` clips, and — unlike
 imported model or motion directories — they are offered from the first scan, with no directory to import: they
-are read from the plugin's own folder, the way the bundled `SampleModel.vrm` is. The pack is filed **one folder per
+are read from the plugin's own folder, the way the bundled `SampleModel.vrm.br` is. The pack is filed **one folder per
 state** (`idle/`, `working/`, `attention/`, `success/`, `fail/`, `offline/`), and that filing IS the mapping: each
 state's picker offers only its own folder, so one list is never every clip the operator has authored. That folder's
 `vrmpet3d-motions.json` is the pack's own answer for a fresh install, in three blocks: `clips` (per file, 循环/单次),
@@ -186,7 +186,7 @@ lib/        the plugin: core.js (rules) · index.js (host routes) · scene.js (r
 desktop/    the launcher: the window, the always-on-top rules, the self-test
 scripts/    the suites and the tools
 docs/       ARCHITECTURE.md (design) · ASSET-CONTRACT.md (model/motion files) · models/
-assets/     the two bundled models (BlueFatFish.vrm · SampleModel.vrm)
+assets/     the two bundled models (BlueFatFish.vrm.br · SampleModel.vrm.br)
 vendor/     the pinned 3D stack (build-time only; the chunk is committed)
 ```
 
@@ -206,8 +206,8 @@ ships exactly two 3D model files, and both may be redistributed with it:
 
 | file | model | author | source | terms |
 | --- | --- | --- | --- | --- |
-| [assets/models/BlueFatFish.vrm](assets/models/BlueFatFish.vrm) | 蓝色小肥鱼Deepseek | 木子恶魔 | <https://www.aplaybox.com/details/model/ayXkRzVflmnd> | 经作者授权分发 — credited here as the author asks |
-| [assets/models/SampleModel.vrm](assets/models/SampleModel.vrm) | ヴィータ | VRoid プロジェクト | <https://vroid.com/en/studio> | its own embedded licence: redistribution, modification and commercial use allowed, no attribution required |
+| [assets/models/BlueFatFish.vrm.br](assets/models/BlueFatFish.vrm.br) | 蓝色小肥鱼Deepseek | 木子恶魔 | <https://www.aplaybox.com/details/model/ayXkRzVflmnd> | 经作者授权分发 — credited here as the author asks |
+| [assets/models/SampleModel.vrm.br](assets/models/SampleModel.vrm.br) | ヴィータ | VRoid プロジェクト | <https://vroid.com/en/studio> | its own embedded licence: redistribution, modification and commercial use allowed, no attribution required |
 
 The first is what a fresh profile resolves to; the second is the fallback. Every other model is the user's and stays
 under its own author's terms.
