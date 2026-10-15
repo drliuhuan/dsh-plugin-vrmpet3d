@@ -138,22 +138,27 @@ const report = {
 let selfTestWritten = false;
 
 /**
- * A self-test is a PROBE, and a probe must not share the user's Chromium profile.
+ * EVERY window gets its own Chromium profile — not only a self-test.
  *
- * Chromium's process singleton is per `user-data-dir`, so a self-test launched while the user's own
- * pet window is running either exits at once or - measured, twice, on 2026-10-08 - hangs before its
- * page ever mounts, because the shared profile is owned by the live instance. The directory is kept
- * between runs so Chromium's one-time work happens once, the same reason `scripts/vrm-probe.mjs`
- * keeps its own profile. Set before `app.whenReady()`, which is the only time it takes effect.
+ * Chromium's process singleton is per `user-data-dir`, so two windows of THIS app that share one either exit at once or — measured,
+ * twice, on 2026-10-08 — hang before their page ever mounts, because the shared profile is owned by the live instance. That was
+ * handled for self-tests only, which left the case that matters in production: the PET window and the SETTINGS window are the same
+ * launcher (`--config=1`) and shared a profile, so whichever started second was the one whose page never mounted.
+ *
+ * The operator's window on 2026-10-15 was exactly that, and it read as 「弹簧骨状态丢了…头发现在动的感觉不对了」: no mount means no scene,
+ * so no spring bones, no motion, and `ready: false` with an empty error list — while the same launcher started by hand, with no second
+ * window in the way, mounted normally (`ready: true`, `pageTitle: … > ready:m1`).
+ *
+ * The directory is kept between runs so Chromium's one-time work happens once, and the mode is in the name so the pet, the settings
+ * window and a probe never share one. Set before `app.whenReady()`, which is the only time it takes effect.
  */
-if (options.selfTest) {
-  const probeProfile = `${app.getPath('userData')}-selftest`;
-  try {
-    fs.mkdirSync(probeProfile, { recursive: true });
-    app.setPath('userData', probeProfile);
-  } catch (_error) {
-    // A probe that cannot get its own profile is still worth running in the shared one.
-  }
+const profileSuffix = options.config === true ? '-config' : '-pet';
+const ownProfile = `${app.getPath('userData')}${profileSuffix}${options.selfTest ? '-selftest' : ''}`;
+try {
+  fs.mkdirSync(ownProfile, { recursive: true });
+  app.setPath('userData', ownProfile);
+} catch (_error) {
+  // A window that cannot get its own profile is still worth opening in the shared one.
 }
 
 function writeSelfTest(code) {
@@ -1518,6 +1523,18 @@ function startWatchdog() {
 let lastPageState = null;
 
 /**
+ * The page's last READY report, kept because the watchdog announces without one.
+ *
+ * The page reports once, through `bridge.ready(info)`, and that is the only payload that can say `ready: true`. Every two seconds the
+ * watchdog announces again for its own reasons and has no `info` — and `announce()` used to fall back to `report.page`, which is the
+ * SELF-TEST's page and is null in a normal window. So a mounted, rendering pet was reported as `ready: false` two seconds after it
+ * said otherwise, and the host's readout flip-flopped between "mounted" and "never mounted" — which is exactly how this session lost
+ * an hour to a window that was working (measured 2026-10-15: `pageTitle` showed `… > ready:m1` in one read and `ready: false` in the
+ * next, with the same window).
+ */
+let lastReadyInfo = null;
+
+/**
  * Tell the host half what the page is doing, on stdout, in one line it can parse.
  *
  * `VRMPET3D_STATUS_PREFIX` is duplicated in `lib/desktop.js`; the pair is asserted by the `desktop`
@@ -1528,14 +1545,22 @@ let lastPageState = null;
  * @param {object} [info] the page's own ready report, when this call is the first one
  */
 function announce(info) {
+  /**
+   * A bare announcement keeps the last REAL one instead of erasing it.
+   *
+   * See `lastReadyInfo`: the page reports once, the watchdog announces every two seconds without any report, and falling back to the
+   * self-test's `report.page` (null in a normal window) made a working pet report `ready: false` on the next tick.
+   */
+  if (info) lastReadyInfo = info;
+  const effective = info || lastReadyInfo;
   // The page's own notes AND this process's errors. Only the page's used to travel, which is why a
   // launcher-side failure showed up in the host as "running, never ready" with nothing to read.
-  const pageErrors = info && Array.isArray(info.errors) ? info.errors.filter(Boolean) : [];
+  const pageErrors = effective && Array.isArray(effective.errors) ? effective.errors.filter(Boolean) : [];
   const ownErrors = Array.isArray(report.errors) ? report.errors.filter(Boolean) : [];
   const payload = {
-    ready: info ? Boolean(info.ok) : Boolean(report.page && report.page.ok),
-    webgl2: info ? Boolean(info.webgl2) : Boolean(report.page && report.page.webgl2),
-    renderer: (info && info.renderer) || (report.page && report.page.renderer) || null,
+    ready: effective ? Boolean(effective.ok) : Boolean(report.page && report.page.ok),
+    webgl2: effective ? Boolean(effective.webgl2) : Boolean(report.page && report.page.webgl2),
+    renderer: (effective && effective.renderer) || (report.page && report.page.renderer) || null,
     errors: [...pageErrors, ...ownErrors].slice(0, 3),
     /**
      * WHERE the page got to, which the fields above cannot say.
