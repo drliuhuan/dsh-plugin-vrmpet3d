@@ -1448,6 +1448,13 @@ group('8. registered routes and both catalogs over HTTP');
     ok(Boolean(chains && chains.DaiMao), 'with a chain the model file actually declares');
     eq(chains && chains.DaiMao && chains.DaiMao.stiffness, 0.4,
       'and the number the operator tuned for it (0.4 on the ahoge), not the file\'s own value');
+    /**
+     * …and the block covers EVERY chain of the model, including ones the profile no longer overrides: a chain that
+     * vanished from the snapshot would silently fall back to the model FILE's value on the next profile, which is a
+     * different number than the one their pet is using (measured 2026-10-14: 复位ing 尾巴 dropped `WeiBa` from the block).
+     */
+    ok(Boolean(chains && chains.WeiBa && chains['WeiBa.L'] && chains['WeiBa.R']),
+      'and it names the model\'s own chains, including one the profile no longer overrides (尾巴)');
   }
 
   // The two catalogs are disjoint at the payload level and at the route level. The bundled model is a MODEL and

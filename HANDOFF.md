@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2442 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2443 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -130,9 +130,10 @@ worse than a missed one. Four assertions pin it (`scripts/verify.mjs`: first see
 turn starting, and the real falling edge).
 
 **THE PACK'S SPRING VALUES SHIP TOO** (operator, 2026-10-14: 「把当前 BlueFatFish 弹簧骨的参数作为默认参数推上去」). `BlueFatFish.vrm` is a
-BUNDLED model, and the operator had tuned all twenty of its chains (呆毛 0.4/0.2/0.05, the hair 0.05/0.2/0.2, 耳朵
-1/0.2/0.05, the skirt chains drag/gravity only). Those numbers cannot travel in a profile: `preferences.springs` is keyed
-by the machine's model ID (`m1`), which is positional. So they live in `assets/models/vrmpet3d-models.json` as
+BUNDLED model, and the block is a snapshot of ALL TWENTY-TWO of its chains as they RESOLVE (呆毛 0.4/0.2/0.05, the hair
+0.05/0.2/0.2, 耳朵 1/0.2/0.05, the skirt chains 1–1.5/0.2/0.2, 尾巴 0.5/0.5/0.05). Those numbers cannot travel in a
+profile: `preferences.springs` is keyed by the machine's model ID (`m1`), which is positional. So they live in
+`assets/models/vrmpet3d-models.json` as
 `{ springs: { "BlueFatFish.vrm": { "DaiMao": { stiffness, dragForce, gravityPower } } } }` — file name and CHAIN KEY, both
 of which are the model file's own words — and `Scene.applySprings` resolves THREE layers, most specific first: the user's
 own slider, the pack's suggestion (`Scene.setSpringDefaults`), then the model file's authored value. The host does the

@@ -6,15 +6,20 @@
         "dragForce": 0.2,
         "gravityPower": 0.05
       },
-      "ErDuo.L": {
-        "stiffness": 1,
+      "LiuHai": {
+        "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.05
+        "gravityPower": 0.2
       },
-      "ErDuo.R": {
-        "stiffness": 1,
+      "LiuHai.R": {
+        "stiffness": 0.05,
         "dragForce": 0.2,
-        "gravityPower": 0.05
+        "gravityPower": 0.2
+      },
+      "LiuHai.L": {
+        "stiffness": 0.05,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
       },
       "FaBing.L": {
         "stiffness": 0.05,
@@ -26,13 +31,15 @@
         "dragForce": 0.2,
         "gravityPower": 0.2
       },
-      "H_QunZi.L": {
+      "ErDuo.L": {
+        "stiffness": 1,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.05
       },
-      "H_QunZi.R": {
+      "ErDuo.R": {
+        "stiffness": 1,
         "dragForce": 0.2,
-        "gravityPower": 0.2
+        "gravityPower": 0.05
       },
       "Hou_hair": {
         "stiffness": 0.05,
@@ -49,47 +56,60 @@
         "dragForce": 0.2,
         "gravityPower": 0.2
       },
-      "LiuHai": {
-        "stiffness": 0.05,
-        "dragForce": 0.2,
-        "gravityPower": 0.2
-      },
-      "LiuHai.L": {
-        "stiffness": 0.05,
-        "dragForce": 0.2,
-        "gravityPower": 0.2
-      },
-      "LiuHai.R": {
-        "stiffness": 0.05,
+      "Z_QunZi": {
+        "stiffness": 1,
         "dragForce": 0.2,
         "gravityPower": 0.2
       },
       "Q_QunZi.L": {
-        "dragForce": 0.2,
-        "gravityPower": 0.2
-      },
-      "Q_QunZi.R": {
+        "stiffness": 1,
         "dragForce": 0.2,
         "gravityPower": 0.2
       },
       "QunZi.L": {
+        "stiffness": 1.5,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "H_QunZi.L": {
+        "stiffness": 1.5,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Z_HouQunZi": {
+        "stiffness": 1.5,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "H_QunZi.R": {
+        "stiffness": 1.5,
         "dragForce": 0.2,
         "gravityPower": 0.2
       },
       "QunZi.R": {
+        "stiffness": 1.5,
+        "dragForce": 0.2,
+        "gravityPower": 0.2
+      },
+      "Q_QunZi.R": {
+        "stiffness": 1,
         "dragForce": 0.2,
         "gravityPower": 0.2
       },
       "WeiBa": {
+        "stiffness": 0.5,
+        "dragForce": 0.5,
+        "gravityPower": 0.0484
+      },
+      "WeiBa.L": {
+        "stiffness": 0.5,
+        "dragForce": 0.5,
         "gravityPower": 0.05
       },
-      "Z_HouQunZi": {
-        "dragForce": 0.2,
-        "gravityPower": 0.2
-      },
-      "Z_QunZi": {
-        "dragForce": 0.2,
-        "gravityPower": 0.2
+      "WeiBa.R": {
+        "stiffness": 0.5,
+        "dragForce": 0.5,
+        "gravityPower": 0.05
       }
     }
   }

@@ -1,5 +1,5 @@
 {
-  "version": 71,
+  "version": 48,
   "preferences": {
     "scope": "global",
     "petSurface": "both",
@@ -29,8 +29,8 @@
     "gazeIdleSeconds": 2,
     "x": 0,
     "y": 0,
-    "placementX": 0.03906247019767761,
-    "placementY": 0.29813218390804597,
+    "placementX": 0.146875,
+    "placementY": 0.1755267614605783,
     "motions": {
       "resting": [
         "a9",
@@ -451,7 +451,83 @@
         "tail"
       ]
     },
-    "springs": {}
+    "springs": {
+      "m1": {
+        "DaiMao": {
+          "dragForce": 0.2
+        },
+        "LiuHai": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "LiuHai.R": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "LiuHai.L": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "FaBing.L": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "FaBing.R": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "ErDuo.L": {
+          "dragForce": 0.2
+        },
+        "ErDuo.R": {
+          "dragForce": 0.2
+        },
+        "Hou_hair": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "Hou_hair.L": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "Hou_hair.R": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "Z_QunZi": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "Q_QunZi.L": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "QunZi.L": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "H_QunZi.L": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "Z_HouQunZi": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "H_QunZi.R": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "QunZi.R": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        },
+        "Q_QunZi.R": {
+          "dragForce": 0.2,
+          "gravityPower": 0.2
+        }
+      }
+    }
   },
   "live": {
     "app": "m1",
