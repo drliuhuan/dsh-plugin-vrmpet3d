@@ -1198,6 +1198,8 @@
       sizeBefore: bubbleSizeBefore,
       whiteSpace: bubbleStyle ? bubbleStyle.whiteSpace : null,
       maxWidth: bubbleStyle ? bubbleStyle.maxWidth : null,
+      /** The plate is a FIXED width now — the shared number, identical on both surfaces (2026-10-14). */
+      plateWidth: bubbleStyle ? bubbleStyle.width : null,
     };
 
     /**
@@ -1240,9 +1242,12 @@
       && onSpeech.size === onSpeech.sizeBefore       // …and still did not move the pet
       && parseFloat(onSpeech.fontAfter) > parseFloat(onSpeech.fontBefore)   // the bubble itself got bigger…
       && onSpeech.fontAfter === onSpeech.expectedFont // …to exactly what the core says it should be
-      && onSpeech.whiteSpace === 'normal'            // 碎碎念 WRAPS (状态文字 is the one that must not)
-      && parseFloat(onSpeech.maxWidth) > 0           // at the pet's own width, so the bubble cannot outgrow it
-      && Math.round(parseFloat(onSpeech.maxWidth)) <= onSpeech.boxWidth
+      /**
+       * A FIXED plate at the SHARED width (operator, 2026-10-14: 「你刚刚修改的时候有一瞬间是成功了的，内置碎碎念的宽度变长了」).
+       * It used to be `max-width: <the pet's box>`, which shrank the in-app plate to a short line and made it look like
+       * half the floating window's. The plate is one constant on both surfaces now; the wheel resizes the TEXT.
+       */
+      && Math.round(parseFloat(onSpeech.plateWidth)) === (CORE.SPEECH_LIMITS ? CORE.SPEECH_LIMITS.wrapPx : 220)
       && Boolean(textOnly.stored) && textOnly.stored[modelId] === textOnly.scale // remembered PER MODEL
       && Boolean(pushedPatch) && Boolean(pushedPatch.statusScale)                // and pushed to the host…
       && pushedPatch.statusScale[modelId] === 1.3                                // …so a snapshot cannot drop it
