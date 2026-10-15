@@ -194,6 +194,25 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     && pageScript.includes("setRowHidden('speech-ai', !speechSourceIsAi())")
     && pageScript.includes('speech.aiVisible'),
     "碎碎念's AI block is shown for the AI source alone, and that visibility is published");
+
+  /**
+   * THE 加载中 COVER ON BOTH PANELS.
+   *
+   * Operator, 2026-10-14: 「给通用设置和模型参数设置面板加上"加载中"的提示，以免用户看着一个dummy界面干等着」. Asserted statically
+   * because the property is static: the markup arrives ALREADY in the loading state (it is what paints first), the overlay
+   * is in the HTML rather than created by the script (a script that never runs still has to show something), and the
+   * script lifts the state on the first render, on each load failure and on a watchdog — a cover only success can lift is
+   * the failure mode this replaces.
+   */
+  const modelHtml = readFileSync(join(ROOT, 'lib', 'config-page.html'), 'utf8');
+  const pagesCss = readFileSync(join(ROOT, 'lib', 'pages.css'), 'utf8');
+  ok(globalHtml.includes('data-loading="true"') && modelHtml.includes('data-loading="true"')
+    && globalHtml.includes('class="page-loading"') && modelHtml.includes('class="page-loading"')
+    && pagesCss.includes('body[data-loading="true"] main'),
+    'both panels ship the 加载中 cover in their markup, with the dimming rule beside it');
+  ok(pageScript.includes('function setLoading(done)')
+    && (pageScript.match(/setLoading\(true\);/g) || []).length >= 4,
+    'and the script lifts it on the first render, on both load failures, and on the watchdog');
 }
 
 // ---------------------------------------------------------------------------

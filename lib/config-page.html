@@ -16,7 +16,20 @@
   -->
   <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
 </head>
-<body data-page="model">
+<body data-page="model" data-loading="true">
+<!--
+  The 加载中 cover — see the note in `lib/pages.css`.
+
+  It is in the MARKUP, not created by the script, so it is on screen from the first paint: between the HTML
+  arriving and `lib/config-page.js` finishing its first render there is a moment where the form below is a dummy
+  (markup defaults, empty lists) and the user has no way to tell. `body[data-loading="true"]` shows this and dims
+  the form; the script clears the attribute when the data is in.
+-->
+<div class="page-loading" role="status" aria-live="polite">
+  <span class="page-loading-spinner" aria-hidden="true"></span>
+  <span>正在加载设置…</span>
+</div>
+
   <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>模型参数</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
   <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">模型</a><a href="#settings-1">表情</a><a href="#settings-2">部位</a><a href="#settings-3">弹簧骨</a></nav>
   <main>

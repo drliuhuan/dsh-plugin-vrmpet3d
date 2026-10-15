@@ -315,3 +315,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .model-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
   .model-drop { min-height: 132px; }
 }
+
+/* ===========================================================================
+   加载中：首屏数据到位之前，别让用户对着 dummy 表单干等
+
+   Operator, 2026-10-14: 「给通用设置和模型参数设置面板加上"加载中"的提示，以免用户看着一个dummy界面干等着」.
+
+   The markup ships the real form (the HTML is what paints first), and both pages fill it from the host a moment
+   later — settings, catalog, model info, motions. Until that first render the form is a dummy: every slider sits
+   at its markup default and every list is empty, which reads as "these are your settings" rather than "this is
+   not your settings yet". So the page starts in `body[data-loading="true"]`: the panel is dimmed and made
+   non-interactive, and the overlay below covers the gap with a spinner and a sentence. `lib/config-page.js`
+   clears the attribute on the first successful render, on every load failure (with the reason in `#status`), and
+   on a watchdog — a spinner that never stops is worse than the dummy it replaced.
+   =========================================================================== */
+body[data-loading="true"] main { opacity: .35; filter: saturate(.5); pointer-events: none; }
+body[data-loading="true"] .page-loading { display: flex; }
+.page-loading {
+  display: none; position: fixed; inset: 0; z-index: 30;
+  align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+  background: color-mix(in srgb, var(--surface, #14161c) 62%, transparent);
+  color: var(--text, #e8eaf0); font-size: 14px; letter-spacing: .02em;
+}
+.page-loading .page-loading-spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text, #e8eaf0) 26%, transparent);
+  border-top-color: var(--accent, #6aa9ff);
+  animation: vrmpet3d-spin .8s linear infinite;
+}
+@keyframes vrmpet3d-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  /* The text carries the meaning; the spin is decoration. */
+  .page-loading .page-loading-spinner { animation-duration: 3s; }
+}
