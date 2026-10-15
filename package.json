@@ -18,6 +18,7 @@
     "desktop",
     "assets",
     "!assets/whale-tail.apng",
+    "!assets/screenshots",
     "docs",
     "cordis.patch.yml",
     "README.md",
