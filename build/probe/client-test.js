@@ -8610,6 +8610,39 @@
   });
 
   /**
+   * 预览里「默认无表情」也要生效 (operator, 2026-10-14: 「工作中状态时，预览跳舞的动作，默认无表情的覆盖似乎没成功」).
+   *
+   * `MOTION_FACE_DEFAULT` ('none') is an ANSWER rather than an expression name: the clip path maps it to "no face", while the
+   * PREVIEW path used to pass the string through — so the model was asked for an expression called `none`, found none, and the
+   * clip's own face stayed on. Asserted on `currentFace`, which is what every consumer reads, and without needing a clip: the
+   * preview branch is the one under test.
+   */
+  check('a preview of 「默认无表情」 answers "no face" instead of asking for an expression called none', function () {
+    var faceScene = widget.scene;
+    if (!faceScene || typeof faceScene.setPreview !== 'function' || typeof faceScene.currentFace !== 'function') {
+      report.previewFace = { available: false };
+      return false;
+    }
+    var savedPreview = faceScene.preview;
+    var out = {};
+    try {
+      faceScene.setPreview({ state: 'working', expression: 'none' });
+      var blank = faceScene.currentFace();
+      out.blank = blank ? { expression: blank.expression, mouth: blank.mouth } : null;
+      out.blankIsAnAnswer = Boolean(blank);
+      faceScene.setPreview({ state: 'working', expression: 'happy' });
+      var named = faceScene.currentFace();
+      out.named = named ? named.expression : null;
+    } finally {
+      if (typeof faceScene.setPreview === 'function') faceScene.setPreview(savedPreview);
+    }
+    report.previewFace = out;
+    // 「默认」 is an answer OF null (not "no answer at all"), and a real name still passes through.
+    return out.blankIsAnAnswer === true && out.blank && out.blank.expression === null && out.blank.mouth === null
+      && out.named === 'happy';
+  });
+
+  /**
    * 预览也要认速度 (operator, 2026-10-14: 「设置了动作的播放速度后，预览播放时并没有生效」).
    *
    * The preview is a THIRD playback entry point, and it called `startPlayback(id, record)` with no state — so the rate was looked

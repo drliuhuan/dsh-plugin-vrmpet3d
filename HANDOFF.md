@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2493 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2494 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,15 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**预览里的「默认无表情」以前是个空操作** (operator, 2026-10-14: 「工作中状态时，预览跳舞的动作，默认无表情的覆盖似乎没成功」). `MOTION_FACE_DEFAULT`
+(`'none'`) is not an expression NAME, it is an ANSWER — 「默认」 means "no expression at all, back to the model's own initial face" —
+and `Scene.currentFace` already mapped it to `null` on the CLIP path. The PREVIEW shortcut at the top of that same function passed the
+string through verbatim, so previewing a clip whose template says `expression: 'none'` asked the model for an expression literally
+called `none`, found none, and left the CLIP's own face in place. The object still came back, because that is what tells
+`expressionTargets` the question HAS been answered — which is exactly why the symptom read as 「覆盖没成功」 rather than as a broken
+preview. Both paths now share one mapping (「跟随」 included), pinned by `previewFace: {"blank":{"expression":null,"mouth":null},
+"blankIsAnAnswer":true,"named":"happy"}`.
 
 **跳舞：一个新状态、一行菜单，和一条已经在的通道** (operator, 2026-10-14: 「在状态和动作中，增加跳舞的状态；给内置和外置宠物模型增加右键菜单选项"跳支舞"，
 作用是在dance文件夹中随机选择一个动作执行一次，动作完成后或者用户双击模型回到idle状态。跳舞也会被进入工作状态打断」, plus 「把dance.vrma压缩成br格式」 and
