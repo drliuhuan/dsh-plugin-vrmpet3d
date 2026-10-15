@@ -2109,11 +2109,15 @@ group('6d. 碎碎念: what the pet says on its own');
   clock += 10_000;
   eq(idleClip.observe(idlePrefs, 'resting', null, 'zh', rnd, { id: 'a1', state: 'resting' }), '休息时的一句',
     'and then the PLAYING clip\'s line is the idle remark');
-  // A clip whose line is written for another state says nothing here: the pair is (state, clip), exactly as it is
-  // for the expression and the gaze switch.
+  // A clip whose line is written for another state does NOT say that line here: the pair is (state, clip), exactly as it
+  // is for the expression and the gaze switch. What the pet says instead is the shipped line for THIS state — the last
+  // tier of the 2026-10-14 chain (「AI > 自定义（非空时）> 内置」), where this used to be silence.
   clock += hold + 1;
-  eq(withClip.observe(clipPrefs, 'done', null, 'zh', rnd, { id: 'a1', state: 'resting' }), null,
+  const otherStateLine = withClip.observe(clipPrefs, 'done', null, 'zh', rnd, { id: 'a1', state: 'resting' });
+  eq(otherStateLine !== '休息时的一句', true,
     'a line stored for another state\'s clip is not spoken here: the pair is per state, like every other per-clip field');
+  eq(core.speechLines('zh', 'done').indexOf(otherStateLine) !== -1, true,
+    'while the shipped line for the state that IS being reported is what gets said');
 
   // The idle remark: not before the drawn gap, then once, and never inside the minimum gap after a line.
   const idler = new core.SpeechMachine(() => clock);
@@ -2236,15 +2240,19 @@ group('6e. 碎碎念: one box per state, and the AI settings beside them');
   eq(core.pickSpeechLine('zh', 'working', () => 0, null, ['我的台词']), '我的台词',
     'a custom pool is what the picker draws from');
   eq(core.speechLines('zh', 'working').indexOf(core.pickSpeechLine('zh', 'working', () => 0, null, [])) !== -1, true,
-    'and an EMPTY one falls back to the shipped table while the built-in source is the one in force');
+    'and an EMPTY one falls through to the shipped table');
   /**
-   * …but NOT once another source is chosen: "开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念" (operator,
-   * 2026-10-11). The sixth argument is the mode, and `false` means the table is not in the chain at all.
+   * THE THIRD TIER IS ALWAYS IN THE CHAIN (operator, 2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）> 内置」).
+   *
+   * It used to be switched off by choosing AI or 自定义 — 「开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念」 (operator,
+   * 2026-10-11) — and THAT rule is what turned a busy model into a silent pet: measured 2026-10-14, the provider answered
+   * `SERVER: Service is too busy` and the only symptom was 「AI碎碎念好像挂了」. The chain is now AI → the user's box when it
+   * has anything in it → the shipped table, in every source.
    */
-  eq(core.pickSpeechLine('zh', 'working', () => 0, null, [], false), null,
-    'with the table OFF, an empty pool is SILENCE — the source the user chose is the whole of it');
-  eq(core.pickSpeechLine('zh', 'working', () => 0, null, ['我的台词'], false), '我的台词',
-    'while a pool the user DID write is still spoken in that mode');
+  eq(core.pickSpeechLine('zh', 'working', () => 0, null, ['我的台词']), '我的台词',
+    'a pool the user DID write is the whole answer for that event, whatever the source');
+  eq(core.speechLines('zh', 'working').indexOf(core.pickSpeechLine('zh', 'working', () => 0, '别的', [])) !== -1, true,
+    'and the shipped table is the LAST tier rather than being switched off by the choice of source');
   eq(core.pickSpeechLine('zh', 'working', () => 0, '我的台词', ['我的台词', '第二句']), '第二句',
     'the no-repeat rule covers custom lines too');
 }
@@ -2266,19 +2274,27 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   // seconds, which stopped being past it when the operator's default became eight (2026-10-13).
   clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
   /**
-   * THE OPERATOR'S RULE (2026-10-11): "开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念."
+   * THE FALLBACK CHAIN (operator, 2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）> 内置」).
    *
-   * Choosing a source other than the built-in one takes the shipped table OUT of the chain, so a state nobody wrote a
-   * line for says NOTHING. It used to fall through to DSH's own line, which left the pet speaking in the app's voice
-   * exactly where the user had chosen their own — the one place "I set it to AI/custom" has to be believed.
+   * This REPLACES the 2026-10-11 rule ("开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念"), which took the shipped table out
+   * of the chain for the AI and 自定义 sources and made an unwritten state say NOTHING — the reason a busy model looked
+   * like 「AI碎碎念好像挂了」. A non-empty box still replaces the table rather than merging with it.
    */
-  eq(custom.observe(customPrefs, 'done', null, 'zh', rnd), null,
-    'a state whose box is empty says NOTHING once custom is chosen — the shipped table is off');
+  eq(core.speechLines('zh', 'done').indexOf(custom.observe(customPrefs, 'done', null, 'zh', rnd)) !== -1, true,
+    'a state whose box is empty speaks a SHIPPED line once custom is chosen — the table is the last tier');
   // …and the BUILT-IN source keeps it: that IS the table, and the table is what built-in means.
   const shipped = new core.SpeechMachine(() => clock);
   const shippedPrefs = prefs({ source: 'builtin' });
   eq(shipped.observe(shippedPrefs, 'done', null, 'zh', rnd), core.speechLines('zh', 'done')[0],
-    'while the built-in source still speaks the shipped line for the same empty box');
+    'while the built-in source speaks the same shipped line for the same empty box');
+  /**
+   * …and a box the user DID write wins in the built-in source too, which is what the settings page's own words promise
+   * (「留空则用内置短语」): the code used to ignore the box entirely in that source and only read the table.
+   */
+  const boxed = new core.SpeechMachine(() => clock);
+  const boxedPrefs = prefs({ source: 'builtin', lines: { done: '我写的完成词' } });
+  eq(boxed.observe(boxedPrefs, 'done', null, 'zh', rnd), '我写的完成词',
+    'and a box the user wrote is spoken even when the source is 内置');
 
   /**
    * `ai`: the machine publishes the INTENT and shows the fallback meanwhile.
@@ -2302,14 +2318,16 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   // the shipped hold became eight (operator, 2026-10-13).
   clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
   /**
-   * Moving on with AI on: the request goes out, but the PET says nothing on its own.
+   * Moving on with AI on: the request goes out AND the pet says the shipped line while the model thinks.
    *
-   * With the shipped table off (2026-10-11) there is no local line for a state the user did not write one for, so the
-   * model's answer is the whole line — which is why the sequence number is the thing to assert here, not the text.
+   * With the table now the last tier (2026-10-14) there is always something local to show, so the assertion is about the
+   * line being one of the shipped ones for that state — plus the new sequence number, which is what proves the request
+   * was published for the event that fired.
    */
-  eq(ai.observe(aiPrefs, 'done', null, 'zh', rnd), null,
-    'moving on says nothing on its own once AI is chosen: the shipped table is off');
-  eq(ai.wantsAi.seq, firstSeq + 1, 'and asks again, with a new sequence number');
+  const movingLine = ai.observe(aiPrefs, 'done', null, 'zh', rnd);
+  eq(core.speechLines('zh', 'done').indexOf(movingLine) !== -1, true,
+    'moving on speaks a shipped line once AI is chosen — and still asks the model');
+  eq(ai.wantsAi.seq, firstSeq + 1, 'with a new sequence number for the new event');
 
   eq(ai.say('模型写的一句', 'done'), true, 'an answer is accepted');
   eq(ai.line(), '模型写的一句', 'and becomes the bubble');
@@ -2350,13 +2368,13 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
     motionClips: { working: { a1: { prompt: '只说提示词' } } },
     speech: { source: 'ai' },
   });
-  eq(noteOnly.observe(noteOnlyPrefs, 'working', null, 'zh', rnd, { id: 'a1', state: 'working' }), null,
-    'a clip with a 提示词 and no 碎碎念 has no local line in AI mode, exactly like a state with an empty box');
+  eq(core.speechLines('zh', 'working').indexOf(noteOnly.observe(noteOnlyPrefs, 'working', null, 'zh', rnd, { id: 'a1', state: 'working' })) !== -1, true,
+    'a clip with a 提示词 and no 碎碎念 still has the shipped line to say while the model thinks');
   eq(noteOnly.wantsAi.clipPrompt, '只说提示词', 'while the request still carries the refinement');
   clock += core.DEFAULT_SPEECH.holdSeconds * 1000;
   const lineOnly = new core.SpeechMachine(() => clock);
-  eq(lineOnly.observe(clipAiPrefs, 'done', null, 'zh', rnd, { id: 'a1', state: 'done' }), null,
-    'and the pair is per state here too: a clip with nothing written for 任务达成 refines nothing');
+  eq(core.speechLines('zh', 'done').indexOf(lineOnly.observe(clipAiPrefs, 'done', null, 'zh', rnd, { id: 'a1', state: 'done' })) !== -1, true,
+    'and the pair is per state here too: a clip with nothing written for 任务达成 gets the state\'s shipped line');
   eq(lineOnly.wantsAi.clipPrompt, null, 'so the host is asked the state\'s own question and no more');
 
   // Switched off means no speech AND no calls: the switch is about the pet talking, not about its voice box.
@@ -2457,10 +2475,18 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   eq(second === '别摸耳朵' || second === '痒', true, 'while one after the gap speaks again');
   eq(second === said, false, 'and prefers a line it did not just say');
 
-  // A part with no lines of its own falls back to the STATE's box — the user's own pool, never the shipped table.
+  /**
+   * A part with no lines of its own says its SHIPPED pool, and says it BEFORE the state's box is consulted.
+   *
+   * The pool is now in the chain for every source (2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）> 内置」), where
+   * it used to belong to the built-in source alone — so a part with an empty box in AI or 自定义 mode answers 摸头 with a
+   * shipped line instead of borrowing the state's remark. The part's own box still outranks it, and the state's box is
+   * still the last tier.
+   */
   const borrowed = new core.SpeechMachine(() => clock);
-  eq(borrowed.react(reactions, head, 'working', 'zh', rnd), '状态台词',
-    'a part with no lines borrows the state\'s own remark');
+  const borrowedLine = borrowed.react(reactions, head, 'working', 'zh', rnd);
+  eq(borrowedLine !== '状态台词', true, 'a part with no lines does not borrow the state\'s remark when it has its own pool');
+  eq(typeof borrowedLine === 'string' && borrowedLine.length > 0, true, 'and says something of its own instead');
   /**
    * A part with SHIPPED lines says them, and says them BEFORE the state's box is consulted — while the source is
    * the built-in one, which is the only source those lines belong to (2026-10-12).
@@ -2507,19 +2533,17 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
     { region: 'butt', bone: null, mesh: 'pantsu', part: buttItem }, 'working', 'zh', rnd);
   eq(core.partSpeechLines(buttItem, true, 'zh', 'click').indexOf(buttLine) !== -1, true, 'and so does 屁股');
   /**
-   * …and the SAME two rows go quiet once the source is 自定义: the shipped table is the built-in source, so the
-   * press falls through to the user's own state box exactly as it does for a part with no table entry at all.
-   *
-   * This is the sibling the operator's rule needs (2026-10-12: 「如果设置了AI碎碎念，就停止输出内置的碎碎念」), and it
-   * is asserted on the press path rather than on the table alone because the table being switched off and the
-   * machine honouring that are two different facts.
+   * …and the SAME two rows still answer once the source is 自定义, because the shipped PART pool is now in the chain for
+   * every source (2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）> 内置」). Until that day the pool belonged to the
+   * built-in source alone (2026-10-12: 「如果设置了AI碎碎念，就停止输出内置的碎碎念」) and the press fell through to the state's
+   * box instead — which is the silence this chain was set up to remove.
    */
   const customSource = core.cleanPreferences({
     speech: { enabled: true, source: 'custom', lines: { working: '状态台词' } },
   });
   eq(new core.SpeechMachine(() => clock).react(customSource,
-    core.partItemById(customSource, 'chest'), 'working', 'zh', rnd), '状态台词',
-  'and a 自定义 source says the state\'s own line instead of the shipped 变态！');
+    core.partItemById(customSource, 'chest'), 'working', 'zh', rnd) !== '状态台词', true,
+  'and a 自定义 source says the shipped 变态！ rather than the state\'s remark');
   // The user's own box outranks the shipped one, which is the operator's own condition for both.
   const chestWritten = core.cleanPreferences({
     parts: { items: [{ id: 'chest', label: '胸部', region: 'chest', speech: { lines: ['不要脸'] } }] },
@@ -2529,15 +2553,15 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
     core.partItemById(chestWritten, 'chest'), 'working', 'zh', rnd), '不要脸',
   'while a line the user wrote replaces the shipped one — in every source');
   /**
-   * In AI mode the shipped line is OFF and the model is what speaks: the press is silence until the answer lands, and
-   * the request still names the part. Both halves matter — a press that said 变态！ would be the built-in table
-   * speaking over the model the user asked for, and a press that asked for nothing would be a lost reaction.
+   * In AI mode the shipped line STANDS while the model writes, and the request still names the part. Both halves matter —
+   * it used to be silence until the answer landed (2026-10-12), and the fallback chain of 2026-10-14 is what put the
+   * shipped pool back in front of the wait so a busy model cannot mute a press.
    */
   const chestAi = core.cleanPreferences({ speech: { enabled: true, source: 'ai' } });
   const chestAsk = new core.SpeechMachine(() => clock);
   const chestHeld = chestAsk.react(chestAi, core.partItemById(chestAi, 'chest'), 'working', 'zh', rnd);
-  eq(chestHeld, null,
-    'in AI mode the shipped line is NOT said while the model writes it — the pet is silent');
+  eq(typeof chestHeld === 'string' && chestHeld.length > 0, true,
+    'in AI mode the shipped line is said while the model writes it — the press is never silent');
   eq(chestAsk.wantsAi && chestAsk.wantsAi.part, 'chest', 'with the request for that part standing beside it');
   // And the user's own part line still STANDS in AI mode, which is what keeps this from being "AI mode is mute".
   const chestAiWritten = core.cleanPreferences({
@@ -2548,15 +2572,17 @@ group('6f. 碎碎念: the AI request, the fallback chain, and the answer');
   eq(chestAiAsk.react(chestAiWritten, core.partItemById(chestAiWritten, 'chest'), 'working', 'zh', rnd), '不要脸',
     'while a line the user wrote for that part is still said over the top of the wait');
   eq(chestAiAsk.wantsAi && chestAiAsk.wantsAi.part, 'chest', 'with the model still asked about it');
-  // …but with no line in EITHER box the touch is silence: a press is not an excuse to reach into the shipped
-  // table, which would answer a touched ear with 开始干活了.
+  // …and with nothing in ANY box the part still answers from its shipped pool, so the only way a press goes quiet is a
+  // region with no pool and no box — the state's TABLE is still never borrowed, because 开始干活了 is a remark about the
+  // turn rather than about the ear.
   const barePrefs = core.cleanPreferences({
     parts: { items: [{ id: 'body', label: '身体', region: 'body' }] },
     speech: { enabled: true, source: 'custom', lines: {} },
   });
   const untouched = new core.SpeechMachine(() => clock);
-  eq(untouched.react(barePrefs, core.partItemById(barePrefs, 'body'), 'working', 'zh', rnd), null,
-    'a part with nothing to say stays silent rather than borrowing the shipped table');
+  const bareLine = untouched.react(barePrefs, core.partItemById(barePrefs, 'body'), 'working', 'zh', rnd);
+  eq(core.speechLines('zh', 'working').indexOf(bareLine) === -1, true,
+    'a part with empty boxes never borrows the shipped STATE table, which answers a different question');
   eq(untouched.wantsAi, null, 'and asks the host for nothing');
   eq(untouched.react(reactions, null, 'working', 'zh', rnd), null, 'as does a press nobody measured a part for');
   eq(new core.SpeechMachine(() => clock).react(

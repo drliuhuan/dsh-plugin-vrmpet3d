@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2443 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2446 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -117,6 +117,19 @@ does not, and the file's own tracks stop counting in that case too (the same ans
 at zero is not on screen). `Scene.blinkState()`'s `paused` reads the same rule, because it exists to explain the gate.
 The dance clip is the first user: `template.working` gives it `expression: "none"` and `gaze: false`, so it plays with a
 blank face, with blinking, and without following the cursor — all three by file name, in the pack's manifest.
+
+**THE 碎碎念 FALLBACK CHAIN RUNS ALL THE WAY TO 内置** (operator, 2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）
+> 内置」). It used to stop one tier short: choosing AI or 自定义 took the shipped table OUT of the chain (the 2026-10-11 rule
+「开启AI碎碎念或者自定义碎碎念之后，关闭内置的默认碎碎念」), so an empty box meant SILENCE — measured the same day, when the
+provider answered `SERVER: Service is too busy` and the only visible symptom was 「AI碎碎念好像挂了」. The order is now, for
+every state, every idle remark and every press: the model's line (requested as before, and it replaces whatever is on
+screen when it lands) → the user's own box, when it has anything in it → the SHIPPED table. A non-empty box still
+REPLACES the table for that event rather than merging with it, and the STATE's shipped table is still deliberately absent
+from the PRESS chain (a touched ear must not answer 开始干活了 — the part's own shipped pool is used instead, which it now
+gets in every source too). One wording consequence, and one real defect found on the way: 通用设置's empty-box
+placeholders now read 「留空则用内置短语」 for 自定义 as well (they said 「不说话」), and 内置 模式 now HONOURS a box the user wrote —
+the code had been ignoring it while the page's own label promised the opposite. Ten assertions that pinned the old rule
+were REWRITTEN rather than deleted, so what they describe is the chain that replaced it.
 
 **A FIRST SIGHTING IS A BASELINE, NOT AN EDGE** (operator, 2026-10-14: 「每次关闭dsh再打开，桌宠就汇报任务完成，才恢复到idle」). `observeStoreEdge`
 compared each session's `running` with the value it remembered, and the FIRST time a session is seen `previous` is
