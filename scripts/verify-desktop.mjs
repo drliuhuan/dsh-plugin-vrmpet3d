@@ -1244,6 +1244,23 @@ if (live.skipped) {
           '任务达成 is published as gold and bold');
         ok(tones.error && tones.error.tone === 'danger', 'and 出错 as the danger colour');
         ok(motions.offered === 2, `listing the catalog the host serves (${motions.offered})`);
+        /**
+         * AND THE BOXES SHOW THE MAPPING IN FORCE, not merely the one on disk.
+         *
+         * Operator, 2026-10-15: 「通用设置里面为什么还有那么多未压缩的vrma信息？而且全部都没有勾选？」 — the profile's `motions` was
+         * empty, so this page ticked nothing while the pet played the pack's own clips: the screen that explains the
+         * configuration disagreed with the pet. `ticked` is what the boxes show, `tickedStored` is what the profile holds,
+         * and `defaultedStates` names the states riding on the pack's answer.
+         *
+         * Written profile-independently on purpose (this runs against whatever the operator has configured): what must hold
+         * is that the page shows AT LEAST as much as the profile stores, and that it can name the inherited states.
+         */
+        ok(Number(motions.ticked) >= Number(motions.tickedStored || 0),
+          `the ticked boxes cover the effective mapping, never less than the stored one (${motions.ticked} shown vs ${motions.tickedStored} stored)`);
+        ok(Array.isArray(motions.defaultedStates),
+          `and the page names the states riding on the pack's defaults (${JSON.stringify(motions.defaultedStates)})`);
+        ok(Number(motions.ticked) > 0 || Number(motions.tickedStored) > 0,
+          'with something ticked whenever either source maps a clip');
         ok(motions.oneShot === 1, `and counting the one-shot PAIR it declares (${motions.oneShot})`);
         /**
          * The per-state controls of the 2026-10-09 round: a play-mode dropdown and two face dropdowns
