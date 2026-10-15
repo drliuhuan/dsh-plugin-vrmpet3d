@@ -523,6 +523,14 @@
         currentSessionId: 's1',
       });
       machine.reset();
+      /**
+       * …and let the machine SEE that connected baseline once before the state under test.
+       *
+       * 离线 requires a connection to have existed (`everConnected`), which is the whole point of the rule: the first snapshot of a
+       * session reports `connected: false` and must not be read as a lost host. Without this tick the offline case below would run
+       * against a latch that was never set, and it would fail while the rule itself was right.
+       */
+      widget.tick(1 / 60);
 
       if (CORE.INTERACTION_STATES.indexOf(state) !== -1) {
         machine.setInteraction(state);

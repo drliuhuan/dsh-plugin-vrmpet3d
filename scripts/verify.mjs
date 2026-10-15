@@ -1044,7 +1044,7 @@ group('6. state machine precedence');
   const now = () => clock;
   const machine = new core.PetMachine(now, 120000);
 
-  const onlineIdle = { available: true, running: false, pending: false };
+  const onlineIdle = { available: true, connected: true, running: false, pending: false };
   /**
    * 离线 is about the CONNECTION, not about there being nothing to show.
    *
@@ -1055,8 +1055,25 @@ group('6. state machine precedence');
    */
   const offline = { available: false, connected: false, running: false, pending: false };
   const loading = { available: false, running: false, pending: false };
-  const working = { available: true, running: true, pending: false };
-  const waiting = { available: true, running: true, pending: true };
+  const working = { available: true, connected: true, running: true, pending: false };
+  const waiting = { available: true, connected: true, running: true, pending: true };
+
+  /**
+   * 离线 needs a connection to have EXISTED first.
+   *
+   * The snapshot's `connected` starts as false and only turns true when DSH's client store is installed, so the very first snapshot of
+   * a session reports `connected: false` — and testing that alone announced a lost connection at startup, which is exactly what the
+   * operator saw after the first version of this fix (「重启了，刚启动的时候还是在报离线」). The latch (`everConnected`) is what
+   * separates "not connected yet" from "connected, then gone", and these two assertions are the pair that holds it there.
+   */
+  {
+    const fresh = new core.PetMachine(now, 120000);
+    eq(fresh.resolve(offline), 'resting',
+      'a pet whose FIRST snapshot reports no connection waits in 空闲 rather than claiming the host is gone');
+    eq(fresh.resolve(onlineIdle), 'resting', 'and it rests once the store arrives');
+    eq(fresh.resolve(offline), 'offline',
+      'while a connection that existed and then went away is 离线 — the latch is what makes the word sayable');
+  }
 
   eq(machine.resolve(onlineIdle), 'resting', 'idle online pet rests');
   eq(machine.resolve(loading), 'resting',
