@@ -179,6 +179,30 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
       `while the settings copy stays the SHORT one (${settings.replace(/\s/g, '').length} vs ${guide.replace(/\s/g, '').length} characters)`);
   }
   /**
+   * AND THE 桌宠界面 STEP EXPLAINS THE RUNTIME FOLDER IT IS ABOUT TO CREATE.
+   *
+   * Operator, 2026-10-15: 「在初始安装引导页，加上建立插件runtime文件夹和dsh客户端硬链接的事情，并告知文件夹的位置，以免用户不知道文件夹怎么回事」.
+   * The folder is what a user finds on disk afterwards — a directory beside DSH holding what looks like an untouched copy of DSH — so
+   * the step must say what it is (a borrowed Electron), why it looks that way (hard links to DSH's own client files), that it costs no
+   * extra space, that it must live on the same volume, and that deleting it is safe. The LOCATION is asked of the HOST rather than
+   * written here, so the guide names the path this machine will really use.
+   */
+  {
+    const runtimeStep = (/<section class="settings-section setup-screen" id="setup-2"[\s\S]*?<\/section>/.exec(setupHtml) || [''])[0];
+    for (const [needle, what] of [
+      ['硬链接', 'hard links rather than copies'],
+      ['不额外占盘', 'that it costs no extra disk space'],
+      ['同盘', 'that it has to live on the same volume as DSH'],
+      ['Electron', 'why an Electron runtime is needed at all'],
+      ['重新建', 'that deleting it is safe'],
+    ]) {
+      ok(runtimeStep.includes(needle), `the 桌宠界面 step explains the runtime folder: ${what}（${needle}）`);
+    }
+    ok(runtimeStep.includes('id="setup-runtime-path"') && setupScript.includes("el('setup-runtime-path')")
+      && setupScript.includes("fetch('/vrmpet3d/desktop'"),
+      "and the folder's LOCATION is filled from the host, not written by hand");
+  }
+  /**
    * The ② 偏好模型 step is the SHARED picker now (2026-10-13), so the markup and the script have to agree on its
    * mount point exactly as they agree on the screens — and the typed-path box it replaced must be gone from the
    * script as well as from the markup, or a half-removed row would sit there wiring nothing.
