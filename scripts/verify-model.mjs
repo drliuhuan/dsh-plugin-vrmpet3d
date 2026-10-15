@@ -2347,6 +2347,22 @@ group('12. what a model contains, over real HTTP (the settings window reads this
   eq(hair.bones, 2, 'a chain reports how many joints it has');
 
   /**
+   * The COLLIDER DETAIL the per-collider switches are built from (operator, 2026-10-14: 「可以做成详细面板一个个开关吗？」).
+   *
+   * The counts beside it answer "how many"; this list answers "which", and the settings page renders one checkbox per
+   * entry. Asserted on the FIXTURE's own model — the app's real 12-sphere model is read in the live half — so the shape is
+   * pinned here and the numbers are pinned there.
+   */
+  const colliderDetail = (info.payload.springs && info.payload.springs.detail) || null;
+  ok(Array.isArray(colliderDetail), 'the model info describes its colliders one by one, not just as a count');
+  ok(colliderDetail.every((entry) => /^\d+:\d+$/.test(String(entry.key))),
+    `every entry carries the <group>:<collider> key the renderer filters by (${colliderDetail.map((e) => e.key).join(' ')})`);
+  ok(colliderDetail.every((entry) => typeof entry.group === 'number' && entry.bone !== undefined),
+    'and names the group and the bone each collider sits on, so a switch can say what it turns off');
+  ok(colliderDetail.length === Number(info.payload.springs.colliders),
+    'the detail list covers every collider the file declares');
+
+  /**
    * And its KEY, which has to be the same string the renderer stores overrides under.
    *
    * This is the drift guard for a rule that lives in two files on purpose: `lib/vrm-info.js` imports nothing

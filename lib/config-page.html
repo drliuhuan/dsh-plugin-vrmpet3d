@@ -130,6 +130,18 @@
         <option value="all">全部（模型自带的所有碰撞组）</option>
       </select>
     </div>
+    <!--
+      逐个碰撞体的开关（operator, 2026-10-14: 「只有body组一个碰撞体组吗？可以做成详细面板一个个开关吗？」）.
+
+      Every collider the model file declares gets a checkbox, named by its group and by the bone it sits on, with its
+      radius — because the radius decides how hard it pushes, and one oversized sphere is the difference between hair that
+      swings and a fringe pressed flat against the head. Built from the MODEL, so a file with no colliders shows no list
+      rather than switches that do nothing.
+    -->
+    <details id="spring-colliders-detail" hidden style="margin-top:8px">
+      <summary>逐个碰撞体 <span id="spring-collider-count"></span></summary>
+      <div id="spring-collider-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+    </details>
     <div class="row" style="margin-top:10px">
       <button id="spring-reset-all">全部恢复默认</button>
     </div>

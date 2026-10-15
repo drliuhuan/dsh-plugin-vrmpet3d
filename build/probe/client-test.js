@@ -8531,61 +8531,87 @@
   });
 
   /**
-   * THE COLLIDER SWITCH (operator, 2026-10-14: 「开body组测试一下」).
+   * THE COLLIDER SWITCH (operator, 2026-10-14: 「开body组测试一下」 → 「调整开关并不能即时生效」).
    *
-   * Driven on synthetic joints rather than the loaded avatar, because the answer must not depend on whether the model in
-   * the probe happens to declare colliders: the rule is 「which of a chain's OWN groups survive」, and it is the same rule
-   * for every model. `body` keeps only the group NAMED body, `all` restores the file verbatim, `off` is the behaviour of
-   * every build before this one.
+   * Built from the LIBRARY'S REAL SHAPES, because a stand-in is what let the first version ship inert: `manager.joints`
+   * is a Set, a group is a plain `{ name, colliders }` shared between the joints that reference it, and there is no
+   * `_colliderGroups` field at all. It also drives the reader the loader uses (`Scene.springColliderMemoryOf`) rather
+   * than assembling the same structure by hand.
    */
-  check('the collider switch keeps the body group, restores all of them, and can be turned off', function () {
+  check('the collider switch keeps the body group, honours per-collider switches, and can be turned off', function () {
     var scene = widget.scene;
-    if (!scene || typeof scene.applySpringColliders !== 'function') {
+    var Ctor = scene && scene.constructor;
+    if (!scene || !Ctor || typeof Ctor.springColliderMemoryOf !== 'function' || typeof scene.applySpringColliders !== 'function') {
       report.springColliders = { applied: false };
       return false;
     }
-    var body = { name: 'body', colliders: [] };
-    var wail = { name: 'wail', colliders: [] };
-    var other = { name: 'other', colliders: [] };
+    var colliders = function (n) {
+      var out = [];
+      for (var i = 0; i < n; i += 1) out.push({ shape: { radius: 0.1 } });
+      return out;
+    };
+    var body = { name: 'body', colliders: colliders(3) };
+    var wail = { name: 'wail', colliders: colliders(2) };
     var jointA = { colliderGroups: [body, wail] };
-    var jointB = { colliderGroups: [wail, other] };
-    var jointC = { colliderGroups: [] };
-    var savedMemory = scene.avatar ? scene.avatar.springColliderMemory : null;
-    var savedMode = (scene.preferences || {}).springColliders;
-    var read = function () { return [jointA.colliderGroups.length, jointB.colliderGroups.length, jointC.colliderGroups.length].join(','); };
-    var stateBody, stateAll, stateOff;
-    try {
-      scene.avatar.springColliderMemory = {
-        joints: [
-          { joint: jointA, groups: [body, wail] },
-          { joint: jointB, groups: [wail, other] },
-          { joint: jointC, groups: [] },
-        ],
-        declared: [body, wail, other],
-        mode: null,
-      };
-      scene.preferences.springColliders = 'body';
-      scene.applySpringColliders();
-      stateBody = read();
-      scene.avatar.springColliderMemory.mode = null;
-      scene.preferences.springColliders = 'all';
-      scene.applySpringColliders();
-      stateAll = read();
-      scene.avatar.springColliderMemory.mode = null;
-      scene.preferences.springColliders = 'off';
-      scene.applySpringColliders();
-      stateOff = read();
-    } finally {
-      scene.avatar.springColliderMemory = savedMemory;
-      if (savedMemory) savedMemory.mode = null;
-      if (scene.preferences) scene.preferences.springColliders = savedMode;
+    var jointB = { colliderGroups: [wail] };
+    var memory = Ctor.springColliderMemoryOf({ joints: new Set([jointA, jointB]) });
+    if (!memory) {
+      report.springColliders = { memory: null };
+      return false;
     }
-    report.springColliders = { body: stateBody, all: stateAll, off: stateOff };
-    // body: one group survives on A (大 body), none on B (no body group of its own); all: both chains get theirs back;
-    // off: nothing anywhere. C never had one and must stay empty in every mode.
-    return stateBody === '1,0,0' && stateAll === '2,2,0' && stateOff === '0,0,0';
+    var saved = scene.avatar ? scene.avatar.springColliderMemory : null;
+    var savedPrefs = {
+      springColliders: (scene.preferences || {}).springColliders,
+      springCollidersOff: (scene.preferences || {}).springCollidersOff,
+    };
+    var groupsOf = function (joint) {
+      return (joint.colliderGroups || []).map(function (group) {
+        return (group.name || '?') + ':' + (group.colliders ? group.colliders.length : 0);
+      }).join(' ');
+    };
+    var out = {};
+    try {
+      scene.avatar.springColliderMemory = memory;
+      var apply = function (mode, off) {
+        memory.mode = null;
+        memory.off = null;
+        scene.preferences.springColliders = mode;
+        scene.preferences.springCollidersOff = off || [];
+        scene.applySpringColliders();
+        return { a: groupsOf(jointA), b: groupsOf(jointB) };
+      };
+      out.body = apply('body');
+      out.all = apply('all');
+      // One collider OFF inside the body group: the group survives, one sphere smaller.
+      out.oneOff = apply('body', ['0:0']);
+      out.off = apply('off');
+      // Restoring the mode with the same off-list must be a no-op the second time (the early return), and a CHANGED
+      // off-list must not be: that early return is what would make the panel look dead.
+      memory.mode = null;
+      memory.off = null;
+      scene.preferences.springColliders = 'body';
+      scene.preferences.springCollidersOff = [];
+      scene.applySpringColliders();
+      var first = groupsOf(jointA);
+      var again = scene.applySpringColliders();
+      out.idempotent = { appliedAgain: again, same: groupsOf(jointA) === first };
+    } finally {
+      scene.avatar.springColliderMemory = saved;
+      if (saved) { saved.mode = null; saved.off = null; }
+      if (scene.preferences) {
+        scene.preferences.springColliders = savedPrefs.springColliders;
+        scene.preferences.springCollidersOff = savedPrefs.springCollidersOff;
+      }
+    }
+    report.springColliders = out;
+    // `body` keeps only the group NAMED body: jointB's chains reference `wail` alone, so they keep nothing — the honest
+    // reading of 「只开身体组」, not a bug. `all` restores both; the off-list narrows one group in place.
+    return out.body.a === 'body:3' && out.body.b === ''
+      && out.all.a === 'body:3 wail:2' && out.all.b === 'wail:2'
+      && out.oneOff.a === 'body:2' && out.oneOff.b === ''
+      && out.off.a === '' && out.off.b === ''
+      && out.idempotent.appliedAgain === 0 && out.idempotent.same === true;
   });
-
   /**
    * THE OLDER PET STANDS DOWN — the half the node-detached rule could not catch (operator, 2026-10-14: two `inst` values
    * alternating on one route, which is the 「idle 与 working 反复横跳」 report). Driven on the document itself: a pet with a

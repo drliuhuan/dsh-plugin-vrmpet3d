@@ -360,6 +360,22 @@ group('5. preferences');
   eq(core.cleanPreferences({ motionPhysics: 'nonsense' }).motionPhysics, true,
     'and anything that is not a stored false reads as on');
 
+  /**
+   * The collider switch (operator, 2026-10-14: 「开body组测试一下」 → 「可以做成详细面板一个个开关吗？」).
+   *
+   * Three claims: the shipped answer is the body group, an unknown value is normalised rather than passed to the solver,
+   * and the per-collider list is an allowlist of `<group>:<collider>` pairs — anything else is DROPPED, because a stored
+   * profile must not be able to grow a list the renderer will walk on every frame.
+   */
+  eq(defaults.springColliders, 'body', 'the shipped answer to 穿模 is the body collider group');
+  eq(core.cleanPreferences({ springColliders: 'all' }).springColliders, 'all',
+    'and 全部 is kept, so the model file can be used verbatim');
+  eq(core.cleanPreferences({ springColliders: 'everything' }).springColliders, 'body',
+    'while a value nobody defined falls back to the shipped one instead of reaching the solver');
+  eq(core.cleanSpringCollidersOff(['0:0', '1:4', '0:0', 'nonsense', '0', '0:x', -3, null]).join(','),
+    '0:0,1:4',
+    'and the per-collider list keeps only deduplicated <group>:<collider> pairs');
+
   const dirty = core.cleanPreferences({
     scope: 'current', size: 9999, motion: false, modelId: 'x'.repeat(900),
     modelScale: -5, yaw: 99, sway: 99, sleepAfterMs: 7, hidden: 'yes', x: 'nope',

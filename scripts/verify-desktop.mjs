@@ -213,6 +213,18 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
   ok(pageScript.includes('function setLoading(done)')
     && (pageScript.match(/setLoading\(true\);/g) || []).length >= 4,
     'and the script lifts it on the first render, on both load failures, and on the watchdog');
+
+  /**
+   * THE PER-COLLIDER PANEL (operator, 2026-10-14: 「只有body组一个碰撞体组吗？可以做成详细面板一个个开关吗？」).
+   *
+   * Static, because the interesting part is the WIRING: the panel is built from the model's own collider list and writes
+   * `springCollidersOff` — the same preference `lib/scene.js` matches against those keys. A panel of switches that wrote
+   * nothing would look identical in a screenshot.
+   */
+  ok(modelHtml.includes('id="spring-colliders"') && modelHtml.includes('id="spring-collider-list"')
+    && pageScript.includes('function renderColliderDetail')
+    && pageScript.includes('preferences.springCollidersOff'),
+    'the collider switch ships beside a per-collider panel, and that panel writes the preference the renderer reads');
 }
 
 // ---------------------------------------------------------------------------
