@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2455 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2456 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -133,6 +133,27 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
 
+**ONE PAYLOAD, TWO KEYS — WHY THE HAIR FELT DIFFERENT ON EACH SURFACE** (operator, 2026-10-14: 「我知道了，不是没有物理，而是弹簧骨参数
+和外置不一样」, which was the whole answer). Both surfaces hand Scene.setSpringDefaults the same payload —
+springDefaults[modelId], resolved by the host against the LIVE model id — but they LOOKED IT UP with different keys: the app
+pet with the live one (m1), the floating window with its own start-up value, which the launcher's own report shows as
+placeholder. That lookup missed, setSpringDefaults(null) was handed over, and the window fell back to the model file's
+authored 0.2 while the app pet wore the 0.4 he had tuned and shipped — "the built-in pet has no physics" was really "the
+window has the stock hair". The window now resolves the key with esolvedModelId, the same resolver its bubble font already
+used, so both read one key. Verified live the same session: app why.physics.spring = {"stiff":0.4,"drag":0.2,"grav":0.05,
+"chain":"DaiMao"} and window pageMetrics.spring identical to the digit. Both halves report that sample now — the app in
+why.physics, the window in the metrics action — because the third report of this class of bug is where the arguing
+should stop.
+
+**THE ORDERING GUARD, AND WHY THE FIRST VERSION OF IT WAS INERT** (same session: 「外置桌宠状态反复横跳依然存在」 — and no, not the
+background jobs: the watcher only GETs, the suites use their own host). uild/probe-out/watch-state.mjs caught THREE
+instances alternating on one route inside a second (2fszuc/oygiv still drawing the old 110 px plate, 8qgem on the new
+one), i.e. cached module copies serving later activations with builds that never contain the client-side self-disposal. So
+ordering moved to the host: a page token plus a per-widget build sequence, only the highest sequence on the current page may
+write, a new token adopts immediately, and — once a page has identified itself — a report with NO token is refused as an
+older client. Its first live reading showed page:/seq: EMPTY: the client emitted them and core.cleanWhy carried them,
+but cleanWhyReport dropped them, so the guard never saw a page. Both halves of the sanitiser have to agree about why,
+including about the fields that decide which report counts. Readings after the fix: one instance, one page, seq: 1.
 **TWO PETS, ONE ROUTE — AND THE HALF THE FIRST FIX MISSED** (operator, 2026-10-14, third report: 「还是有任务已经完成，但是宠物反复
 在idle和working状态来回跳转的问题」). The instance label added for exactly this caught it in the live log: two `inst` values
 alternating on ONE route (`4q0uof`, then `w5jgw6`) — a leftover widget from an earlier activation still publishing its own
@@ -252,7 +273,8 @@ joke's presence instead of failing on it. The generator and the review copy live
 (`gen-speech-lines.mjs`, `speech-lines-review.md`).
 
 **The 碎碎念 table round-trips through a MARKDOWN file he edits by hand.** `speech-lines-review.md` (repo root) is
-regenerated from what is SHIPPED and written back by `build/probe-out/speech-lines-md.mjs` (`export` / `report` /
+regenerated from what is SHIPPED and written back by the speech-lines tool that lived in the operator's own
+`build/probe-out/` (`export` / `report` /
 `import [--dry-run]`). He edited it on 2026-10-13 late — 30 working lines rewritten, 15 left with an empty English cell
 and 2 more whose Chinese changed under a stale translation — and all 17 were translated and imported. The importer
 REFUSES structural damage (a renamed pool, an empty pool, a row with no Chinese or English, an illegal cadence) and only

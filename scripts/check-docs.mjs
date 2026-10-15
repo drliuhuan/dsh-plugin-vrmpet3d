@@ -263,9 +263,15 @@ group('4. structural invariants');
   const bundled = join(ROOT, 'assets', 'models');
   ok(existsSync(bundled), 'assets/models/ exists');
   if (existsSync(bundled)) {
+    /**
+     * The two built-in MODELS, plus the defaults manifest the operator pushed on 2026-10-14
+     * (rmpet3d-models.json, the pack's own spring values keyed by file name). The point of this assertion is that no
+     * stray avatar binary ships; the manifest is data the host reads, not a model, and it is named in the expected list so
+     * a third .vrm still fails here.
+     */
     const entries = readdirSync(bundled).filter(name => name !== 'README.md').sort();
-    ok(entries.join(', ') === 'BlueFatFish.vrm, SampleModel.vrm',
-      'and ships exactly the two built-in models', entries.join(', '));
+    ok(entries.join(', ') === 'BlueFatFish.vrm, SampleModel.vrm, vrmpet3d-models.json',
+      'and ships exactly the two built-in models plus the defaults manifest', entries.join(', '));
 
     const samplePath = join(bundled, 'SampleModel.vrm');
     if (existsSync(samplePath)) {
