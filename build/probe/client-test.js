@@ -8530,11 +8530,67 @@
     }
   });
 
-      /**
-     * THE OLDER PET STANDS DOWN — the half the node-detached rule could not catch (operator, 2026-10-14: two \`inst\` values
-     * alternating on one route, which is the 「idle 与 working 反复横跳」 report). Driven on the document itself: a pet with a
-     * HIGHER build order means this widget has been replaced; one with a lower order is just the leftover and is ignored.
-     */
+  /**
+   * THE COLLIDER SWITCH (operator, 2026-10-14: 「开body组测试一下」).
+   *
+   * Driven on synthetic joints rather than the loaded avatar, because the answer must not depend on whether the model in
+   * the probe happens to declare colliders: the rule is 「which of a chain's OWN groups survive」, and it is the same rule
+   * for every model. `body` keeps only the group NAMED body, `all` restores the file verbatim, `off` is the behaviour of
+   * every build before this one.
+   */
+  check('the collider switch keeps the body group, restores all of them, and can be turned off', function () {
+    var scene = widget.scene;
+    if (!scene || typeof scene.applySpringColliders !== 'function') {
+      report.springColliders = { applied: false };
+      return false;
+    }
+    var body = { name: 'body', colliders: [] };
+    var wail = { name: 'wail', colliders: [] };
+    var other = { name: 'other', colliders: [] };
+    var jointA = { colliderGroups: [body, wail] };
+    var jointB = { colliderGroups: [wail, other] };
+    var jointC = { colliderGroups: [] };
+    var savedMemory = scene.avatar ? scene.avatar.springColliderMemory : null;
+    var savedMode = (scene.preferences || {}).springColliders;
+    var read = function () { return [jointA.colliderGroups.length, jointB.colliderGroups.length, jointC.colliderGroups.length].join(','); };
+    var stateBody, stateAll, stateOff;
+    try {
+      scene.avatar.springColliderMemory = {
+        joints: [
+          { joint: jointA, groups: [body, wail] },
+          { joint: jointB, groups: [wail, other] },
+          { joint: jointC, groups: [] },
+        ],
+        declared: [body, wail, other],
+        mode: null,
+      };
+      scene.preferences.springColliders = 'body';
+      scene.applySpringColliders();
+      stateBody = read();
+      scene.avatar.springColliderMemory.mode = null;
+      scene.preferences.springColliders = 'all';
+      scene.applySpringColliders();
+      stateAll = read();
+      scene.avatar.springColliderMemory.mode = null;
+      scene.preferences.springColliders = 'off';
+      scene.applySpringColliders();
+      stateOff = read();
+    } finally {
+      scene.avatar.springColliderMemory = savedMemory;
+      if (savedMemory) savedMemory.mode = null;
+      if (scene.preferences) scene.preferences.springColliders = savedMode;
+    }
+    report.springColliders = { body: stateBody, all: stateAll, off: stateOff };
+    // body: one group survives on A (大 body), none on B (no body group of its own); all: both chains get theirs back;
+    // off: nothing anywhere. C never had one and must stay empty in every mode.
+    return stateBody === '1,0,0' && stateAll === '2,2,0' && stateOff === '0,0,0';
+  });
+
+  /**
+   * THE OLDER PET STANDS DOWN — the half the node-detached rule could not catch (operator, 2026-10-14: two `inst` values
+   * alternating on one route, which is the 「idle 与 working 反复横跳」 report). Driven on the document itself: a pet with a
+   * HIGHER build order means this widget has been replaced; one with a lower order is just the leftover and is ignored.
+   */
     check('a pet stamped with a newer build order takes the page over, and an older one does not', function () {
       var base = Number(widget.sequence) || 0;
       var before = widget.supersededByNewerPet();
