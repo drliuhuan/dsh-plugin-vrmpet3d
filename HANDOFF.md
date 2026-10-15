@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2481 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2482 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,15 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**预览播放器是第三个入口，也要认速度** (operator, 2026-10-14: 「设置了动作的播放速度后，预览播放时并没有生效」). 速度 is stored per (state, clip), and
+the preview used to call `startPlayback(previewId, previewRecord)` with NO state — so the rate was resolved under whatever state the
+pet happened to be DRAWING (`pickState`), a different pair from the one the settings window was editing: a clip configured for
+工作中 previewed at 100 % while the pet rested. The preview exists to show THAT state's answer, so it now hands over its own state
+(`this.preview.state || this.pickState`), and the live re-apply on every preference push keeps working because `playback.state`
+records that same pair. Pinned as a SOURCE assertion in the client suite: the first behavioural version could only report
+`no loaded clip`, because `tick` walks the state's clips (gaze, expressions, blink) before the preview branch and the probe's fixture
+has nothing loaded at that point in the run — a check that cannot run is worse than one that reads the delivered source.
 
 **内置弹簧骨与外置不同步 — 数据都在，是顺序** (operator, 2026-10-14: 「内置宠物的弹簧骨参数似乎并不能跟外置宠物的参数同步，外置宠物的参数和面板基本是一致的」).
 Both surfaces read the same payload, the same profile and the same model — and their readouts disagreed: the app's ahoge reported the

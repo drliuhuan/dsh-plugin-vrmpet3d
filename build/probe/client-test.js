@@ -8604,6 +8604,32 @@
   });
 
   /**
+   * 预览也要认速度 (operator, 2026-10-14: 「设置了动作的播放速度后，预览播放时并没有生效」).
+   *
+   * The preview is a THIRD playback entry point, and it called `startPlayback(id, record)` with no state — so the rate was looked
+   * up under whatever state the pet happened to be DRAWING, a different pair from the one the settings window was editing: a clip
+   * configured for 工作中 previewed at 100 % while the pet rested.
+   *
+   * Asserted against the delivered SOURCE rather than by driving a preview, and the reason is worth keeping: `tick` walks the
+   * state's clips (gaze, expressions, blink) before it reaches the preview branch, and the probe's fixture has no loaded clip at
+   * this point in the run, so a behavioural version could only ever report 
+o loaded clip`. The source is fetched from the same
+   * origin the page loads the scene from, so this still reads what ships.
+   */
+  check('a preview hands its OWN state to the playback, so 速度 is the pair being edited', function () {
+    return fetch('/vrmpet3d/window/lib/scene.js').then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.text();
+    }).then(function (text) {
+      var matched = /startPlayback\(previewId,\s*previewRecord,\s*this\.preview\.state/.test(text);
+      report.previewSpeedSource = { matched: matched, bytes: text.length };
+      return matched;
+    }).catch(function (error) {
+      report.previewSpeedSource = { fetched: false, reason: String(error && error.message) };
+      return false;
+    });
+  });
+  /**
    * 内置的弹簧骨参数要和外置一致 — the pack's values must land the moment they ARRIVE (operator, 2026-10-14: 「内置宠物的弹簧骨参数似乎
    * 并不能跟外置宠物的参数同步，外置宠物的参数和面板基本是一致的」).
    *
