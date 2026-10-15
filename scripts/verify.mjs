@@ -1045,11 +1045,22 @@ group('6. state machine precedence');
   const machine = new core.PetMachine(now, 120000);
 
   const onlineIdle = { available: true, running: false, pending: false };
-  const offline = { available: false, running: false, pending: false };
+  /**
+   * 离线 is about the CONNECTION, not about there being nothing to show.
+   *
+   * This fixture used to say only `available: false`, because that is what the rule tested — and that is exactly the confusion the
+   * operator hit on 2026-10-15 (「两个桌宠在dsh刚打开的时候，都提示离线状态，应该是插件没完全启动好吧？」): during startup the session
+   * catalogue is not ready, so `available` is false, so both pets announced a lost connection while DSH was loading normally.
+   * `connected` is the field for this, and the suite has to model it that way or it would pin the wrong rule back in place.
+   */
+  const offline = { available: false, connected: false, running: false, pending: false };
+  const loading = { available: false, running: false, pending: false };
   const working = { available: true, running: true, pending: false };
   const waiting = { available: true, running: true, pending: true };
 
   eq(machine.resolve(onlineIdle), 'resting', 'idle online pet rests');
+  eq(machine.resolve(loading), 'resting',
+    'and a connected pet whose catalogue is still loading RESTS rather than claiming the host is gone');
   eq(machine.resolve(working), 'working', 'a running turn works');
   eq(machine.resolve(waiting), 'waiting', 'a pending approval outranks working');
   eq(machine.resolve(offline), 'offline', 'a disconnected host is offline');
