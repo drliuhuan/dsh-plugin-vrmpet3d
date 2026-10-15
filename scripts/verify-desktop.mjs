@@ -1287,7 +1287,7 @@ if (live.skipped) {
         ok(tones.done && tones.done.tone === 'gold' && tones.done.bold === true,
           '任务达成 is published as gold and bold');
         ok(tones.error && tones.error.tone === 'danger', 'and 出错 as the danger colour');
-        ok(motions.offered === 2, `listing the catalog the host serves (${motions.offered})`);
+        ok(motions.offered === 3, `listing the catalog the host serves (${motions.offered})`);
         /**
          * AND THE BOXES SHOW THE MAPPING IN FORCE, not merely the one on disk.
          *
@@ -1328,15 +1328,18 @@ if (live.skipped) {
         ok(motions.oneShot === 1, `and counting the one-shot PAIR it declares (${motions.oneShot})`);
         /**
          * The per-state controls of the 2026-10-09 round: a play-mode dropdown and two face dropdowns
-         * (expression, mouth) for every clip ticked IN A STATE. The stub ticks both clips in `resting`, so two
-         * modes and four face selects — and the play mode is a per-state decision now, which is why the old
-         * "one row per clip" table is gone and this counts pairs.
+         * (expression, mouth) for every clip ticked IN A STATE — plus the 凝视 switch beside them.
+         *
+         * The fixture ticks two clips in `resting` and inherits the pack's one in `dancing`, so the counts are 2 mode
+         * dropdowns (dancing has none BY DESIGN — `core.motionLoopForState` forces one-shot there), 6 face selects and 3
+         * gaze switches. The 跳舞 row is why these numbers are worth reading: a page that dropped the whole section would
+         * report zeros here, which is what the operator saw on 2026-10-15 (「现在配置页完全崩了」).
          */
-        ok(motions.modeRows === 2, `with a play-mode dropdown per ticked clip in a state (${motions.modeRows})`);
-        ok(motions.faceRows === 4, `and an expression and a mouth dropdown beside each (${motions.faceRows})`);
+        ok(motions.modeRows === 2, `with a play-mode dropdown per ticked clip in a state, and NONE for 跳舞 (${motions.modeRows})`);
+        ok(motions.faceRows === 6, `and an expression and a mouth dropdown beside each of the three (${motions.faceRows})`);
         // The 凝视 switch the operator asked for on 2026-10-09 late: one per ticked clip, beside the three
         // dropdowns.
-        ok(motions.gazeRows === 2, `and a gaze switch on each row too (${motions.gazeRows})`);
+        ok(motions.gazeRows === 3, `and a gaze switch on each row too (${motions.gazeRows})`);
         ok(motions.everyRows === 10, `and one interval line per state (${motions.everyRows})`);
         /**
          * AND THE TICK BOX COLLECTS ONLY CLIPS.
@@ -1377,12 +1380,34 @@ if (live.skipped) {
         const scoped = pick.rows || {};
         const folderNames = (value) => (Array.isArray(value) ? value : (value ? [value] : []));
         ok(Object.keys(scoped).length === 10, `all ten states are drawn (${Object.keys(scoped).length})`);
+        /**
+         * …and a state's FOLDER is its own: `done` draws `plain/`, `跳舞` draws `dance/`, everything else has none.
+         *
+         * The list of mapped states is named rather than "everything except done", because the fixture maps TWO states now —
+         * and 跳舞 is one of them precisely so its rows are exercised (see the catalog stub). The assertion failing here was how
+         * the fixture grew past its own expectation on 2026-10-15, which is the honest way for it to fail.
+         */
+        const mappedStates = ['done', 'dancing'];
         ok(Object.values(scoped).every((row) => row.outsideFolder.length === 0)
           && folderNames(scoped.done && scoped.done.folder).indexOf('plain') !== -1
-          && Object.entries(scoped).filter(([state]) => state !== 'done').every(([, row]) => row.folder === null),
-          `the mapping is read per state and nothing is drawn from outside it (${JSON.stringify(scoped.done)})`);
-        ok(Object.values(scoped).every((row) => row.drawn === pick.offered),
-          `and every state's list is populated, mapped or not (${Object.values(scoped).map((row) => row.drawn).join(',')})`);
+          && folderNames(scoped.dancing && scoped.dancing.folder).indexOf('dance') !== -1
+          && Object.entries(scoped).filter(([state]) => mappedStates.indexOf(state) === -1).every(([, row]) => row.folder === null),
+          `the mapping is read per state and nothing is drawn from outside it (${JSON.stringify(scoped.done)}, ${JSON.stringify(scoped.dancing)})`);
+        /**
+         * Every state's list holds exactly the clips IT may draw: its own folder's, or the whole catalog when it maps none.
+         *
+         * This used to compare every state against one number, which only held while the fixture had a single folder and no
+         * pack defaults. With two folders the expected count is per state, so the assertion computes it the same way the page
+         * does — from the catalog and the folder mapping — instead of pinning a tuple of ten numbers.
+         */
+        const catalogCount = 3;
+        const folderCount = (state) => {
+          const folders = folderNames(scoped[state] && scoped[state].folder);
+          if (!folders.length) return catalogCount;
+          return catalogCount === 0 ? 0 : folders.reduce((total, name) => total + (name === 'plain' ? 2 : (name === 'dance' ? 1 : 0)), 0);
+        };
+        ok(Object.entries(scoped).every(([state, row]) => row.drawn === folderCount(state)),
+          `and every state's list is populated from what it may draw (${Object.entries(scoped).map(([s, row]) => s + ':' + row.drawn + '/' + folderCount(s)).join(' ')})`);
         /**
          * The mouse-interaction controls (2026-10-10: "把鼠标互动的参数加入设置面板"), and the folding rule for a
          * model with many chains ("如果弹簧骨选项超过5个，就折叠起来").
@@ -1628,10 +1653,22 @@ async function startPageServer() {
         motions: [
           { id: 'a1', name: 'plain/vrmpet3d-rest.vrma', format: 'vrma', bytes: 24796, source: 'user', loop: true },
           { id: 'a2', name: 'plain/vrmpet3d-wave.vrma', format: 'vrma', bytes: 9348, source: 'user', loop: false },
+          /**
+           * A DANCE CLIP, and it is here on purpose.
+           *
+           * 跳舞 is the one state whose rows carry no 循环/单次 select (`core.motionLoopForState` forces one-shot), so it is the
+           * state whose per-clip controls exercise the code path where that select is ABSENT. A stub without a dance clip leaves
+           * the 跳舞 row unticked, never enters that path, and stays green while the whole 状态与动作 section throws for anyone
+           * whose pack does ship one — which is exactly what shipped to the operator on 2026-10-15 (「现在配置页完全崩了，所有的
+           * 动作信息都找不到了」). The `motionDefaults` block below ticks it, the same way the real payload does.
+           */
+          { id: 'a3', name: 'dance/vrmpet3d-dance.vrma', format: 'vrma', bytes: 1234, source: 'user', loop: false },
         ],
         motionDirs: [],
         importedDirs: [],
-        stateFolders: { done: ['plain'] },
+        stateFolders: { done: ['plain'], dancing: ['dance'] },
+        // The pack's own answer, keyed by ID — the shape the host really sends, which is what the page has to resolve.
+        motionDefaults: { dancing: ['a3'] },
       }));
       return;
     }
