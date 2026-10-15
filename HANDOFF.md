@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2494 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2497 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,27 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**BR EVERYWHERE, AND A MANIFEST REBUILT BY NAME** (operator, 2026-10-14: 「把当前working时的动作参数（速度，表情等）设置为默认下发；另外，我修改了assets里面working和dance的文件名，另外，我需要把自带的所有的vrma和vrm全部都用br格式压缩封装以节约空间，请确保当前的参数全部都能对应解析到br格式」).
+
+* **MODELS have brotli support now.** Motions had it; models did not, so compressing them would have left the plugin unable to read
+  its own pack. `core.isModelFile` strips a `.br` before looking at the extension, `MODEL_COMPRESSION_EXTENSION` names the suffix once,
+  the model catalog reports `format: 'vrm'` with `compressed: true` (never `br` as a format), a `.br` twin REPLACES its plain original
+  exactly as clips do, `createAssetHandler` unpacks through a size+mtime-keyed cache, and `lib/vrm-info.js` decompresses before parsing
+  — the thumbnail, the expression list and the spring chains are all read in Node from those bytes, so a brotli stream parsed as glTF
+  would have been a 500 rather than a missing thumbnail. Measured: `BlueFatFish.vrm` 18,480,432 → 15,411,050 (83.4 %) and
+  `SampleModel.vrm` 13,967,836 → 10,703,053 (76.6 %) — a VRM is mostly already-compressed textures, which is why the ratio is nothing
+  like the dance clips' 18 %. `scripts/compress-motions.mjs` grew the model extensions and now says 「asset」 rather than 「clip」.
+* **The pack's name-keyed blocks were REBUILT from the files**, because the renames (`dance/Dancing` → `dance/dance1`, 极乐净土 →
+  `dance2`, plus a copy at `working/dance1`) invalidated every one of them. The generator read the LIVE catalog for the id → name map,
+  the payload's `motionClipDefaults` for the per-(state, clip) intent, and the profile for what he asked to ship. Two facts fell out of
+  that: the manifest's `motionClipDefaults` block had never been read at all (`readMotionManifest` reads only `clips`/`stateFolders`/
+  `defaults`/`template`), and motion ids are POSITIONAL, so the renames had stranded `motions.working = ['a4']` and
+  `dancing = ['a4','a5']` — both states were playing nothing. The pack's defaults now carry his own 工作中 parameters
+  (`expression: 'none'`, `gaze: false`, `speed: 150`), and the dance clips stay one-shot wherever they appear.
+* **`check-plugin-load` is GREEN for the first time in this session**: its menu-list pin predated 跳舞/重载模型, and three source regexes
+  had been left behind by the speech-chain and `publishState` changes. A pin that no longer matches the code it describes is worse than
+  no pin at all.
 
 **预览里的「默认无表情」以前是个空操作** (operator, 2026-10-14: 「工作中状态时，预览跳舞的动作，默认无表情的覆盖似乎没成功」). `MOTION_FACE_DEFAULT`
 (`'none'`) is not an expression NAME, it is an ANSWER — 「默认」 means "no expression at all, back to the model's own initial face" —

@@ -9,6 +9,12 @@
     "attention/wave hand 3.vrma": {
       "loop": true
     },
+    "dance/dance1.vrma.br": {
+      "loop": false
+    },
+    "dance/dance2.vrma.br": {
+      "loop": false
+    },
     "fail/fall down1.vrma": {
       "loop": false
     },
@@ -74,6 +80,9 @@
     },
     "success/jump 3.vrma": {
       "loop": true
+    },
+    "working/dance1.vrma.br": {
+      "loop": true
     }
   },
   "stateFolders": {
@@ -101,6 +110,7 @@
   },
   "defaults": {
     "resting": [
+      "idle/coolIdleGlance.vrma",
       "idle/hungry1.vrma",
       "idle/hungry2.vrma",
       "idle/idle lookaround1.vrma",
@@ -113,8 +123,12 @@
       "idle/idle2.vrma",
       "idle/idle3.vrma",
       "idle/idle4.vrma",
+      "idle/innocentStandIdle.vrma",
       "idle/touch hair1.vrma",
       "idle/touch hair2.vrma"
+    ],
+    "working": [
+      "working/dance1.vrma.br"
     ],
     "waiting": [
       "attention/wave hand 1.vrma",
@@ -133,12 +147,9 @@
     "offline": [
       "offline/sleeping.vrma"
     ],
-    "working": [
-      "dance/Dancing.vrma.br"
-    ],
     "dancing": [
-      "dance/Dancing.vrma.br",
-      "dance/极乐净土.vrma.br"
+      "dance/dance1.vrma.br",
+      "dance/dance2.vrma.br"
     ]
   },
   "template": {
@@ -206,12 +217,6 @@
         "gaze": false
       }
     },
-    "working": {
-      "dance/Dancing.vrma.br": {
-        "expression": "none",
-        "gaze": false
-      }
-    },
     "waiting": {
       "attention/wave hand 2.vrma": {
         "expression": "none",
@@ -264,14 +269,21 @@
       "fail/fall down1.vrma": {
         "loop": false
       }
-    }
-  },
-  "motionClipDefaults": {
+    },
+    "working": {
+      "working/dance1.vrma.br": {
+        "expression": "none",
+        "gaze": false,
+        "speed": 150
+      }
+    },
     "dancing": {
-      "dance/Dancing.vrma.br": {
+      "dance/dance1.vrma.br": {
+        "expression": "none",
         "loop": false
       },
-      "dance/极乐净土.vrma.br": {
+      "dance/dance2.vrma.br": {
+        "expression": "none",
         "loop": false
       }
     }

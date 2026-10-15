@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brotliDecompressSync } from 'node:zlib';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -270,12 +271,14 @@ group('4. structural invariants');
      * a third .vrm still fails here.
      */
     const entries = readdirSync(bundled).filter(name => name !== 'README.md').sort();
-    ok(entries.join(', ') === 'BlueFatFish.vrm, SampleModel.vrm, vrmpet3d-models.json',
+    ok(entries.join(', ') === 'BlueFatFish.vrm.br, SampleModel.vrm.br, vrmpet3d-models.json',
       'and ships exactly the two built-in models plus the defaults manifest', entries.join(', '));
 
-    const samplePath = join(bundled, 'SampleModel.vrm');
+    const samplePath = join(bundled, 'SampleModel.vrm.br');
     if (existsSync(samplePath)) {
-      const bytes = readFileSync(samplePath);
+      // A bundled model is brotli-packed since 2026-10-14, so the bytes this suite reads are an ARCHIVE: what the plugin serves —
+// and what these assertions are about — is what is inside it. `brotliDecompressSync` mirrors the host's `decompressBrotli`.
+const bytes = brotliDecompressSync(readFileSync(samplePath));
       ok(bytes.length > 1000000 && bytes.subarray(0, 4).toString('latin1') === 'glTF',
         `SampleModel.vrm is a real binary glTF (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
       // The JSON chunk is the second one, and the licence lives in its VRM metadata. Read as latin1 so the
@@ -287,14 +290,14 @@ group('4. structural invariants');
       ok(text.includes('credit=unnecessary'), 'and requires no attribution');
       ok(text.includes('VRoid'), 'while crediting its author in the file itself');
     } else {
-      ok(false, 'the bundled SampleModel.vrm is committed');
+      ok(false, 'the bundled SampleModel.vrm.br is committed');
     }
 
-    const fatFishPath = join(bundled, 'BlueFatFish.vrm');
+    const fatFishPath = join(bundled, 'BlueFatFish.vrm.br');
     if (existsSync(fatFishPath)) {
-      const bytes = readFileSync(fatFishPath);
+      const bytes = brotliDecompressSync(readFileSync(fatFishPath));
       ok(bytes.length > 1000000 && bytes.subarray(0, 4).toString('latin1') === 'glTF',
-        `BlueFatFish.vrm is a real binary glTF (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+        `BlueFatFish.vrm.br is a real binary glTF (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
       const text = bytes.toString('latin1');
       ok(text.includes('VRMC_vrm'), 'and is a VRM 1.0 (VRMC_vrm)');
       // The author lives in the metadata as UTF-8, so it is matched as BYTES: latin1-decoding the chunk would
@@ -317,7 +320,7 @@ group('4. structural invariants');
       ok(licenceDoc.includes('木子恶魔') && licenceDoc.includes(SOURCE),
         'and README.md credits the same author and source');
     } else {
-      ok(false, 'the bundled BlueFatFish.vrm is committed');
+      ok(false, 'the bundled BlueFatFish.vrm.br is committed');
     }
   }
 

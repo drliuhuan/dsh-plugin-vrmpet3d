@@ -339,7 +339,7 @@ report(service?.assetRoutes === null,
     const list = /var ITEMS = \[([\s\S]*?)\];/.exec(menuSource);
     const ids = list ? [...list[1].matchAll(/'([a-zA-Z]+)'/g)].map((match) => match[1]) : [];
     report(JSON.stringify(ids) === JSON.stringify([
-      'resetView', 'resetSize', 'globalSettings', 'switchModel', 'modelSettings', 'surface', 'gravity', 'closePet',
+      'resetView', 'resetSize', 'globalSettings', 'switchModel', 'dance', 'reloadModel', 'modelSettings', 'surface', 'gravity', 'closePet',
     ]), `the shared list is the operator's entries in order, without 重启/退出 (${ids.join(', ') || 'none'})`);
     report(/surfaceWindow: '切换回窗口外'/.test(menuSource) && /surfaceApp: '切换回窗口内'/.test(menuSource),
       'and the 切换 row still carries both directions in the table');
@@ -455,7 +455,7 @@ report(service?.assetRoutes === null,
     const launcherSource = readFileSync(join(ROOT, 'desktop', 'main.js'), 'utf8');
     report(/new this\.core\.SpeechMachine\(function \(\) \{ return Date\.now\(\); \}\)/.test(clientSource),
       'the app owns a speech machine (the window has no session to react to)');
-    report(/this\.publishState\(state, speech, touch, clock\)/.test(clientSource),
+    report(/this\.publishState\(state, speech, touch, clock, null, this\.machine \? this\.machine\.unreadCount : 0, this\.decisionWhy\(\)\)/.test(clientSource),
       'and publishes the line WITH the state, the press, and the TURN clock, so none of the three can be dropped on the way');
     report(/petStateLine = cleanSpeechLine\(body && body\.line\)/.test(hostSource),
       'the host sanitises and stores the line on /vrmpet3d/state');
@@ -466,7 +466,7 @@ report(service?.assetRoutes === null,
     report(/const speech = speechRect && speechRect\.width > 1/.test(launcherSource)
       && /const extras = \[menu, status, speech\]/.test(launcherSource),
       'and the launcher grows the window to hold the bubble without making it clickable');
-    report(/speech: speechBox && speechBox\.width > 0/.test(windowSource),
+    report(/speech: \(function \(\) \{[\s\S]{0,240}?speechBand\(\)/.test(windowSource),
       'the page reports the bubble rectangle, which is what the launcher unions');
     report(!/function hitTest\([\s\S]{0,600}?speechBox/.test(windowSource),
       'and the bubble is deliberately NOT in the hit test: it is there to be read, not clicked');
@@ -656,8 +656,9 @@ report(service?.assetRoutes === null,
      * 「用内置短语」.
      */
     report(/builtin: '用内置短语'/.test(configSource)
-      && /custom: '不说话'/.test(configSource)
-      && /ai: '用内置 AI 生成提示词'/.test(configSource),
+      && /custom: '用内置短语'/.test(configSource)
+      && /ai: '用内置 AI 生成提示词'/.test(configSource)
+    && /EMPTY_LINES_LABEL/.test(configSource),
       'the settings page names an empty box per SOURCE: the built-in table, silence, or the AI prompt');
     report(/row\.count\.textContent = lines\.length \? lines\.length \+ ' 条' : emptyLabel;/.test(configSource)
       && /row\.lines\.placeholder = emptyPlaceholder;/.test(configSource),
@@ -683,8 +684,8 @@ report(service?.assetRoutes === null,
      * over their own reason for the press and their own language. Pinned in the source because the two surfaces
      * drifting apart on a shipped-default rule is the failure this project has paid for most often.
      */
-    report(/partSpeechLines\(item, speech\.source === 'builtin', language, gesture\)/.test(coreSource)
-      && /core\.partSpeechLines\(item, speech\.source === 'builtin', language, reason\)/.test(windowSource),
+    report(/partSpeechLines\(item, true, language, gesture\)/.test(coreSource)
+      && /core\.partSpeechLines\(item, true, language, reason\)/.test(windowSource),
       'both press paths pass the SAME source argument to the shipped part lines, plus the gesture and the locale');
     report(/core\.partSpeechLines\(item, true, 'zh', 'click'\)/.test(configSource)
       && /core\.partSpeechLines\(item, true, 'zh', 'hold'\)/.test(configSource)

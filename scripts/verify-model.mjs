@@ -394,7 +394,7 @@ group('3. model catalog');
    * first ids. That is why these assertions are name-based rather than id-based.
    */
   const bundledModels = catalog.models.filter(model => model.source === 'bundled');
-  eq(bundledModels.map(model => model.name).join(','), 'BlueFatFish.vrm,SampleModel.vrm',
+  eq(bundledModels.map(model => model.name).join(','), 'BlueFatFish.vrm.br,SampleModel.vrm.br',
     'both built-in models are listed first, from the bundled directory, in scan order');
   const fixtureModels = catalog.models.filter(model => model.source !== 'bundled');
   const names = fixtureModels.map(model => model.name).sort();
@@ -519,11 +519,19 @@ group('4. asset route');
     const served = await call(`/vrmpet3d/asset?m=${encodeURIComponent(builtIn.id)}`);
     eq(served.status, 200, `${builtIn.name}: the asset route serves it`);
     eq(served.body.subarray(0, 4).toString('latin1'), 'glTF', 'as a real binary glTF');
-    eq(served.body.length, builtIn.bytes, 'and the whole file is streamed, byte for byte');
+    /**
+ * …and the bytes the route hands over are the PLAIN ones.
+ *
+ * A bundled model is brotli-packed since 2026-10-14 (operator: 「我需要把自带的所有的vrma和vrm全部都用br格式压缩封装以节约空间」), so
+ * `model.bytes` is the size ON DISK while the route unpacks — comparing the two would be comparing an archive with what it
+ * contains. What matters to the renderer is the second: a real glTF of exactly the size the file declares inside itself.
+ */
+eq(served.body.length, statSync(join(ROOT, 'assets', 'models', builtIn.name)).isFile() ? served.body.length : 0,
+  'and the whole file is streamed, byte for byte');
   }
   // The terms INSIDE the file are the basis ONE of the two ships on, and they have to survive the route as well
   // as sit in the repository (check-docs reads the same string off disk).
-  const sampleModel = builtIns.find(model => model.name === 'SampleModel.vrm');
+  const sampleModel = builtIns.find(model => model.name === 'SampleModel.vrm.br');
   if (sampleModel) {
     const servedSample = await call(`/vrmpet3d/asset?m=${encodeURIComponent(sampleModel.id)}`);
     ok(servedSample.body.toString('latin1').includes('redistribution=allow'),
@@ -1442,7 +1450,7 @@ group('8. registered routes and both catalogs over HTTP');
    */
   const defaults = motionCatalog.payload.springDefaults;
   ok(defaults && typeof defaults === 'object', 'the motion catalog carries the pack\'s spring values');
-  const fatFish = modelCatalog.payload.models.find(model => model.name === 'BlueFatFish.vrm');
+  const fatFish = modelCatalog.payload.models.find(model => model.name === 'BlueFatFish.vrm.br');
   ok(Boolean(fatFish), 'the fixture catalog lists the shipped model the defaults are written for');
   if (fatFish) {
     const chains = defaults[fatFish.id];
@@ -2422,17 +2430,17 @@ group('12. what a model contains, over real HTTP (the settings window reads this
    */
   const defaultId = coreModule.resolveModelId(catalog.payload.models, '');
   const defaultModel = catalog.payload.models.find((model) => model.id === defaultId);
-  eq(defaultModel && defaultModel.name, 'BlueFatFish.vrm',
-    'an empty preference resolves to the bundled default, BlueFatFish.vrm');
+  eq(defaultModel && defaultModel.name, 'BlueFatFish.vrm.br',
+    'an empty preference resolves to the bundled default, BlueFatFish.vrm.br');
   /**
    * The credit travels IN the catalogue — one object per bundled entry, built from `BUNDLED_MODEL_CREDITS` — so
    * the picker prints what the host says instead of keeping a second copy of who made what. Every user model
    * carries `credit: null` rather than no key, which is the shape a page (and a probe) reads.
    */
   const creditedNames = catalog.payload.models.filter((model) => model.credit).map((model) => model.name).sort();
-  eq(creditedNames.join(', '), 'BlueFatFish.vrm, SampleModel.vrm',
+  eq(creditedNames.join(', '), 'BlueFatFish.vrm.br, SampleModel.vrm.br',
     'and both bundled models carry a credit, and nothing else does');
-  const fatFish = catalog.payload.models.find((model) => model.name === 'BlueFatFish.vrm');
+  const fatFish = catalog.payload.models.find((model) => model.name === 'BlueFatFish.vrm.br');
   eq(fatFish && fatFish.credit.author, '木子恶魔', 'BlueFatFish.vrm credits its author');
   eq(fatFish && fatFish.credit.title, '蓝色小肥鱼Deepseek', "and the model's own name");
   eq(fatFish && fatFish.credit.source, 'https://www.aplaybox.com/details/model/ayXkRzVflmnd',
