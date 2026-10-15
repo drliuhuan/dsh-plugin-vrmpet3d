@@ -126,7 +126,7 @@ function checkPool(name, lang, rows) {
     problems.push(`${where}: 这一池是空的（每个池至少留 1 条）`);
     return;
   }
-  // 上限只对用户自己的框生效（`SPEECH_LIMITS.maxLines = 30`），内置池按原样进包 —— working 现在就是 41 条。
+  // 上限只对用户自己的框生效（`SPEECH_LIMITS.maxLines`，2026-10-14 起是 100），内置池按原样进包 —— working 现在就是 41 条。
   const seen = new Set();
   for (const row of rows) {
     const text = row[lang];

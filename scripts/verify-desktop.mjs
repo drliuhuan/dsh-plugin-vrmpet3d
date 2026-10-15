@@ -1071,8 +1071,16 @@ if (live.skipped) {
           `an empty box is called what the SOURCE makes it (${JSON.stringify(speech.emptyLabel)} for source ${speech.source})`);
         ok(speech.emptyPlaceholder === '留空则用内置短语' && speech.placeholders === '留空则用内置短语',
           `and the box itself says the same thing (${JSON.stringify(speech.placeholders)})`);
-        ok((speech.rowLabels || []).length === 1 && speech.rowLabels[0] === speech.emptyLabel,
-          `with every collapsed state row showing that one label, not a stale one (${JSON.stringify(speech.rowLabels)})`);
+        /**
+         * …and a collapsed row says what its box HOLDS.
+         *
+         * The shipped lines now land in the boxes (operator, 2026-10-14: 「把这些内容也复写到用户框的自定义框里，方便用户修改使用」), so a
+         * fresh profile's rows show 条数 where they used to show 「用内置短语」 six times. The label is still what an EMPTY box gets,
+         * and THAT is the half this assertion exists for: a row may show its own count or the empty label, never a stale third thing.
+         */
+        ok((speech.rowLabels || []).length > 0
+          && speech.rowLabels.every((label) => label === speech.emptyLabel || /^\d+ 条$/.test(label)),
+          `with every collapsed state row showing its own box, not a stale label (${JSON.stringify(speech.rowLabels)})`);
         ok(Object.keys(speech.lineCounts || {}).length === 6,
           'with the per-state line counts published, so an empty box is readable from outside');
         ok(speech.aiControls === true, 'the AI half\'s provider, URL, model, key and persona controls');

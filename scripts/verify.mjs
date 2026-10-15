@@ -2220,7 +2220,22 @@ group('6e. 碎碎念: one box per state, and the AI settings beside them');
     'and an array — what storage holds — cleans to itself');
   eq(Object.keys(core.cleanSpeech(null).lines).length, core.SPEECH_STATES.length,
     'all six keys always come back, empty or not');
-  eq(core.cleanSpeech(null).lines.resting.length, 0, 'with nothing in them by default');
+  /**
+   * …and a fresh profile's boxes HOLD THE SHIPPED LINES (operator, 2026-10-14: 「把这些内容也复写到用户框的自定义框里，方便用户修改
+   * 使用」) — while a box the user EMPTIED stays empty. The two halves are one rule: the boxes are the user's to edit, and an
+   * answer of "nothing" is still an answer.
+   *
+   * The last assertion is what keeps the seed honest: a fresh profile counts as "the user wrote nothing", so a touched part
+   * still does not borrow a turn-level remark and an AI-mode reaction still waits for the model.
+   */
+  eq(core.cleanSpeech(null).lines.resting.length, core.speechLines('zh', 'idle').length,
+    'with the shipped lines already in them, so they can be edited');
+  eq(core.cleanSpeech(null).lines.working.length, core.speechLines('zh', 'working').length,
+    'and the state whose pool is deepest matches it line for line');
+  eq(core.cleanSpeech({ lines: { working: [] } }).lines.working.length, 0,
+    'while a box the user emptied stays empty');
+  eq(core.customSpeechLines(core.cleanSpeech(null), 'working').length, 0,
+    'and the seed is not mistaken for the user\'s own writing');
   eq(core.cleanSpeech({ lines: { error: '多行\n文本' } }).lines.error[0].indexOf('\n'), -1,
     'a line never carries a newline into the bubble');
 
@@ -2270,9 +2285,9 @@ group('6e. 碎碎念: one box per state, and the AI settings beside them');
     'while a persona the user wrote is theirs, trimmed and verbatim');
   ok(/DeepSeek娘/.test(persona) && /简体中文/.test(persona) && /白饭|白米饭/.test(persona),
     'it names the character, the language and the one thing she cares about');
-  const classics = ['你想压力一只蓝色大肥鱼？', '我去吃饭，测完告诉我就行', '我操，用户彻底怒了！',
+  const classics = ['你想压力一只蓝色大肥鱼？', '我去吃饭，你测完告诉我', '我操，用户彻底怒了！',
     '我不是吃白饭的蓝色大肥鱼……', '不许嘲笑我，这些回答是我花了好多token想出来的！',
-    '大方承认吧，你已经爱上我了', '饭呢？人家的白米饭呢？！'];
+    '大方承认吧，你已经爱上我了', '饭饭呢？人家的饭饭呢？！'];
   const missingClassics = classics.filter((line) => persona.indexOf(line) === -1);
   eq(missingClassics.join(' / '), '', 'with every 经典语句 the operator listed kept word for word');
   ok(persona.indexOf('不要过度重复固定台词') !== -1,
