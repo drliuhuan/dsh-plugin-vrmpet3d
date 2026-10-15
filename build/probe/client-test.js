@@ -8604,6 +8604,51 @@
   });
 
   /**
+   * 速度 — a per-clip playback rate that is LIVE and does not touch the follow-up logic (operator, 2026-10-14: 「允许给每个动作
+   * 配置速度，默认100%，范围是1-1000%…这一步会延长或者缩短单次/循环动作的时间，但是动作结束后的后续动作接续逻辑依然不变」).
+   *
+   * Asserted on a RUNNING playback rather than through `startPlayback`, which needs a mixer and real clips: what matters is
+   * that a preference push moves `timeScale` on the clip already on screen (the 实时预览 half) and that nothing about
+   * completion — `finished`, `held` — moves with it (the 接续 half).
+   */
+  check("速度 moves the running clip's timeScale and leaves completion alone", function () {
+    var speedScene = widget.scene;
+    if (!speedScene || !speedScene.core || typeof speedScene.core.motionSpeedFor !== 'function') {
+      report.motionSpeed = { available: false };
+      return false;
+    }
+    var action = { timeScale: 1, play: function () {}, setLoop: function () {}, clampWhenFinished: false };
+    var record = { id: 'speed-clip', action: action, mixer: null, format: 'vrma', finished: false, held: false };
+    var savedPlayback = speedScene.playback;
+    var savedClips = speedScene.preferences ? speedScene.preferences.motionClips : null;
+    var out = {};
+    try {
+      speedScene.playback = { id: 'speed-clip', state: 'resting', record: record, action: action, held: false };
+      var faster = widget.core.cleanPreferences({ motionClips: { resting: { 'speed-clip': { speed: 250 } } } });
+      speedScene.preferences = faster;
+      speedScene.applyPreferences(faster);
+      out.rate250 = action.timeScale;
+      out.speed250 = record.speed;
+      var slower = widget.core.cleanPreferences({ motionClips: { resting: { 'speed-clip': { speed: 50 } } } });
+      speedScene.preferences = slower;
+      speedScene.applyPreferences(slower);
+      out.rate50 = action.timeScale;
+      var plain = widget.core.cleanPreferences({});
+      speedScene.preferences = plain;
+      speedScene.applyPreferences(plain);
+      out.rateDefault = action.timeScale;
+      out.completionUntouched = record.finished === false && record.held === false;
+    } finally {
+      speedScene.playback = savedPlayback;
+      if (speedScene.preferences) speedScene.preferences.motionClips = savedClips;
+    }
+    report.motionSpeed = out;
+    return out.rate250 === 2.5 && out.speed250 === 250
+      && out.rate50 === 0.5 && out.rateDefault === 1
+      && out.completionUntouched === true;
+  });
+
+  /**
    * THE COLLIDER SWITCH (operator, 2026-10-14: 「开body组测试一下」 → 「调整开关并不能即时生效」).
    *
    * Built from the LIBRARY'S REAL SHAPES, because a stand-in is what let the first version ship inert: `manager.joints`

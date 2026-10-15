@@ -225,6 +225,16 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
     && pageScript.includes('function renderColliderDetail')
     && pageScript.includes('preferences.springCollidersOff'),
     'the collider switch ships beside a per-collider panel, and that panel writes the preference the renderer reads');
+
+  /**
+   * 速度 — a per-clip playback rate in 状态与动作 (operator, 2026-10-14: 「允许给每个动作配置速度，默认100%，范围是1-1000%，同样具有实
+   * 时预览功能」). Static, because the wiring is the whole point: the box writes `speed` into the same per-(state, clip) entry
+   * the loop mode uses, through `core.setMotionClip`, and its bounds come from the core rather than from a literal here.
+   */
+  ok(pageScript.includes("setMotionClip(preferences, state, entry.id, 'speed'")
+    && pageScript.includes('core.motionSpeedFor(preferences, state, entry.id')
+    && pageScript.includes('core.MOTION_SPEED_LIMITS'),
+    'the clip controls carry a 速度 box, resolved and bounded through the core');
 }
 
 // ---------------------------------------------------------------------------

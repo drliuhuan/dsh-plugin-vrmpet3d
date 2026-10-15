@@ -3693,6 +3693,24 @@ group('11. authored motion (VRMA; a VMD is recognised only to be refused)');
   eq(core.motionClipFor(core.cleanPreferences({ motionClips: { resting: { a1: { loop: true } } } }), 'sleeping', 'a1'), null,
     'a state the session machine cannot reach has no per-clip entry');
 
+  /**
+   * 速度 (operator, 2026-10-14: 「允许给每个动作配置速度，默认100%，范围是1-1000%…这一步会延长或者缩短单次/循环动作的时间，但是动作结束后的
+   * 后续动作接续逻辑依然不变」).
+   *
+   * Four claims: an unconfigured clip plays at 100, a stored rate is read back for that (state, clip) pair, both ends of
+   * the range survive the cleaner, and anything outside it is DROPPED rather than clamped — a stored 0 or 100000 is a
+   * typo, and the renderer multiplies by what it reads.
+   */
+  eq(core.motionSpeedFor(core.cleanPreferences({}), 'resting', 'a1'), 100,
+    'a clip nobody configured plays at 100 %');
+  eq(core.motionSpeedFor(core.cleanPreferences({ motionClips: { resting: { a1: { speed: 250 } } } }), 'resting', 'a1'), 250,
+    'and a stored rate is read back for that state and clip');
+  same(core.cleanMotionClipEntry({ speed: 1 }), { speed: 1 }, '1 % is inside the range');
+  same(core.cleanMotionClipEntry({ speed: 1000 }), { speed: 1000 }, 'and so is 1000 %');
+  eq(core.cleanMotionClipEntry({ speed: 0 }), null, 'while 0 is dropped rather than clamped');
+  eq(core.cleanMotionClipEntry({ speed: 100000 }), null, 'and so is a rate far outside the range');
+  eq(core.MOTION_SPEED_LIMITS.default, 100, 'and the default sits where the operator put it');
+
   // The three layers of the play mode, most specific first. This is the operator's "每个状态下，可以针对每个动作
   // 设置该状态下该动作为循环还是单次" (2026-10-09).
   const layered = core.cleanPreferences({

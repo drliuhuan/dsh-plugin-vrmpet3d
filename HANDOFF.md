@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2470 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2479 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -132,6 +132,21 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 `gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
+
+**每支动作一个速度** (operator, 2026-10-14: 「在通用设置-状态与动作那里，允许给每个动作配置速度，默认100%，范围是1-1000%，同样具有实时预览功能。这一步会延长或者缩短单次/循环动作的时间，但是动作结束后的后续动作接续逻辑依然不变」).
+
+A number box in percent sits with the clip's other per-(state, clip) controls (loop mode, 表情, 口型, 台词, 提示词, 凝视), and it
+writes `speed` into the SAME entry through `core.setMotionClip`. Three things are deliberate:
+
+* **100 is stored as "no decision"**, unless a pack template names a different speed — the rule the face dropdowns already
+  follow, so 恢复默认 is typing 100 rather than a seventh control, and a template's answer stays overridable.
+* **The range lives in `core.MOTION_SPEED_LIMITS`** (1…1000, default 100) and the cleaner DROPS anything outside it rather than
+  clamping it: a stored 0 or 100000 is a typo, and the renderer multiplies by whatever it reads.
+* **It is a rate, not a re-schedule.** The scene sets `action.timeScale` where the clip starts and re-applies it on every
+  preference push, which is what makes it a live preview: the clip on screen slows down or speeds up where it is. Its own length
+  and its own end are untouched, so three still reports completion on the same clock and 接续 — the next clip, the next one-shot
+  window — simply happens sooner or later. Probe readout: `motionSpeed: {"rate250":2.5,"speed250":250,"rate50":0.5,
+  "rateDefault":1,"completionUntouched":true}`, that last flag being the operator's 接续 requirement asserted rather than assumed.
 
 **COLLIDER SIZES, A FOLDED 部位 LIST, AND 重载模型** (operator, 2026-10-14: 「增加修改弹簧骨碰撞体球尺寸的方法。“部位”区域默认折叠，内容太多了。给内置
 和外置宠物的右键菜单新增“重载模型”的选项，用来刷新模型」). Three asks, one commit:
