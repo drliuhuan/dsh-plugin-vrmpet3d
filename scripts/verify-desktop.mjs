@@ -153,6 +153,26 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
       && win.includes('danceEndedReported')
       && win.includes("body: '{}'"),
       'and the floating window reports a finished dance through the preview channel, once');
+    /**
+     * A DANCE MUST NOT BE CLAMPED, whatever its loop list says.
+     *
+     * `clampWhenFinished` is the operator's rule for REACTION states (「如果没有循环动作，单次动作结束后停止在最后一帧」, 2026-10-13), and
+     * 跳舞 is the exception he stated in the same breath as making it one-shot: 「播放结束后并不要停在最后一帧，而是直接回到idle状态」
+     * (2026-10-15). Since `motionLoopForState` forces every dance to one-shot, `loopCandidates('dancing')` is ALWAYS empty — so the
+     * general expression clamped every dance and the window froze on the final frame exactly as he reported.
+     */
+    const sceneSource = readFileSync(join(ROOT, 'lib', 'scene.js'), 'utf8');
+    ok(sceneSource.includes("record.action.clampWhenFinished = inState !== 'dancing'"),
+      'a one-shot is clamped only in the states that rule was written for — 跳舞 is excluded by name');
+    /**
+     * …and the window PUBLISHES what it resolved, so 「默认无表情的覆盖没有生效」 can be answered from the host.
+     *
+     * `face` is the scene's own per-clip answer and `clamping` is the boolean behind the freeze above; neither was readable outside
+     * the page before, which is why both reports had to be taken on trust.
+     */
+    ok(win.includes('face: scene.currentFace ? scene.currentFace() : null')
+      && win.includes('clamping: Boolean(scene.playback'),
+      'and the window reports the face it resolved and whether it is holding a frame');
   }
   const setupHtml = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
   const setupScript = readFileSync(join(ROOT, 'lib', 'setup-page.js'), 'utf8');

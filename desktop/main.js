@@ -1597,6 +1597,16 @@ function announce(info) {
         offered: lastPageState.motion.offered === undefined ? null : lastPageState.motion.offered,
         routed: lastPageState.motion.routed === undefined ? null : lastPageState.motion.routed,
         playing: lastPageState.motion.playing,
+        /**
+         * The face the window resolved, and whether three is HOLDING the clip's last frame.
+         *
+         * Relayed for the same reason `status` is: both answer a question the host cannot otherwise read. `face` says whether the
+         * per-clip answer (the profile's, else the pack's template) reached this surface at all — 「默认无表情的覆盖没有生效」 is
+         * unanswerable without it — and `clamping` says whether the one-shot on screen is being held, which is 「跳支舞之后卡在
+         * 最后一帧」 in one boolean. Measured 2026-10-15.
+         */
+        face: lastPageState.motion.face === undefined ? null : lastPageState.motion.face,
+        clamping: lastPageState.motion.clamping === undefined ? null : lastPageState.motion.clamping,
         mapped: lastPageState.motion.mapped,
         available: Array.isArray(lastPageState.motion.available)
           ? lastPageState.motion.available.map((entry) => ({
