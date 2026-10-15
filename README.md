@@ -43,7 +43,7 @@ no runtime dependencies · works offline
 
 ## 运行要求
 
-- DeepSeek Harness **0.2.0-rc.2 或更高版本**；本项目是 DSH 插件，不能作为独立应用运行。
+- 已在 DeepSeek Harness **0.2.0-rc.2** 上验证；其他版本尚未验证，不代表无法使用。本项目是 DSH 插件，不能作为独立应用运行。
 - 支持 WebGL2 的图形环境。独立悬浮窗需可用的 Electron 运行时，由启动器从 DSH 安装目录复用；无法启动时回退到应用内显示。
 - 无需安装运行时 npm 依赖。默认台词和模型动画可离线使用；AI 碎碎念取决于所选服务的网络与额度。
 
