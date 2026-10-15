@@ -1573,6 +1573,14 @@ function announce(info) {
     sources: lastPageDiagnostics ? lastPageDiagnostics.sources : null,
     pageTitle: lastPageDiagnostics ? lastPageDiagnostics.title : null,
     pageReadError: lastPageDiagnostics && lastPageDiagnostics.readError ? lastPageDiagnostics.readError : null,
+    /**
+     * The page's frame count — so "the loop is alive" is a READOUT rather than an inference.
+     *
+     * Twice this session a frozen spring bone and an un-stoppable dance were described from outside while the page reported nothing,
+     * and the frame count is the one number that separates "the loop stopped" from "the loop runs and the scene is idle". Relayed
+     * from the page state, so a page that never published reports `null` rather than a stale number.
+     */
+    frames: lastPageState && typeof lastPageState.frames === 'number' ? lastPageState.frames : null,
     over: overPet,
     interacting: interacting,
     rect: petRect,

@@ -35,6 +35,8 @@
 <script>
 (function () {
   var notes = [];
+  /** The walk itself, published through `document.title` — never as an error (see `step`). */
+  var steps = [];
   /**
    * A PROGRESS LINE the launcher can read even when nothing else works.
    *
@@ -44,11 +46,15 @@
    * even say whether the bridge existed.
    *
    * So the title carries the steps. It is ordinary DOM, it needs no bridge and no IPC, and `desktop/main.js` reads it on every poll.
+   *
+   * The steps are kept OUT of `notes`: that list is the page's ERRORS, and the first version pushed both into it — so the host's error
+   * list read `glue | bridge | config` on a perfectly healthy window, and a real failure would have had to share three slots with the
+   * walk that got there.
    */
   function step(name) {
     try {
-      notes.push(name);
-      document.title = 'vrmpet3d: ' + notes.join(' > ');
+      steps.push(name);
+      document.title = 'vrmpet3d: ' + steps.join(' > ');
     } catch (_error) {
       // A title that cannot be written must not stop the pet.
     }
