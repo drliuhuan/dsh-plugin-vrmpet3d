@@ -73,6 +73,7 @@ in the docs look wrong.
 | a delivered chunk's name, or the loader registration | `node scripts/verify-browser.mjs --page chunk-delivery` |
 | `vendor/`, the pinned 3D stack | `node scripts/vendor-build.mjs --check` |
 | documentation, or any count those docs quote | `node scripts/check-docs.mjs` (it recomputes the totals, so it IS the local suite for this case) |
+| the release tree — what `main` ships and what it must NOT carry | `node scripts/check-release.mjs <tree>` (`--prune` deletes uncompressed `.vrm`/`.vrma`; a `.br` twin always wins, and dev material must be absent) |
 | the profile wiring, or "is the running app current?" | `node scripts/check-profile.mjs` |
 | what the RUNNING app is actually serving (routes, page sources), after a restart | `node scripts/live-check.mjs` |
 
