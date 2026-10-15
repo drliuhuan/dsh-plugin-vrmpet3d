@@ -54,6 +54,15 @@ import { promisify } from 'node:util';
 import { listenOnUsablePort } from './loopback.mjs';
 // VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
 import { envVar } from '../lib/env.js';
+// The shipped pack is brotli-packed (`<name>.vrma.br`), and this tool is the one documented way to check a clip, so it has to
+// unpack one itself: reading the archive's bytes as a VRMA would fail on every clip the pack actually ships.
+import { decompressBrotli } from '../lib/brotli.js';
+
+/** Read a model or motion file, undoing a `.br` wrapper. See `lib/brotli.js` for why brotli. */
+function readMaybeCompressed(path) {
+  const bytes = readFileSync(path);
+  return String(path).toLowerCase().endsWith('.br') ? decompressBrotli(bytes) : bytes;
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -95,8 +104,8 @@ function findBrowser() {
   return null;
 }
 
-const modelBytes = readFileSync(MODEL);
-const motionBytes = readFileSync(MOTION);
+const modelBytes = readMaybeCompressed(MODEL);
+const motionBytes = readMaybeCompressed(MOTION);
 
 // ---------------------------------------------------------------------------
 // A time-varying derivative of the motion fixture.
