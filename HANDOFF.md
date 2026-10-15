@@ -20,7 +20,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2446 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2454 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -117,6 +117,21 @@ does not, and the file's own tracks stop counting in that case too (the same ans
 at zero is not on screen). `Scene.blinkState()`'s `paused` reads the same rule, because it exists to explain the gate.
 The dance clip is the first user: `template.working` gives it `expression: "none"` and `gaze: false`, so it plays with a
 blank face, with blinking, and without following the cursor — all three by file name, in the pack's manifest.
+
+**A 坠落 MARK THAT NOTHING TAKES BACK** (operator, 2026-10-14: 「我说的是工作的时候，拖动一下变成了idle，然后再也不进入工作状态了」).
+Both release paths mark the interaction `falling` so a drop reads as a drop, and the flight itself is PHYSICS — his own
+profile has 重力 off (`gravity: false`, `windowGravity: false`). The pet is then never airborne, and nothing ever cleared
+the mark: the tick expired only `landing`, which is assigned on touchdown, so `interaction` stayed `falling` for ever and
+outranks every other branch in `resolve`. Measured with `build/probe-out/watch-state.mjs`:
+`state=falling interaction=falling running=true working=1` for minutes on end while the session was plainly 工作中 — i.e.
+「拖一下之后它就再也不回工作态了」. The floating window cannot show this: it has no state machine of its own, it mirrors what the
+app half reports, which is exactly why he saw it on one surface and not the other. The fix is a GRACE owned by the
+machine: `PetMachine.setInteraction` stamps `fallingAt` when the mark goes on (one place, so every present and future
+caller gets the same clock), and the tick takes the mark back after `FALL_MARK_GRACE_MS` (300 ms) if the pet is still on
+the ground — one frame is enough for a real fall to go airborne, so a genuine drop is never touched. Probe readout:
+`gravityOffRelease: {"insideGrace":"falling","afterGrace":null}`. The same pass stopped a DRAG from acknowledging a
+completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
+count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
 
 **THE 碎碎念 FALLBACK CHAIN RUNS ALL THE WAY TO 内置** (operator, 2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）
 > 内置」). It used to stop one tier short: choosing AI or 自定义 took the shipped table OUT of the chain (the 2026-10-11 rule

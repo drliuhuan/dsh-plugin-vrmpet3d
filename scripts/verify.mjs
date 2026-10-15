@@ -1178,6 +1178,33 @@ group('6. state machine precedence');
     eq(blind.lastDismissal && blind.lastDismissal.kind, 'focus-return',
       'and the record names the path, which is why a session id matters');
     eq(blind.lastDismissal.presentId, null, 'with the missing side named');
+
+    /**
+     * …BUT NOT WHEN A DOT WAS LIT, AND NOT WHILE THE PET IS BEING DRAGGED (operator, 2026-10-14: 「拖动内置桌宠之后，会重置到
+     * idle状态，外部桌宠目前没发现这个问题」).
+     *
+     * Grabbing the pet inside the app's window focuses that window, and the focus rule above read that as 「回来了，看过了」.
+     * The evidence that he went BACK TO THE SESSION is DSH's own unread count falling — the pet can see the number even
+     * when it cannot see the id — and a drag moves no counter. The floating window never takes focus, which is why the
+     * same gesture cannot do this there.
+     */
+    const playing = new core.PetMachine(() => whyClock, 120000);
+    playing.boundary({ type: 'turn/end', sessionId: 's2', seq: 1, reason: 'completed' });
+    whyClock += core.COMPLETION_SETTLE_MS + 1;
+    const unreadSnap = { available: true, running: false, pending: false, unreadCount: 1, currentSessionId: null };
+    eq(playing.resolve(unreadSnap), 'done', 'a completion is announced while DSH still counts it unread');
+    playing.setInteraction('held');
+    playing.setFocus(true);
+    eq(playing.notice !== undefined, true, 'a drag that focuses the window does NOT throw the completion away');
+    eq(playing.resolve(unreadSnap), 'held', 'the pet is in the drag state, with its completion still behind it');
+    playing.setInteraction(null);
+    whyClock += core.NOTICE_WINDOW_MS + 1;
+    eq(playing.resolve(unreadSnap), 'done', 'and after the drag it is STILL there while the unread count has not moved');
+    eq(playing.resolve({ ...unreadSnap, unreadCount: 0 }), 'done',
+      'the count is read at the top of a frame, so the drop is noticed on the NEXT one');
+    eq(playing.resolve({ ...unreadSnap, unreadCount: 0 }), 'resting',
+      'while opening that session — DSH clearing its dot — is what ends it');
+    eq(playing.lastDismissal && playing.lastDismissal.kind, 'no-session', 'recorded as the no-identity path');
   }
 
   /**

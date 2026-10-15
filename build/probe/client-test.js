@@ -939,9 +939,11 @@
         widget.speech.clear();
         widget.notePress('drag', { region: 'head', part: ear, bone: 'ErDuo.L.002', mesh: null });
         out.dragSaid = widget.speech.current ? widget.speech.current.text : null;
-        // The part with an empty box borrows the state's own line (NOT the shipped table, which answers a
-        // different question). The event in force is set explicitly: the widget remembers it from `speechLine`,
-        // and this check drives presses without a state machine behind them.
+        // The part with an empty box says its SHIPPED pool — the chain is AI → the box → 内置 in every source now
+        // (operator, 2026-10-14: 「把所有的碎碎念都设置降级连，AI > 自定义（非空时）> 内置」), where it used to borrow the STATE's own
+        // line because the shipped part table belonged to the built-in source alone. The state's TABLE is still never
+        // borrowed, which is what 「摸耳朵不该回答开始干活了」 means. The event in force is set explicitly: the widget
+        // remembers it from `speechLine`, and this check drives presses without a state machine behind them.
         widget.speech.clear();
         widget.speechEvent = 'working';
         widget.notePress('click', { region: 'body', part: body, bone: 'Spine', mesh: null });
@@ -972,7 +974,7 @@
           return out.said !== null && out.dragSaid === null
             && out.partOnLine === 'ear' && out.touchPart === 'ear' && out.touchLabel === '耳朵'
             && out.touchMesh === null && out.touchChain === 'hair0'
-            && out.borrowed === '状态台词'
+            && typeof out.borrowed === 'string' && out.borrowed.length > 0 && out.borrowed !== '状态台词'
             && (out.aiFallback === '别摸耳朵' || out.aiFallback === '痒')
             && out.wantsPart === 'ear' && out.wantsStructure === 'ErDuo.L.002'
             && out.wantsChain === 'TwinTail.A.002.L'
@@ -8478,6 +8480,44 @@
   // own before the report is written.
   setTimeout(function () {
     Promise.all(pending.slice()).then(function () {
+  /**
+   * A RELEASE WITH 重力 OFF MUST NOT LATCH THE PET IN 坠落 (operator, 2026-10-14: 「我说的是工作的时候，拖动一下变成了idle，然后再也不进入
+   * 工作状态了」).
+   *
+   * Both release paths mark the interaction `falling` so a drop reads as a drop, but the flight is physics — and his own
+   * profile has 重力 off, so the pet is never airborne and nothing ever cleared the mark (the tick only expired `landing`).
+   * `interaction` outranks every other branch in `resolve`, so the pet sat in 坠落 while the session was 工作中: measured
+   * live, `/vrmpet3d/state` read `state=falling interaction=falling running=true working=1` for minutes on end.
+   */
+  check('a release with 重力 off clears the falling mark instead of latching it', function () {
+    var machine = widget.machine;
+    var realGravity = widget.preferences.gravity;
+    var realWindowGravity = widget.preferences.windowGravity;
+    var realInteraction = machine.interaction;
+    var realFall = widget.placement.fall;
+    var realFallingAt = machine.fallingAt;
+    try {
+      widget.preferences.gravity = false;
+      widget.preferences.windowGravity = false;
+      widget.placement.fall = null; // on the ground: there is no flight to run
+      machine.setInteraction('falling'); // the machine stamps `fallingAt` itself
+      widget.tick(1 / 60);
+      var insideGrace = machine.interaction;
+      // Past the grace: a release that produced no flight is just a release.
+      machine.fallingAt = Date.now() - 1000;
+      widget.tick(1 / 60);
+      var afterGrace = machine.interaction;
+      report.gravityOffRelease = { insideGrace: insideGrace, afterGrace: afterGrace };
+      return insideGrace === 'falling' && afterGrace === null;
+    } finally {
+      widget.preferences.gravity = realGravity;
+      widget.preferences.windowGravity = realWindowGravity;
+      widget.placement.fall = realFall;
+      machine.fallingAt = realFallingAt;
+      machine.setInteraction(realInteraction);
+    }
+  });
+
       check('dispose removes the DOM and stops the loop', function () {
         widget.dispose();
         return widget.disposed === true && widget.root === null && document.querySelector('.vrmpet3d-root') === null;
