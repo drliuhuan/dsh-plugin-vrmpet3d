@@ -20,12 +20,16 @@ reason named here, and each is credited below with its **source and author** —
 | model | 蓝色小肥鱼Deepseek |
 | author | 木子恶魔 |
 | source | <https://www.aplaybox.com/details/model/ayXkRzVflmnd> |
-| terms | 经作者授权分发 — it ships inside this plugin with the author's permission, and this credit travels with it |
+| terms | 经作者授权分发，需注明来源与作者 — it ships inside this plugin with the author's permission, and this credit travels with it |
 | file | VRM 1.0 (`VRMC_vrm`), 18 480 432 bytes, 152 nodes, 6 meshes, 53 humanoid bones, 18 preset expressions plus one custom (`TiePen`), 22 spring chains |
 
 It became the plugin's default model on 2026-10-13 (「把BlueFatFish作为默认模型」). The permission covers distribution as
 part of this plugin and nothing else: a copy taken from this repository is still the author's work, under the
 author's terms, credited above.
+
+**授权说明：** BlueFatFish / 蓝色小肥鱼Deepseek 的作者为 **木子恶魔**，来源为上方 Aplaybox 原始发布页。
+本项目获得的是随本插件分发模型的授权，并保留来源与作者署名；模型不因收录于本仓库而改用 MIT 许可证。
+其他用途以模型作者的原始条款和另行授权为准。README 展示区、模型选择页和首次引导的模型步骤均保留这些信息。
 
 ### `SampleModel.vrm` — ヴィータ, by VRoid プロジェクト
 

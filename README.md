@@ -12,6 +12,22 @@
 no runtime dependencies · works offline
 ```
 
+## 效果展示
+
+空闲、工作中、等待确认与任务完成的状态展示合成图：
+
+![桌宠空闲、工作中、等待确认与任务完成](assets/screenshots/states-overview.png)
+
+碎碎念与鼠标凝视的实机演示：
+
+![碎碎念与鼠标凝视演示](assets/screenshots/chatter-gaze.gif)
+
+展示模型为 **BlueFatFish / 蓝色小肥鱼Deepseek**，作者 **木子恶魔**，
+[原始发布页](https://www.aplaybox.com/details/model/ayXkRzVflmnd)。**经作者授权随本插件分发，需注明来源与作者。**
+模型版权归原作者，其授权独立于插件代码的 MIT 许可证。模型选择页及首次引导的模型步骤也展示相同署名、授权与来源。
+
+市场截图顺序由根目录 [screenshots.json](screenshots.json) 声明，包含合成展示图和四张原始截图。
+
 ## 功能
 
 | 功能 | 说明 |
@@ -71,6 +87,18 @@ no runtime dependencies · works offline
 ## 模型、动作与数据
 
 自带默认模型 **蓝色小肥鱼Deepseek（木子恶魔）**，以及备用模型 **ヴィータ（VRoid プロジェクト）**。来源和授权见下方许可证说明及[模型说明](assets/models/README.md)。
+
+### BlueFatFish 模型署名与授权
+
+| 项目 | 信息 |
+| --- | --- |
+| 模型文件 | `BlueFatFish.vrm.br`（加载时解压为 VRM） |
+| 模型名称 | 蓝色小肥鱼Deepseek |
+| 作者 | 木子恶魔 |
+| 来源 | [Aplaybox 原始发布页](https://www.aplaybox.com/details/model/ayXkRzVflmnd) |
+| 分发授权 | 经作者授权随本插件分发，需注明来源与作者 |
+
+本项目的 MIT 许可证不替代模型作者的授权；其他用途仍以作者原始发布页的条款和另行授权为准。
 
 模型支持 `.vrm`、`.glb`、`.gltf`，动作支持 `.vrma`；不支持 PMX/PMD 或 VMD。普通 glTF/GLB 没有 VRM 人体骨架时，不能播放 VRMA 人体动作。自带模型与动作使用 Brotli 压缩存储，加载时自动解压。
 
