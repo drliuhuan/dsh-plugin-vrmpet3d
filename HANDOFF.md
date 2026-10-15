@@ -133,6 +133,16 @@ the ground — one frame is enough for a real fall to go airborne, so a genuine 
 completion: grabbing the pet focuses the app's window, and the no-identity acknowledgement now waits for DSH's unread
 count to FALL (the visible half of 「回到已完成的会话」) rather than treating any focus as 「回来了，看过了」.
 
+**EVERY CLIP IS A `.br` NOW, AND THE MANIFEST IS REBUILT BY STEM** (operator, 2026-10-14: 「除了舞蹈，其他动作的VRMA也都压缩」). 25 more clips
+went through `scripts/compress-motions.mjs` (2,654,024 → 1,414,314 bytes, 53.3 %), the uncompressed originals were deleted, and the
+manifest's name-keyed blocks were rebuilt by matching keys with the `.br` suffix STRIPPED — which is what makes a compression-only
+change free: every existing decision (`expression`, `gaze`, `loop`, `speed`, and the operator's 工作中 parameters) survives, because
+`idle/idle.vrma` and `idle/idle.vrma.br` are the same stem. The generator walks `assets/motions` itself rather than reading a live
+payload, so it works with the host down. Two mistakes were caught on the way and are worth recording: the rebuilt block was written over
+a manifest whose template had already been emptied (recovered with `git show HEAD:…`, which is the whole argument for committing every
+step), and a `walk` that returned paths prefixed with `assets/motions/` — names matching no catalog entry, which emptied the template a
+second time. `assets/` is now 32.0 MB, down from 58.9 MB.
+
 **BR EVERYWHERE, AND A MANIFEST REBUILT BY NAME** (operator, 2026-10-14: 「把当前working时的动作参数（速度，表情等）设置为默认下发；另外，我修改了assets里面working和dance的文件名，另外，我需要把自带的所有的vrma和vrm全部都用br格式压缩封装以节约空间，请确保当前的参数全部都能对应解析到br格式」).
 
 * **MODELS have brotli support now.** Motions had it; models did not, so compressing them would have left the plugin unable to read

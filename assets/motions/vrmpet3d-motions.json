@@ -1,12 +1,12 @@
 {
   "clips": {
-    "attention/wave hand 1.vrma": {
+    "attention/wave hand 1.vrma.br": {
       "loop": true
     },
-    "attention/wave hand 2.vrma": {
+    "attention/wave hand 2.vrma.br": {
       "loop": true
     },
-    "attention/wave hand 3.vrma": {
+    "attention/wave hand 3.vrma.br": {
       "loop": true
     },
     "dance/dance1.vrma.br": {
@@ -15,70 +15,70 @@
     "dance/dance2.vrma.br": {
       "loop": false
     },
-    "fail/fall down1.vrma": {
+    "fail/fall down1.vrma.br": {
       "loop": false
     },
-    "fail/fall down2.vrma": {
+    "fail/fall down2.vrma.br": {
       "loop": false
     },
-    "idle/coolIdleGlance.vrma": {
+    "idle/coolIdleGlance.vrma.br": {
       "loop": true
     },
-    "idle/hungry1.vrma": {
+    "idle/hungry1.vrma.br": {
       "loop": false
     },
-    "idle/hungry2.vrma": {
+    "idle/hungry2.vrma.br": {
       "loop": false
     },
-    "idle/idle lookaround1.vrma": {
+    "idle/idle lookaround1.vrma.br": {
       "loop": false
     },
-    "idle/idle lookaround2.vrma": {
+    "idle/idle lookaround2.vrma.br": {
       "loop": false
     },
-    "idle/idle stretch1.vrma": {
+    "idle/idle stretch1.vrma.br": {
       "loop": false
     },
-    "idle/idle stretch2.vrma": {
+    "idle/idle stretch2.vrma.br": {
       "loop": false
     },
-    "idle/idle stretch3.vrma": {
+    "idle/idle stretch3.vrma.br": {
       "loop": false
     },
-    "idle/idle stretch4.vrma": {
+    "idle/idle stretch4.vrma.br": {
       "loop": false
     },
-    "idle/idle.vrma": {
+    "idle/idle.vrma.br": {
       "loop": true
     },
-    "idle/idle2.vrma": {
+    "idle/idle2.vrma.br": {
       "loop": true
     },
-    "idle/idle3.vrma": {
+    "idle/idle3.vrma.br": {
       "loop": true
     },
-    "idle/idle4.vrma": {
+    "idle/idle4.vrma.br": {
       "loop": true
     },
-    "idle/innocentStandIdle.vrma": {
+    "idle/innocentStandIdle.vrma.br": {
       "loop": true
     },
-    "idle/touch hair1.vrma": {
+    "idle/touch hair1.vrma.br": {
       "loop": false
     },
-    "idle/touch hair2.vrma": {
+    "idle/touch hair2.vrma.br": {
       "loop": false
     },
-    "offline/sleeping.vrma": {
+    "offline/sleeping.vrma.br": {
       "loop": true
     },
-    "success/jump 1.vrma": {
+    "success/jump 1.vrma.br": {
       "loop": true
     },
-    "success/jump 2.vrma": {
+    "success/jump 2.vrma.br": {
       "loop": true
     },
-    "success/jump 3.vrma": {
+    "success/jump 3.vrma.br": {
       "loop": true
     },
     "working/dance1.vrma.br": {
@@ -110,42 +110,42 @@
   },
   "defaults": {
     "resting": [
-      "idle/coolIdleGlance.vrma",
-      "idle/hungry1.vrma",
-      "idle/hungry2.vrma",
-      "idle/idle lookaround1.vrma",
-      "idle/idle lookaround2.vrma",
-      "idle/idle stretch1.vrma",
-      "idle/idle stretch2.vrma",
-      "idle/idle stretch3.vrma",
-      "idle/idle stretch4.vrma",
-      "idle/idle.vrma",
-      "idle/idle2.vrma",
-      "idle/idle3.vrma",
-      "idle/idle4.vrma",
-      "idle/innocentStandIdle.vrma",
-      "idle/touch hair1.vrma",
-      "idle/touch hair2.vrma"
+      "idle/coolIdleGlance.vrma.br",
+      "idle/hungry1.vrma.br",
+      "idle/hungry2.vrma.br",
+      "idle/idle lookaround1.vrma.br",
+      "idle/idle lookaround2.vrma.br",
+      "idle/idle stretch1.vrma.br",
+      "idle/idle stretch2.vrma.br",
+      "idle/idle stretch3.vrma.br",
+      "idle/idle stretch4.vrma.br",
+      "idle/idle.vrma.br",
+      "idle/idle2.vrma.br",
+      "idle/idle3.vrma.br",
+      "idle/idle4.vrma.br",
+      "idle/innocentStandIdle.vrma.br",
+      "idle/touch hair1.vrma.br",
+      "idle/touch hair2.vrma.br"
     ],
     "working": [
       "working/dance1.vrma.br"
     ],
     "waiting": [
-      "attention/wave hand 1.vrma",
-      "attention/wave hand 2.vrma",
-      "attention/wave hand 3.vrma"
+      "attention/wave hand 1.vrma.br",
+      "attention/wave hand 2.vrma.br",
+      "attention/wave hand 3.vrma.br"
     ],
     "done": [
-      "success/jump 1.vrma",
-      "success/jump 2.vrma",
-      "success/jump 3.vrma"
+      "success/jump 1.vrma.br",
+      "success/jump 2.vrma.br",
+      "success/jump 3.vrma.br"
     ],
     "error": [
-      "fail/fall down1.vrma",
-      "fail/fall down2.vrma"
+      "fail/fall down1.vrma.br",
+      "fail/fall down2.vrma.br"
     ],
     "offline": [
-      "offline/sleeping.vrma"
+      "offline/sleeping.vrma.br"
     ],
     "dancing": [
       "dance/dance1.vrma.br",
@@ -154,119 +154,119 @@
   },
   "template": {
     "resting": {
-      "idle/idle stretch2.vrma": {
+      "idle/hungry1.vrma.br": {
         "loop": false,
         "expression": "none",
         "gaze": false
       },
-      "idle/idle stretch4.vrma": {
+      "idle/hungry2.vrma.br": {
         "loop": false,
         "expression": "none",
         "gaze": false
       },
-      "idle/idle3.vrma": {
+      "idle/idle lookaround1.vrma.br": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle lookaround2.vrma.br": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle stretch1.vrma.br": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle stretch2.vrma.br": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle stretch3.vrma.br": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle stretch4.vrma.br": {
+        "loop": false,
+        "expression": "none",
+        "gaze": false
+      },
+      "idle/idle.vrma.br": {
         "expression": "none"
       },
-      "idle/hungry2.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle4.vrma": {
+      "idle/idle2.vrma.br": {
         "expression": "none"
       },
-      "idle/touch hair1.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle2.vrma": {
+      "idle/idle3.vrma.br": {
         "expression": "none"
       },
-      "idle/idle.vrma": {
+      "idle/idle4.vrma.br": {
         "expression": "none"
       },
-      "idle/touch hair2.vrma": {
+      "idle/touch hair1.vrma.br": {
         "loop": false,
         "expression": "none",
         "gaze": false
       },
-      "idle/idle stretch3.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle lookaround2.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle lookaround1.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/idle stretch1.vrma": {
-        "loop": false,
-        "expression": "none",
-        "gaze": false
-      },
-      "idle/hungry1.vrma": {
+      "idle/touch hair2.vrma.br": {
         "loop": false,
         "expression": "none",
         "gaze": false
       }
     },
     "waiting": {
-      "attention/wave hand 2.vrma": {
-        "expression": "none",
-        "gaze": false
-      },
-      "attention/wave hand 1.vrma": {
+      "attention/wave hand 1.vrma.br": {
         "loop": true,
         "expression": "none",
         "gaze": false
       },
-      "attention/wave hand 3.vrma": {
+      "attention/wave hand 2.vrma.br": {
+        "expression": "none",
+        "gaze": false
+      },
+      "attention/wave hand 3.vrma.br": {
         "expression": "none",
         "gaze": false
       }
     },
     "done": {
-      "success/jump 3.vrma": {
+      "success/jump 1.vrma.br": {
         "expression": "happy",
         "gaze": false
       },
-      "success/jump 2.vrma": {
+      "success/jump 2.vrma.br": {
         "expression": "happy",
         "gaze": false
       },
-      "success/jump 1.vrma": {
+      "success/jump 3.vrma.br": {
         "expression": "happy",
         "gaze": false
       }
     },
     "error": {
-      "fail/fall down2.vrma": {
+      "fail/fall down1.vrma.br": {
         "loop": false,
         "expression": "sad",
         "gaze": false
       },
-      "fail/fall down1.vrma": {
+      "fail/fall down2.vrma.br": {
         "loop": false,
         "expression": "sad",
         "gaze": false
       }
     },
     "offline": {
-      "offline/sleeping.vrma": {
+      "offline/sleeping.vrma.br": {
         "loop": true,
         "expression": "blink",
         "gaze": false
       }
     },
     "landing": {
-      "fail/fall down1.vrma": {
+      "fail/fall down1.vrma.br": {
         "loop": false
       }
     },
