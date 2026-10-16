@@ -53,6 +53,17 @@
     <div class="row"><span class="k" data-i18n="availableInfo">可用信息</span><span class="grow note" id="model-meta">—</span></div>
   </div>
 
+  <div class="card" id="toon-card" style="margin-top:12px">
+    <h3 data-i18n="toonTitle">卡通增强</h3>
+    <div class="row"><span class="k" data-i18n="toonState">材质状态</span><span class="grow note" id="toon-state" role="status">—</span></div>
+    <div class="row">
+      <label class="k" for="toon-mode">MToon</label>
+      <select id="toon-mode"><option value="original" data-i18n="toonOriginal">模型原始</option><option value="on" data-i18n="on">开启</option><option value="off" data-i18n="toonDisabled">关闭</option></select>
+      <button id="toon-reset" type="button" data-i18n="toonReset">恢复模型原始参数</button>
+    </div>
+    <div id="toon-controls"></div>
+    <p class="note" data-i18n="toonNote">参数仅保存到当前模型，留空使用模型原始值。关闭 MToon 后使用普通光照材质。描边倍率只调整模型已有的描边。</p>
+  </div>
 </section>
 
 <section class="settings-section" id="settings-1">
