@@ -1107,7 +1107,7 @@ group('6. state machine precedence');
   clock += core.COMPLETION_SETTLE_MS + 1;
   eq(machine.resolve(onlineIdle), 'done', 'a fresh completion shows as done once nothing started again');
   clock += core.NOTICE_WINDOW_MS + 1;
-  eq(machine.resolve(onlineIdle), 'resting', 'a stale completion stops showing as done');
+  eq(machine.resolve({ ...onlineIdle, currentSessionId: 's' }), 'resting', 'viewing the completed session clears its notice');
 
   /**
    * A completion that was SHOWN and then taken back makes the next one wait LONGER — the flash/retract cooldown.
@@ -1220,10 +1220,9 @@ group('6. state machine precedence');
     eq(blind.resolve(nowhere), 'done', 'and it does NOT expire on the hold while the user is elsewhere');
     eq(blind.lastDismissal === undefined, true, 'so nothing was dismissed by the clock');
     blind.setFocus(true);
-    eq(blind.resolve(nowhere), 'resting', 'while coming back to DSH clears it');
-    eq(blind.lastDismissal && blind.lastDismissal.kind, 'focus-return',
-      'and the record names the path, which is why a session id matters');
-    eq(blind.lastDismissal.presentId, null, 'with the missing side named');
+    eq(blind.resolve(nowhere), 'done', 'coming back to DSH without a known selected session does not clear it');
+    eq(blind.lastDismissal, undefined, 'focus alone is not a session acknowledgement');
+    eq(blind.notice.sessionId, 's1', 'the target is retained until that session is actually viewed');
 
     /**
      * …BUT NOT WHEN A DOT WAS LIT, AND NOT WHILE THE PET IS BEING DRAGGED (operator, 2026-10-14: 「拖动内置桌宠之后，会重置到
@@ -1248,9 +1247,9 @@ group('6. state machine precedence');
     eq(playing.resolve(unreadSnap), 'done', 'and after the drag it is STILL there while the unread count has not moved');
     eq(playing.resolve({ ...unreadSnap, unreadCount: 0 }), 'done',
       'the count is read at the top of a frame, so the drop is noticed on the NEXT one');
-    eq(playing.resolve({ ...unreadSnap, unreadCount: 0 }), 'resting',
-      'while opening that session — DSH clearing its dot — is what ends it');
-    eq(playing.lastDismissal && playing.lastDismissal.kind, 'no-session', 'recorded as the no-identity path');
+    eq(playing.resolve({ ...unreadSnap, unreadCount: 0, viewedCompletions: ['s2'] }), 'resting',
+      'viewing that specific session clears its notice even if selection reporting arrives later');
+    eq(playing.lastDismissal && playing.lastDismissal.kind, 'acknowledged', 'recorded as a session acknowledgement');
   }
 
   /**
@@ -1285,7 +1284,7 @@ group('6. state machine precedence');
     eq(core.statusFor(extendedPrefs, 'done', extendedClock - core.NOTICE_WINDOW_MS - 1, extendedClock).text,
       '任务达成', 'with its own line up for the whole configured time');
     extendedClock += 30000;
-    eq(extended.resolve(onlineIdle), 'resting', 'and it lets go once the configured seconds are up');
+    eq(extended.resolve({ ...onlineIdle, currentSessionId: 's' }), 'resting', 'and viewing that session clears it after the configured hold');
 
     // The readout is per frame, so an edit made while the pet runs applies without a restart.
     let liveClock = 8_000_000;
@@ -1339,13 +1338,13 @@ group('6. state machine precedence');
   machine.setInteraction('falling');
   eq(machine.resolve(working), 'falling', 'falling outranks working');
   machine.setInteraction('landing');
-  eq(machine.resolve(waiting), 'landing', 'landing outranks waiting');
+  eq(machine.resolve(waiting), 'waiting', 'attention outranks landing');
   machine.setInteraction(null);
   machine.greetingUntil = 0;
 
   // Automatic sleeping is disabled: idle keeps the resting motion mapping.
   clock += 120001;
-  eq(machine.resolve(onlineIdle), 'resting', 'idle remains resting after the legacy nap timeout');
+  eq(machine.resolve({ ...onlineIdle, currentSessionId: 's' }), 'resting', 'viewing the completed session restores idle after the legacy nap timeout');
   eq(machine.resolve(working), 'working', 'a busy session wakes the pet');
   eq(machine.resolve(onlineIdle), 'resting', 'and it stays awake shortly after');
 }
@@ -1375,7 +1374,7 @@ group('6b. the waiting latch, the pending kind, and coming back to DSH');
   machine.boundary({ type: 'turn/end', sessionId: 's', seq: 2, reason: 'completed' });
   eq(machine.resolve(approval), 'waiting', 'nor does a completion');
   machine.setInteraction('held');
-  eq(machine.resolve(question), 'held', 'a drag still owns the pose, because that is the user’s own hand');
+  eq(machine.resolve(question), 'waiting', 'attention stays visible even while the user holds the pet');
   machine.setInteraction(null);
 
   // Answered: the latch releases, and the same frame's cascade decides where to go — here, the failure that
@@ -1385,21 +1384,25 @@ group('6b. the waiting latch, the pending kind, and coming back to DSH');
   machine.clear();
   eq(machine.resolve(idle), 'resting', 'and the pet rests once the failure is dismissed');
 
-  // Coming back to DSH ends a 任务完成 or 出错 prompt: "用户切换回dsh为焦点后恢复到空闲状态".
+  // Returning to the corresponding conversation acknowledges its completion; focus on another chat does not.
   machine.boundary({ type: 'turn/end', sessionId: 's', seq: 3, reason: 'completed' });
   clock += core.COMPLETION_SETTLE_MS + 1;
   eq(machine.resolve(idle), 'done', 'a completion shows while the user is away');
   machine.setFocus(false);
   eq(machine.resolve(idle), 'done', 'losing focus does not clear it');
-  eq(machine.setFocus(true), 'resting', 'regaining focus returns the pet to the idle state');
+  clock += core.NOTICE_WINDOW_MS + 1;
+  machine.resolve({ ...idle, currentSessionId: 's' });
+  eq(machine.setFocus(true), 'resting', 'regaining focus while viewing the completed conversation restores idle');
   eq(machine.notice, undefined, 'and the notice is gone, not merely hidden');
 
   // The same for a latched failure — the other case the operator named.
   machine.boundary({ type: 'turn/end', sessionId: 's', seq: 4, reason: 'error' });
   eq(machine.resolve(idle), 'error', 'a failure latches');
   machine.setFocus(false);
+  clock += core.NOTICE_WINDOW_MS + 1;
+  machine.resolve({ ...idle, currentSessionId: 's' });
   machine.setFocus(true);
-  eq(machine.state, 'resting', 'and coming back to DSH clears that too');
+  eq(machine.state, 'resting', 'and viewing the corresponding failed conversation clears that too');
 
   /**
    * But NOT 等待确认: an unanswered question is still unanswered whether or not the window has focus, and
@@ -3103,9 +3106,9 @@ group('8. session aggregate');
        * machine never read it ("完成后的提示还是没有传到独立桌宠上").
        */
       const machine = new core.PetMachine(() => now, 120000);
-      // The store edge is the ONLY source here, and the settlement is what stands between it and 任务达成.
-      eq(machine.resolve(storeAggregate.snapshot()), 'resting',
-        'the snapshot alone is not yet 任务达成: the completion is waiting out its settle window');
+      // The user-session stop is confirmed by the aggregate, so it reports completion immediately.
+      eq(machine.resolve(storeAggregate.snapshot()), 'done',
+        'a confirmed main-session stop reports completion without an idle gap');
       now += core.COMPLETION_SETTLE_MS + 1;
       eq(machine.resolve(storeAggregate.snapshot()), 'done',
         'the SNAPSHOT alone is enough: the machine adopts the aggregate’s completion notice');

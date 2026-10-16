@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
    * Sent as an invoke so the page can await it before mounting anything.
    */
   config: () => ipcRenderer.invoke('vrmpet3d:config'),
+  focusHost: () => ipcRenderer.send('vrmpet3d:focus-host'),
 
   /** The global cursor position, pushed by the main process at frame rate. */
   onCursor: (callback) => {

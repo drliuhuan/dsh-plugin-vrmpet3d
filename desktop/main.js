@@ -8,7 +8,7 @@
 // Everything here was measured before it was written (see HANDOFF §12): a transparent
 // always-on-top window renders WebGL with a real alpha channel, can be resized to the whole
 // screen, and `capturePage()` returns pixels that are mostly fully transparent.
-const { app, BrowserWindow, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -604,6 +604,7 @@ app.whenReady().then(async () => {
       if (!probing) sendCursor(lastCursor);
     };
 
+    ipcMain.on('vrmpet3d:focus-host', () => { shell.openExternal('dsh://open').catch(() => {}); });
     ipcMain.handle('vrmpet3d:config', () => ({
       modelId: options.modelId,
       assetBase: '/vrmpet3d/asset',

@@ -526,7 +526,7 @@
         connected: true,
         scope: 'global',
         catalog: { byId: { s1: {} }, phase: 'ready' },
-        statuses: new Map(),
+        statuses: new Map([['s1', { running: false, pendingInteraction: null }]]),
         currentSessionId: 's1',
       });
       machine.reset();
@@ -1380,10 +1380,16 @@
       scope: 'global',
     });
     widget.tick(1 / 60);
+    var attentionWhileDisconnected = widget.pet.getAttribute('data-state');
+    widget.aggregate.setInput({
+      connected: false, catalog: { byId: { s1: {} }, phase: 'ready' },
+      statuses: new Map([['s1', { running: false, pendingInteraction: null }]]), scope: 'global',
+    });
+    widget.tick(1 / 60);
     var offline = widget.pet.getAttribute('data-state');
 
     report.states = { working: working, waiting: waiting, offline: offline };
-    return working === 'working' && waiting === 'waiting' && offline === 'offline';
+    return working === 'working' && waiting === 'waiting' && attentionWhileDisconnected === 'waiting' && offline === 'offline';
   });
 
   check('a turn boundary shows 任务完成', async function () {
@@ -1397,12 +1403,10 @@
     widget.boundary({ type: 'turn/start', sessionId: 's1', seq: 1 });
     widget.boundary({ type: 'turn/end', sessionId: 's1', seq: 2, reason: 'completed' });
     widget.tick(1 / 60);
-    // Withheld at first: a task is not a turn, so the pet waits out `COMPLETION_SETTLE_MS` before congratulating.
-    var withheld = widget.pet.getAttribute('data-state') !== 'done';
-    await settleCompletion();
-    widget.tick(1 / 60);
-    report.turnBoundary = { withheld: withheld, state: widget.pet.getAttribute('data-state') };
-    return withheld && widget.pet.getAttribute('data-state') === 'done';
+    // This user's session ended: no idle frame or fixed wait belongs between working and done.
+    var immediate = widget.pet.getAttribute('data-state') === 'done';
+    report.turnBoundary = { immediate: immediate, state: widget.pet.getAttribute('data-state') };
+    return immediate;
   });
 
   check('dragging the widget enters held, and releasing makes it fall', function () {
