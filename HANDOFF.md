@@ -13,6 +13,43 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
+## ▶ 鲸鱼标记：宿主在激活时从"正在跑的 DSH"里读，读不到逐级回落（2026-10-16）
+
+操作者：「assets/whale-tail.apng 是不是可以从 dsh 客户端里提取或者引用？」→「就按你说的，宿主最早加载插件的时候就抄下来，抄不到就逐级回落。」
+
+* **它本来处在三处自相矛盾的状态**：dev 上这个文件**被跟踪**（21,631 B，DeepSeek 的 60 帧 APNG），而
+  `scripts/whale-asset.mjs` 的注释说它「git-ignored」，`lib/index.js` 的注释说「NOT committed」，`files[]` 又把它排除
+  —— 于是 main/发布版从来没有它，`/vrmpet3d/whale` 404、两个提示回落静态 SVG。实测：`/vrmpet3d/whale` 与
+  `/vrmpet3d-dev/whale` 都是 404。
+* **来源与可行性（都实测过）**：标记不是独立资源，而是内联在 DSH 客户端 bundle 的 CSS 里：
+  `<install>/resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js`（551.8 KB）里的
+  `mask:url(data:image/png;base64,…)`（28,844 个 base64 字符 → 21,631 B、60 帧、28×28，**与仓库里那份逐字节相同**）。
+  宿主读得到 asar 不是推测：拿 `/favicon.svg` 与 asar 内成员比对，HTTP 返回的字节**逐字节相同**；而那个 web 服务就是插件
+  注册路由的同一个 cordis 进程。纯 `dsh web` 部署（plain node，包是真实目录）走同一段 `join()` 的第二个候选路径。
+* **做法**：新的 `lib/whale.js` 是**唯一一份**解析规则（marker、base64 解码、`acTL`/`fcTL` 校验），宿主与
+  `scripts/whale-asset.mjs` 都 import 它。`apply()` **最早**就调一次 `resolveWhaleMark(...)`（操作者要的"最早加载插件的时候"），
+  逐级回落：
+  1. **正在跑的这个 DSH** 自己的 bundle（打包版读 `app.asar`，纯装版读真实文件）；
+  2. `assets/whale-tail.apng`（dev 预置过、或用户自己放了一份；`VRMPET3D_WHALE_FILE` 可改指向）；
+  3. **上一次激活缓存下来的副本**——落在插件自己的状态目录 `<profile>/vrmpet3d-desktop/whale-tail.apng`（= `importRootDir()`，
+     所以套件用 `VRMPET3D_IMPORT_DIR` 就把它关在 scratch 里，gotcha 37）；每次第 1 级成功都会刷新它；
+  4. 都没有 → 404，两个提示回落静态 SVG。
+  字节在**内存**里活一次激活（不去 552 KB 每请求一读），每条分支都记一行 `ctx.logger.info`，谁都不抛。
+* **不落进包目录**：npm 安装的包在 `node_modules/` 下，更新/重装就没了，而且往包目录写是不该做的事；状态目录才是插件写自己的地方。
+* **陈旧性**：第 3 级只是兜底，永远不在"源可读"时抢先回答，所以 DSH 升级后标记自动跟着变——这正是要的形状。
+* **仓库与发布版都干净了**：dev 上 `git rm --cached assets/whale-tail.apng` + `.gitignore` 加一行（让脚本注释说的
+  "git-ignored" 变成真的）；`files[]` 的排除照旧。**顺带的效果正是这件事想要的**：发布版第一次也有动图（从用户自己那份 DSH 里读），
+  `files[]` 不用改，`assets/whale-tail.apng` 也不再需要随包。
+* **`whale-asset.mjs` 退化成"离线预置 + `--check`"**：它的 `--check` 现在是「文件在就必须是可用的动图，不在就算通过（打印说明）
+  ——因为运行时那一路已经覆盖了」；这一点变了语义，是因为**缺席不再是一种错误**。
+* **验证（AGENTS.md 的窄验证）**：`verify-model` **812**（+16，新增第 13d 组：marker 解析、rung 1/2/3/4 的顺序、
+  成功时刷新缓存副本、以及"DSH 的 bundle 里是静止 PNG 时必须被拒绝并继续回落"），并把它那条 HTTP 断言钉在
+  `VRMPET3D_WHALE_FILE` 上（原来靠"本机恰好有那个文件"，现在由套件自己的 PNG 形状 fixture 决定，两个 `DSH_ASAR`
+  拼写按 `check-docs` 的老办法用空字符串清掉）；`check-plugin-load`（激活时多了一次解析，路由表不变）、
+  `client-chunks --check`、`live-check`（两条前缀）、`make-dev-package` + `--check`。文档面：README/HANDOFF/ARCHITECTURE
+  的计数 2609 → **2625**、verify-model 行 796 → **812**。**没跑**：完整 `check-docs`（会强行打开 `verify-desktop`
+  的实时半场——真实置顶窗口，时机照旧留给操作者）、`verify-all`、`verify.mjs`（`lib/core.js` 未动）。
+
 ## ▶ dev 版与正式版同时在 DSH 里跑：生成式 dev 孪生（2026-10-16）
 
 操作者：「本地是 dev 分支，可以在 dev 分支的插件名字后面加上 -dev 吗？让我可以同时在 dsh 中调试正式版插件和 dev 版本。」
@@ -191,7 +228,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2609 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2625 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which

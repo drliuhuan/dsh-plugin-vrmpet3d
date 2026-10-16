@@ -29,6 +29,12 @@ build/*.png
 # lib/client.vendor.js is committed instead, so the plugin runs with no toolchain.
 vendor/node_modules/
 
+# DSH's own animated whale mark, which this repository must not carry (`docs/ASSET-CONTRACT.md` §1): the host
+# reads it out of the RUNNING DSH at activation now (`lib/whale.js`), and `scripts/whale-asset.mjs` only
+# pre-seeds this copy for a deployment that cannot read the app. Committed once by accident; the rule above
+# says it stays out of the tree, and the package's `files[]` excludes it either way.
+assets/whale-tail.apng
+
 # The generated DEV TWIN (`scripts/make-dev-package.mjs`): a second, identity-shifted copy of
 # this plugin — `dsh-plugin-vrmpet3d-dev`, routes `/vrmpet3d-dev/...` — that DSH composes beside
 # the real one. A build product like the client chunks, and never a source of truth: the second

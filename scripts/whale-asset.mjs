@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 /**
- * Extract DSH's animated whale mark from the installed application.
+ * Pre-seed `assets/whale-tail.apng` from the installed DSH — the OFFLINE half of the whale mark.
  *
  * Run:  node scripts/whale-asset.mjs [--check]
  *
- * ## Why this exists instead of a committed file
+ * ## The mark now has a runtime source; this script is the fallback it pre-seeds
+ *
+ * Since 2026-10-16 the HOST half reads the mark out of the running DSH at activation (`lib/whale.js`,
+ * falling back to this file and then to the copy it caches in the plugin's state directory), so nothing here
+ * is required for the pet to show the animated tail. What this script is still for:
+ *
+ *   * a checkout with no asar-readable DSH (a terminal `dsh web` deployment whose packages are real
+ *     directories is covered by the runtime search too, but a CI box with no DSH at all is not);
+ *   * `--check`, which is the cheap assertion that the file in `assets/` — when a checkout has one — really is
+ *     the animated mark rather than a still PNG.
+ *
+ * ## Why the bytes are not in the repository
  *
  * The operator's pet shows DSH's own running label, and that label's mark is a **60-frame APNG**: the app
  * embeds it in `dsh-client-ui-chat`'s stylesheet as a `mask:url(data:image/png;base64,…)`, animates it, and
@@ -12,12 +23,9 @@
  *
  * That image is DeepSeek's, not this project's, and `docs/ASSET-CONTRACT.md` §1 is the rule this repository
  * follows for assets it did not make: the plugin loads them from where they already live and never copies
- * them into the tree. So the bytes are read out of the DSH installation that is running this plugin, written
- * to `assets/whale-tail.apng` (git-ignored, like every generated fixture in `build/`), and served from there
- * by the host's `/vrmpet3d/whale` route. A checkout with no DSH to read simply has no file: the route answers
- * 404 and both prompts fall back to the static SVG, which is exactly the app's own fallback.
- *
- * `--check` verifies an already-extracted file rather than rewriting it, and is what the suites run.
+ * them into the tree. `assets/whale-tail.apng` is therefore git-ignored, and this script writes it only for a
+ * deployment that cannot read the running app. The parse rule itself lives in `lib/whale.js` — one copy, the
+ * one the host uses — so this script cannot drift from what `/vrmpet3d/whale` actually serves.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -25,15 +33,18 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // VRMPET3D_* with the pre-rename PET3D_* names as a fallback (lib/env.js).
 import { envVar } from '../lib/env.js';
+// The ONE parse rule: the marker, the base64 decode and the "is it really animated" check.
+import { WHALE_BUNDLE_MEMBER, parseWhaleBundle, inspectWhaleImage } from '../lib/whale.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'assets', 'whale-tail.apng');
 const CHECK = process.argv.includes('--check');
 
-/** The chat plugin whose stylesheet carries the mark. */
-const CHAT_CLIENT = 'dsh/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js';
-/** The declaration that carries it: `mask:url(data:image/png;base64,…)`. */
-const MARKER = 'mask:url(data:image/png;base64,';
+/**
+ * Where the mark lives inside the installation, relative to the archive's own root: the packaged app holds
+ * the whole tree under `dsh/`, which is what `WHALE_BUNDLE_MEMBER` is relative to.
+ */
+const CHAT_CLIENT = `dsh/${WHALE_BUNDLE_MEMBER}`;
 
 const ASAR_CANDIDATES = [
   envVar('DSH_ASAR'),
@@ -60,40 +71,30 @@ function extract() {
   } catch (error) {
     return { error: `could not read ${CHAT_CLIENT} from ${ASAR}: ${error.message}` };
   }
-  const at = bundle.indexOf(MARKER);
-  if (at < 0) return { error: `${CHAT_CLIENT} carries no ${JSON.stringify(MARKER)} declaration` };
-  const start = at + MARKER.length;
-  let end = start;
-  while (end < bundle.length && ![')', '"', "'", ';', ' ', '\n'].includes(bundle[end])) end += 1;
-  const base64 = bundle.slice(start, end);
-  let bytes;
-  try {
-    bytes = Buffer.from(base64, 'base64');
-  } catch (error) {
-    return { error: `the embedded mask is not valid base64: ${error.message}` };
-  }
-  if (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return { error: 'the embedded mask is not a PNG' };
-  const text = bytes.toString('latin1');
-  if (!text.includes('acTL') || !text.includes('fcTL')) {
-    return { error: 'the embedded mask is a still PNG, not the animated one' };
-  }
-  return {
-    bytes,
-    frames: (text.match(/fcTL/g) || []).length,
-    width: bytes.readUInt32BE(16),
-    height: bytes.readUInt32BE(20),
-    asar: ASAR,
-  };
+  const parsed = parseWhaleBundle(bundle);
+  if (parsed.error) return { error: `${CHAT_CLIENT}: ${parsed.error}` };
+  return { ...parsed, asar: ASAR };
 }
 
 if (CHECK) {
   if (!existsSync(OUT)) {
-    console.log(`whale mark: absent (${OUT}); run: node scripts/whale-asset.mjs`);
+    /**
+     * ABSENT IS A PASS NOW, and that is a change of meaning rather than a relaxation.
+     *
+     * The host reads the mark out of the running DSH at activation, so a checkout with no pre-seeded file
+     * still shows the animated tail — there is nothing here to be wrong. What this check is FOR is the file
+     * that IS present: that it is the animated mark and not, say, a still PNG a script wrote by mistake.
+     */
+    console.log(`whale mark: no pre-seeded ${OUT} (nothing to check; the host reads the running DSH's own mark)`);
+    process.exit(0);
+  }
+  // The same rule the host applies, so `--check` cannot pass a file `/vrmpet3d/whale` would refuse.
+  const checked = inspectWhaleImage(readFileSync(OUT));
+  if (checked.error) {
+    console.error(`whale mark: ${OUT} is not usable: ${checked.error}`);
     process.exit(1);
   }
-  const text = readFileSync(OUT).toString('latin1');
-  const frames = (text.match(/fcTL/g) || []).length;
-  puts(readFileSync(OUT), frames);
+  puts(checked.bytes, checked.frames);
   process.exit(0);
 }
 

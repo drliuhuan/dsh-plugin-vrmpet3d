@@ -55,7 +55,61 @@ await import(new URL('../lib/core.js', import.meta.url).href);
  * a route test would only prove that whatever the route did produced bytes that matched whatever it did.
  */
 const brotli = await import(new URL('../lib/brotli.js', import.meta.url).href);
+/**
+ * The whale mark's own module, which the closing chain group drives directly.
+ *
+ * `/vrmpet3d/whale` serves whatever `resolveWhaleMark` found AT ACTIVATION, so the order of its rungs — the
+ * running DSH, this package's file, the copy a previous activation cached, nothing — cannot be re-asked over
+ * HTTP without re-applying the plugin. The rule is a pure function of the paths it is handed, which is what
+ * lets one group drive every rung.
+ */
+const whaleMark = await import(new URL('../lib/whale.js', import.meta.url).href);
 const core = globalThis.__VRMPET3D_CORE__;
+
+/**
+ * The whale fixtures: PNG-SHAPED bytes built here rather than DeepSeek's mark copied.
+ *
+ * What the host checks — and therefore what a suite can hold it to — is the PNG signature plus the `acTL`
+ * animation-control and `fcTL` frame-control chunks, not decoded pixels. The real mark is the 21 KB APNG this
+ * repository must not keep (`docs/ASSET-CONTRACT.md` §1), so the fixture is a header, an animation control
+ * chunk and two frame control chunks: exactly the shape that decides every branch below, and nothing that
+ * could be mistaken for the real asset.
+ */
+function apngFixture(frames = 2) {
+  const ihdr = Buffer.alloc(8 + 13 + 4);
+  ihdr.writeUInt32BE(13, 0);
+  ihdr.write('IHDR', 4, 'latin1');
+  ihdr.writeUInt32BE(28, 8);
+  ihdr.writeUInt32BE(28, 12);
+  const actl = Buffer.alloc(8 + 8 + 4);
+  actl.writeUInt32BE(8, 0);
+  actl.write('acTL', 4, 'latin1');
+  const fctl = Buffer.alloc(8 + 26 + 4);
+  fctl.writeUInt32BE(26, 0);
+  fctl.write('fcTL', 4, 'latin1');
+  const iend = Buffer.alloc(12);
+  iend.write('IEND', 4, 'latin1');
+  return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), ihdr, actl,
+    ...Array.from({ length: frames }, () => fctl), iend]);
+}
+
+/** A still PNG: the signature and an IHDR, deliberately with no `acTL`/`fcTL`. */
+function stillPngFixture() {
+  return Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('0000000dIHDR0000001c0000001c', 'latin1'),
+    Buffer.from('00000000IEND', 'latin1'),
+  ]);
+}
+
+/** One DSH-shaped root: `<root>/dsh/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js`. */
+function dshLayoutFixture(root, image, label) {
+  const member = join(root, 'dsh', 'node_modules', '@deepseek-ai', 'dsh-client-ui-chat', 'lib', 'client.js');
+  mkdirSync(dirname(member), { recursive: true });
+  writeFileSync(member,
+    `/* ${label} */\nvar css = "color:red;mask:url(data:image/png;base64,${image.toString('base64')}) center/contain";\n`);
+  return member;
+}
 
 /**
  * The imported-directory list the whole run is pointed at.
@@ -121,6 +175,28 @@ rmSync(MODEL_FILES_FILE, { force: true });
 rmSync(MOTION_IMPORTS_FILE, { force: true });
 rmSync(SETUP_FILE, { force: true });
 rmSync(IMPORT_STATE_DIR, { recursive: true, force: true });
+
+/**
+ * And the whale mark's local rungs, pointed at fixtures this suite owns.
+ *
+ * The host resolves the mark ONCE, at activation, and `/vrmpet3d/whale` then serves that answer — so a suite
+ * that let the resolution read the repository's own `assets/whale-tail.apng` would be asserting "this machine
+ * happens to have pre-seeded the mark", and one that let it read the operator's DSH would assert nothing at
+ * all in plain node (`existsSync` on a member of `app.asar` is false without Electron's patched `fs`).
+ * `VRMPET3D_WHALE_FILE` names the fallback file instead; the two `DSH_ASAR` spellings are cleared, because an
+ * empty string counts as unset in `lib/env.js` — the same technique `check-docs.mjs` uses for the desktop
+ * suite's switch.
+ *
+ * The cached copy a previous activation would leave is `join(importRootDir(), 'whale-tail.apng')`, which the
+ * `VRMPET3D_IMPORT_DIR` redirection above already puts in this suite's scratch (gotcha 37), and the chain
+ * group at the end of the run is what exercises it.
+ */
+const WHALE_FIXTURE_FILE = join(ROOT, 'build', 'fixtures', 'whale-mark-verify.apng');
+mkdirSync(dirname(WHALE_FIXTURE_FILE), { recursive: true });
+writeFileSync(WHALE_FIXTURE_FILE, apngFixture());
+process.env.VRMPET3D_WHALE_FILE = WHALE_FIXTURE_FILE;
+process.env.VRMPET3D_DSH_ASAR = '';
+process.env.PET3D_DSH_ASAR = '';
 
 let passed = 0;
 let failed = 0;
@@ -1394,27 +1470,21 @@ group('8. registered routes and both catalogs over HTTP');
    *
    * The status prompt masks the whale through this image, so "the tail is not animated" is a delivery
    * question before it is a styling one — and the two failure modes have to be told apart: a route that
-   * answers 404 (host half not restarted, or the asset never extracted) versus an image that arrives but is
-   * a STILL PNG (the app's fallback would then never animate, silently). Both are asserted, and the check is
-   * portable: a checkout with no extracted asset is expected to answer 404, because that is exactly the state
-   * in which both prompts fall back to the static SVG.
+   * answers 404 (the host resolved no mark at all) versus an image that arrives but is a STILL PNG (the
+   * app's fallback would then never animate, silently). Both are asserted here, and the source is pinned to
+   * `VRMPET3D_WHALE_FILE` above so the answer is this suite's fixture rather than whatever the machine has
+   * pre-seeded. The rungs that decide WHICH source wins are group 13d's subject, not this block's.
    */
   {
-    const whalePath = join(ROOT, 'assets', 'whale-tail.apng');
     const whale = await server.call('/vrmpet3d/whale');
-    if (existsSync(whalePath)) {
-      eq(whale.status, 200, '/vrmpet3d/whale serves the extracted mark');
-      eq(whale.headers['content-type'], 'image/apng', 'as an APNG');
-      const bytes = whale.body;
-      eq(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'whose bytes are a PNG');
-      const text = bytes.toString('latin1');
-      ok(text.includes('acTL') && text.includes('fcTL'),
-        `and an ANIMATED one (${(text.match(/fcTL/g) || []).length} frames, not a still fallback)`);
-      eq(bytes.length, readFileSync(whalePath).length, 'byte for byte what the extractor wrote');
-    } else {
-      eq(whale.status, 404,
-        '/vrmpet3d/whale answers 404 when the mark was never extracted (the static SVG is the fallback)');
-    }
+    eq(whale.status, 200, '/vrmpet3d/whale serves the mark the host resolved at activation');
+    eq(whale.headers['content-type'], 'image/apng', 'as an APNG');
+    const bytes = whale.body;
+    eq(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'whose bytes are a PNG');
+    const text = bytes.toString('latin1');
+    ok(text.includes('acTL') && text.includes('fcTL'),
+      `and an ANIMATED one (${(text.match(/fcTL/g) || []).length} frames, not a still fallback)`);
+    eq(bytes.length, readFileSync(WHALE_FIXTURE_FILE).length, 'byte for byte what VRMPET3D_WHALE_FILE names');
   }
 
   const modelCatalog = await server.json('/vrmpet3d/catalog');
@@ -3328,6 +3398,99 @@ group('13b. the state channel stops believing a report that has gone quiet');
 
   for (const dispose of effects) dispose();
   await server.close();
+}
+
+// ---------------------------------------------------------------------------
+group('13d. the whale mark: read from the running DSH, then fall back rung by rung');
+/**
+ * WHY THIS GROUP EXISTS.
+ *
+ * Since 2026-10-16 `/vrmpet3d/whale` serves DSH's own mark read out of the RUNNING application at activation
+ * (the operator: 「宿主最早加载插件的时候就抄下来，抄不到就逐级回落」). That is a delivery chain with four
+ * rungs, and the failure it can hide is the quiet one: serving a STILL PNG, or serving the packaged copy
+ * while the app's own mark went unread, or reporting a 404 on a machine that had a perfectly good cached
+ * copy. Each rung is asserted on its own here, with fixture roots, because the rung that WINS cannot be
+ * re-asked over HTTP without re-applying the plugin — and because the real mark is DeepSeek's asset, which
+ * this repository must not keep in order to test (`docs/ASSET-CONTRACT.md` §1).
+ *
+ * The fixtures are laid out the way a real installation is: `<root>/dsh/node_modules/…/dsh-client-ui-chat/
+ * lib/client.js` with a `mask:url(data:image/png;base64,…)` declaration in it.
+ */
+{
+  const scratch = join(ROOT, 'build', 'fixtures', 'whale-chain-verify');
+  rmSync(scratch, { recursive: true, force: true });
+  mkdirSync(scratch, { recursive: true });
+
+  const mark = apngFixture(3);
+  const other = apngFixture(1);
+  const dshRoot = join(scratch, 'asar-shaped');
+  const dshMember = dshLayoutFixture(dshRoot, mark, "the running DSH's own bundle");
+  const stillRoot = join(scratch, 'asar-shaped-still');
+  dshLayoutFixture(stillRoot, stillPngFixture(), 'a still PNG, which must never be served as the animated mark');
+  const localFile = join(scratch, 'local.apng');
+  const stateFile = join(scratch, 'state', 'whale-tail.apng');
+  writeFileSync(localFile, other);
+
+  /** The parse rule on its own: what a bundle's declaration yields, and what it refuses. */
+  {
+    const parsed = whaleMark.parseWhaleBundle(readFileSync(dshMember, 'utf8'));
+    ok(!parsed.error && parsed.frames === 3 && parsed.width === 28 && parsed.height === 28,
+      `the declaration parses to the animated bytes (${parsed.error ?? `${parsed.frames} frames ${parsed.width}x${parsed.height}`})`);
+    eq(Buffer.compare(parsed.bytes ?? Buffer.alloc(0), mark), 0, 'byte for byte, with the base64 decoded');
+    const still = whaleMark.inspectWhaleImage(stillPngFixture());
+    ok(Boolean(still.error) && /still PNG/.test(still.error),
+      `and a still PNG is REFUSED by name rather than served as if it animated (${still.error})`);
+    const absent = whaleMark.parseWhaleBundle('var css = "color: red";');
+    ok(Boolean(absent.error) && absent.error.includes(whaleMark.WHALE_MARKER),
+      'a bundle with no declaration says which declaration it looked for');
+  }
+
+  /** Rung 1 wins over the packaged copy, and refreshes the cached copy on its way past. */
+  {
+    const found = whaleMark.resolveWhaleMark({ asar: dshRoot, localFile, stateFile });
+    eq(found.source, dshMember, "the mark comes from the running DSH's own bundle, not from the packaged file");
+    eq(Buffer.compare(found.bytes ?? Buffer.alloc(0), mark), 0, 'and it is that bundle\'s bytes, not the other file\'s');
+    ok(existsSync(stateFile), 'a successful read caches a copy in the plugin\'s own state directory');
+    ok(existsSync(stateFile) && Buffer.compare(readFileSync(stateFile), mark) === 0, 'holding those same bytes');
+  }
+
+  /** Rung 2: no readable DSH, so the packaged file answers — as it always did. */
+  {
+    const found = whaleMark.resolveWhaleMark({ asar: join(scratch, 'nothing-here'), localFile });
+    ok(String(found.source).startsWith("the plugin's own mark:"),
+      `with no DSH to read, the packaged file answers (${found.source ?? found.error})`);
+    eq(Buffer.compare(found.bytes ?? Buffer.alloc(0), other), 0, 'and it is that file\'s bytes');
+  }
+
+  /** Rung 3: no DSH and no packaged file, but a copy a previous activation left is still a mark. */
+  {
+    const found = whaleMark.resolveWhaleMark({ asar: join(scratch, 'nothing-here'), localFile: join(scratch, 'absent.apng'), stateFile });
+    ok(String(found.source).startsWith('the copy a previous activation left'),
+      `the cached copy is the third rung (${found.source ?? found.error})`);
+    eq(Buffer.compare(found.bytes ?? Buffer.alloc(0), mark), 0, 'and it is the bytes the first rung cached');
+  }
+
+  /** Rung 4: nothing anywhere is a REPORTED failure, not a throw and not a silent still image. */
+  {
+    const found = whaleMark.resolveWhaleMark({ asar: join(scratch, 'nothing-here'), localFile: join(scratch, 'absent.apng'), stateFile: join(scratch, 'no-copy.apng') });
+    ok(Boolean(found.error) && Array.isArray(found.tried) && found.tried.length > 0,
+      `nothing to read is an error naming what was tried (${found.tried?.length ?? 0} paths)`);
+    ok(!found.bytes, 'and no bytes are invented for the route to serve');
+  }
+
+  /**
+   * A DSH whose bundle carries a STILL PNG must not win: the whole point of reading the running app is the
+   * animated half, and `/vrmpet3d/whale` answering with a still image would look like a working route while
+   * the tail never moved.
+   */
+  {
+    const found = whaleMark.resolveWhaleMark({ asar: stillRoot, localFile });
+    ok(String(found.source).startsWith("the plugin's own mark:"),
+      'a still PNG in DSH\'s bundle is refused, and the chain falls through to the packaged file');
+    eq(Buffer.compare(found.bytes ?? Buffer.alloc(0), other), 0, 'so what is served is still an animated image');
+  }
+
+  rmSync(scratch, { recursive: true, force: true });
 }
 
 // ---------------------------------------------------------------------------

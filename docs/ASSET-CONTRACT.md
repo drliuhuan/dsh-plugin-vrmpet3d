@@ -66,11 +66,24 @@ The 工作中 prompt is DSH's own running label, and that label's mark is DeepSe
 app embeds in `dsh-client-ui-chat`'s stylesheet and masks `currentColor` through, with a static SVG for
 reduced motion, forced colours, or a browser without alpha masks.
 
-It follows the rule above rather than an exception to it. Nothing is committed here: `scripts/whale-asset.mjs`
-reads the image out of the **installed** DSH (`resources/app.asar`) into `assets/whale-tail.apng`, the host
-serves it from `/vrmpet3d/whale`, and `assets/whale-tail.apng` is excluded from the package's `files` list. A
-checkout with no DSH, or one where the script has not been run, has no file and shows the static SVG — the
-app's own fallback.
+It follows the rule above rather than an exception to it. Nothing is committed here, and since 2026-10-16 the
+bytes are read out of the **running** DSH itself, at plugin activation, by `lib/whale.js`: the mark is a
+`mask:url(data:image/png;base64,…)` declaration inside `dsh-client-ui-chat`'s own client bundle
+(`resources/app.asar/dsh/node_modules/…` for the packaged app, the same member as a real file for a plain
+install), the host parses that declaration, checks for the `acTL`/`fcTL` animation chunks, and serves the bytes
+from `/vrmpet3d/whale`. The rungs after it are the fallback — `assets/whale-tail.apng` (what
+`scripts/whale-asset.mjs` pre-seeds for a deployment that cannot read the app), then a copy cached in the
+plugin's own state directory — and if none of them answers, the route returns 404 and both prompts draw the
+static SVG, which is the app's own fallback.
+
+Two properties are worth stating, because they are why this shape was chosen over a committed file:
+
+* that packaged copy is **git-ignored and excluded from `files`**, so no distribution of this plugin carries
+  DeepSeek's image, while an install still shows the animated tail by reading it from the app that is running
+  it — and it tracks that app's version with nothing to re-extract by hand;
+* the reading happens ONCE, at activation, and the bytes live in memory for that activation
+  (`resolveWhaleMark` refreshes the state-directory copy on the way past but never answers from it while a
+  source is readable, so a DSH update cannot leave a stale mark behind a working route).
 
 ### About the project's own reference model
 

@@ -59,10 +59,12 @@
  * never fire. Nothing on this machine carries them any more, so they are dead either way — but they
  * are dead for the honest reason.
  *
- * `assets/whale-tail.apng` is deliberately absent, exactly as it is from a real install
- * (`files[]` excludes it, and `docs/ASSET-CONTRACT.md` §1 forbids copying an asset the project
- * did not make): the twin's `/vrmpet3d-dev/whale` answers 404 and both prompts fall back to
- * the static SVG, which is what the released plugin does as well.
+ * `assets/whale-tail.apng` is deliberately absent, exactly as it is from a real install (`files[]` excludes
+ * it, and `docs/ASSET-CONTRACT.md` §1 forbids copying an asset the project did not make). Since 2026-10-16
+ * that costs the twin nothing: the host reads the mark out of the RUNNING DSH at activation
+ * (`lib/whale.js`), so `/vrmpet3d-dev/whale` answers exactly as the released plugin's `/vrmpet3d/whale`
+ * does — from the app's own bundle, with the same fallbacks. (Before that change the twin's route 404'd
+ * here, because the twin is generated and the mark was a file in the tree.)
  *
  * Cost of keeping it alive: one command after an edit to `lib/` or `desktop/`, and `--check`
  * in the same breath as `client-chunks.mjs --check`. A stale twin is not silent — it fails
