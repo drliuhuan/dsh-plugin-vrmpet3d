@@ -2635,6 +2635,7 @@
       // 切换模型: the model picker's own row, added 2026-10-13, and it belongs to the SHARED table because both
       // pets offer it — the operator asked for it in both menus, with the guide's 偏好模型 content behind it.
       && zh.switchModel === '切换模型'
+      && zh.miniGame === '小游戏 · 吃白饭'
       // 重载模型: re-read the model FILE without touching the profile (operator, 2026-10-14) — the second model row, and
       // in the shared table for the same reason 切换模型 is: both pets offer it.
       && zh.reloadModel === '重载模型'

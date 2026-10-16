@@ -330,7 +330,7 @@ app.whenReady().then(async () => {
       height: 860,
       minWidth: 560,
       minHeight: 420,
-      title: isGame ? '开饭啦 · 桌宠弹球' : 'vrmpet3d - model settings',
+      title: isGame ? '吃白饭 · 桌宠弹球' : 'vrmpet3d - model settings',
       fullscreen: isGame,
       backgroundColor: '#16171c',
       show: true,

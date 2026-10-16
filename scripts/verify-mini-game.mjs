@@ -50,5 +50,7 @@ check('notifications prioritize attention, deduplicate and reject stale reports'
   const state = { state: 'waiting', why: { waitingSessionIds: ['a', 'b'], completedSessionIds: ['a', 'c'], statusSessionId: 'b' } };
   assert.equal(JSON.stringify(notices(state)), JSON.stringify([{ id: 'a', kind: 'waiting' }, { id: 'b', kind: 'waiting' }, { id: 'c', kind: 'done' }]));
   state.stale = true; assert.equal(notices(state).length, 0); assert.equal(notices(null).length, 0);
+  state.stale = false; state.state = 'error'; state.why.statusSessionId = 'a';
+  assert.equal(JSON.stringify(notices(state)), JSON.stringify([{ id: 'a', kind: 'error' }, { id: 'b', kind: 'waiting' }, { id: 'c', kind: 'done' }]));
 });
 console.log(`mini-game: ${count} passed`);
