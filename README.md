@@ -42,6 +42,7 @@ no runtime dependencies · works offline
 | 互动 | 点击与长按部位触发表情和碎碎念；拖动、缩放、旋转视角、视线跟随和弹簧骨物理 |
 | 碎碎念 | 内置台词、自定义台词，或使用 DSH 模型 / OpenAI 兼容接口生成 AI 台词 |
 | 导入 | 模型以文件导入、动作包以文件夹导入，复制到插件存储后不依赖原路径 |
+| 界面语言 | 全部界面中英双语，默认跟随系统 / DSH 自动识别；「通用设置 → 显示与外观」和初次引导欢迎页各有一个语言选择（自动 / 中文 / English） |
 
 ## 运行要求
 
@@ -155,6 +156,7 @@ The marketplace screenshot order is declared in the root [screenshots.json](scre
 | Interaction | Click or hold body parts for expressions and chatter; drag, resize, rotate the view, follow the pointer and use spring-bone physics |
 | Chatter | Built-in or custom lines, or AI-generated lines using a DSH model or an OpenAI-compatible service |
 | Import | Import models as files and motion packs as folders. Imported files are copied into plugin storage and no longer depend on their original paths |
+| Language | The whole interface is Chinese and English, auto-detected from the system or DSH by default; a chooser (Auto / 中文 / English) sits in General settings → Display, and on the first-run guide's welcome screen |
 
 ### Requirements
 

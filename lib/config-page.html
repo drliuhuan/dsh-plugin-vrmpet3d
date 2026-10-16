@@ -3,11 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>vrmpet3d · 模型参数</title>
+  <!--
+    The title, the nav, the table headers and every row below carry `data-i18n*`, and the Chinese text stays INLINE as
+    the no-JS fallback: this page's script can fail to load (that is what the watchdog at the bottom reports), and a
+    page that failed should still read in one language rather than show nothing. `lib/config-page.js` owns the table
+    and `core.applyI18n` writes these places; a key the table lacks leaves the markup alone.
+
+    Both settings pages are written in the two languages by that ONE script and its ONE table, so a key here is shared
+    with 通用设置 — `sectionModel` names both this page's heading and its nav entry.
+  -->
+  <title data-i18n="titleModel">vrmpet3d · 模型参数</title>
   <meta name="color-scheme" content="dark light">
   <!--
-    The stylesheet both settings pages share. One file rather than a copy in each page: the two pages
-    render the same rows, tables and status lines, and a copy is how the two drift apart.
+    The stylesheet both settings pages share. One file rather than a copy in each page: the two pages render
+    the same rows, tables and status lines, and a copy is how the two drift apart.
 
     The MODEL page (`/vrmpet3d/config`). Its sections are the ones that are about ONE model, in this order:
     模型 → 表情 → 部位 → 弹簧骨. Everything else (导入, 状态, 碎碎念, 视线, 鼠标互动, 其他) is a section of
@@ -27,44 +36,44 @@
 -->
 <div class="page-loading" role="status" aria-live="polite">
   <span class="page-loading-spinner" aria-hidden="true"></span>
-  <span>正在加载设置…</span>
+  <span data-i18n="loading">正在加载设置…</span>
 </div>
 
-  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>模型参数</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
-  <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">模型</a><a href="#settings-1">表情</a><a href="#settings-2">部位</a><a href="#settings-3">弹簧骨</a></nav>
+  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1 data-i18n="headingModel">模型参数</h1><div id="status" role="status" aria-live="polite" data-i18n="reading">正在读取…</div></header>
+  <nav class="section-nav" aria-label="设置分组" data-i18n-aria="navSections"><a href="#settings-0" data-i18n="sectionModel">模型</a><a href="#settings-1" data-i18n="sectionExpression">表情</a><a href="#settings-2" data-i18n="sectionParts">部位</a><a href="#settings-3" data-i18n="sectionSprings">弹簧骨</a></nav>
   <main>
 <section class="settings-section" id="settings-0">
-  <h2>模型</h2>
+  <h2 data-i18n="sectionModel">模型</h2>
   <div class="card">
     <div class="row">
-      <label class="k" for="model-select">当前模型</label>
+      <label class="k" for="model-select" data-i18n="currentModel">当前模型</label>
       <select id="model-select" class="grow"></select>
       <span class="pill" id="model-spec">—</span>
     </div>
-    <div class="row"><span class="k">可用信息</span><span class="grow note" id="model-meta">—</span></div>
+    <div class="row"><span class="k" data-i18n="availableInfo">可用信息</span><span class="grow note" id="model-meta">—</span></div>
   </div>
 
 </section>
 
 <section class="settings-section" id="settings-1">
-  <h2>表情 <span id="expression-count"></span></h2>
+  <h2><span data-i18n="sectionExpression">表情</span> <span id="expression-count"></span></h2>
   <div class="card">
     <div class="row">
-      <label class="k" for="blink-enabled">眨眼</label>
-      <label class="inline"><input type="checkbox" id="blink-enabled"> 开启</label>
-      <span class="k sub">间隔</span>
+      <label class="k" for="blink-enabled" data-i18n="blink">眨眼</label>
+      <label class="inline"><input type="checkbox" id="blink-enabled"> <span data-i18n="on">开启</span></label>
+      <span class="k sub" data-i18n="interval">间隔</span>
       <input type="number" id="blink-min" step="0.5" min="0.5" max="60"> –
-      <input type="number" id="blink-max" step="0.5" min="0.5" max="60"> 秒
+      <input type="number" id="blink-max" step="0.5" min="0.5" max="60"> <span data-i18n="secondsUnit">秒</span>
     </div>
     <div class="row">
-      <label class="k" for="emotion-enabled">情绪</label>
-      <label class="inline"><input type="checkbox" id="emotion-enabled"> 开启</label>
-      <span class="k sub">空闲间隔</span>
+      <label class="k" for="emotion-enabled" data-i18n="emotion">情绪</label>
+      <label class="inline"><input type="checkbox" id="emotion-enabled"> <span data-i18n="on">开启</span></label>
+      <span class="k sub" data-i18n="idleInterval">空闲间隔</span>
       <input type="number" id="emotion-idle-min" step="1" min="2" max="600"> –
-      <input type="number" id="emotion-idle-max" step="1" min="2" max="600"> 秒
+      <input type="number" id="emotion-idle-max" step="1" min="2" max="600"> <span data-i18n="secondsUnit">秒</span>
     </div>
     <table id="emotion-table">
-      <thead><tr><th style="width:76px">情境</th><th style="width:58px">使用</th><th>表情</th><th style="width:104px">持续时间</th></tr></thead>
+      <thead><tr><th style="width:76px" data-i18n="colSituation">情境</th><th style="width:58px" data-i18n="colUse">使用</th><th data-i18n="colExpression">表情</th><th style="width:104px" data-i18n="colHold">持续时间</th></tr></thead>
       <tbody id="emotion-body"></tbody>
     </table>
   </div>
@@ -72,7 +81,7 @@
 </section>
 
 <section class="settings-section" id="settings-2">
-  <h2>部位 <span id="part-count"></span></h2>
+  <h2><span data-i18n="sectionParts">部位</span> <span id="part-count"></span></h2>
   <!--
     默认折叠（operator, 2026-10-14: 「"部位"区域默认折叠，内容太多了」）.
 
@@ -83,22 +92,22 @@
     the markup. The count beside the heading is filled whether the fold is open or shut.
   -->
   <details id="parts-fold">
-    <summary>展开部位列表</summary>
+    <summary data-i18n="partsExpand">展开部位列表</summary>
     <div class="card">
       <table id="part-table">
       <thead><tr>
-        <th style="width:150px">部位</th>
-        <th style="width:58px">使用</th>
-        <th>表情</th>
-        <th style="width:104px">持续时间</th>
-        <th style="width:290px">结构</th>
+        <th style="width:150px" data-i18n="colPart">部位</th>
+        <th style="width:58px" data-i18n="colUse">使用</th>
+        <th data-i18n="colExpression">表情</th>
+        <th style="width:104px" data-i18n="colHold">持续时间</th>
+        <th style="width:290px" data-i18n="colStructure">结构</th>
         <th style="width:58px"></th>
       </tr></thead>
       <tbody id="part-body"></tbody>
     </table>
     <div class="row" style="margin-top:10px">
-      <button id="part-add" type="button">新增部位</button>
-      <span class="note">最多 <span id="part-max"></span> 个</span>
+      <button id="part-add" type="button" data-i18n="partsAdd">新增部位</button>
+      <span class="note"><span data-i18n="partsMaxPrefix">最多</span> <span id="part-max"></span><span data-i18n="partsMaxSuffix"> 个</span></span>
     </div>
     <!--
       The structure BROWSER. It replaced a native `<input list>` + `<datalist>`: in the settings window that popup
@@ -107,9 +116,9 @@
     -->
     <div class="part-picker" id="part-picker" hidden>
       <div class="part-picker-head">
-        <input type="text" id="part-picker-filter" placeholder="筛选结构名">
+        <input type="text" id="part-picker-filter" placeholder="筛选结构名" data-i18n-placeholder="filterStructures">
         <span class="note" id="part-picker-count"></span>
-        <button type="button" id="part-picker-close">关闭</button>
+        <button type="button" id="part-picker-close" data-i18n="close">关闭</button>
       </div>
       <div class="part-picker-list" id="part-picker-list" tabindex="0"></div>
       </div>
@@ -119,12 +128,12 @@
 </section>
 
 <section class="settings-section" id="settings-3">
-  <h2>弹簧骨 <span id="spring-count"></span></h2>
+  <h2><span data-i18n="sectionSprings">弹簧骨</span> <span id="spring-count"></span></h2>
   <div class="card">
     <div id="spring-list"></div>
     <div class="row" style="margin-top:10px">
-      <label class="k" for="spring-motion-physics">动作播放时</label>
-      <label class="inline"><input type="checkbox" id="spring-motion-physics"> 头发与裙摆继续摆动</label>
+      <label class="k" for="spring-motion-physics" data-i18n="springMotionWhile">动作播放时</label>
+      <label class="inline"><input type="checkbox" id="spring-motion-physics"> <span data-i18n="springMotionBox">头发与裙摆继续摆动</span></label>
     </div>
     <!--
       弹簧骨碰撞：全部关闭（默认）/ 全部开启 / 自定义（operator, 2026-10-14）.
@@ -136,11 +145,11 @@
       because comparing the two states in one sitting is the only way to answer 穿模 by looking.
     -->
     <div class="row" style="margin-top:10px">
-      <label class="k" for="spring-colliders">弹簧骨碰撞</label>
+      <label class="k" for="spring-colliders" data-i18n="springColliders">弹簧骨碰撞</label>
       <select id="spring-colliders">
-        <option value="off">全部关闭（默认）</option>
-        <option value="all">全部开启</option>
-        <option value="custom">自定义</option>
+        <option value="off" data-i18n="collidersOff">全部关闭（默认）</option>
+        <option value="all" data-i18n="collidersAll">全部开启</option>
+        <option value="custom" data-i18n="collidersCustom">自定义</option>
       </select>
     </div>
     <!--
@@ -152,11 +161,11 @@
       no colliders shows no list rather than switches that do nothing.
     -->
     <details id="spring-colliders-detail" hidden style="margin-top:8px">
-      <summary>逐个碰撞体 <span id="spring-collider-count"></span></summary>
+      <summary><span data-i18n="collidersDetail">逐个碰撞体</span> <span id="spring-collider-count"></span></summary>
       <div id="spring-collider-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
     </details>
     <div class="row" style="margin-top:10px">
-      <button id="spring-reset-all">全部恢复默认</button>
+      <button id="spring-reset-all" data-i18n="springResetAll">全部恢复默认</button>
     </div>
   </div>
 
@@ -168,23 +177,40 @@
     A settings page that can only say "正在读取…" is useless when something fails: the text is the HTML's
     own placeholder, and a script that never ran, 404'd or threw at its first line looks exactly like a
     slow host. So this runs FIRST, catches what it can, and after two seconds says what is actually wrong.
+
+    It runs BEFORE `lib/core.js`, which is the whole point — the case it exists for is a core that never
+    loaded — so it cannot use `core.textFor` and carries its own tiny map instead: three sentences plus the
+    brackets a filename goes in, picked from `navigator.language` in one line. Chinese is the fallback,
+    because the markup around it is Chinese. Keep it small: this is a watchdog, not a second i18n system.
   -->
   <script>
     (function () {
+      var ZH = /^(zh|cn|chinese)/i.test(navigator.language || '');
+      var WORDS = ZH
+        ? {
+          error: "页面脚本出错：",
+          file: "（来自 {name}）",
+          coreMissing: "初始化卡住：core.js 没有加载（检查 /vrmpet3d/window/lib/core.js 是否 404）。",
+          stuck: "初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/settings）。",
+        }
+        : {
+          error: "Page script error: ",
+          file: "(from {name})",
+          coreMissing: "Stuck at startup: core.js did not load (check whether /vrmpet3d/window/lib/core.js is a 404).",
+          stuck: "Stuck at startup: the script loaded but never finished initialising (check the window console, or whether the host serves /vrmpet3d/settings).",
+        };
       function show(message) {
         var status = document.getElementById("status");
         if (status) { status.textContent = message; status.className = "warn"; }
       }
       window.addEventListener("error", function (event) {
-        show("页面脚本出错：" + (event.message || event.type) + (event.filename ? " （" + event.filename + "）" : ""));
+        show(WORDS.error + (event.message || event.type)
+          + (event.filename ? " " + WORDS.file.replace("{name}", event.filename) : ""));
       }, true);
       window.setTimeout(function () {
         if (window.__VRMPET3D_CONFIG_STATE__) return;
-        if (!window.__VRMPET3D_CORE__) {
-          show("初始化卡住：core.js 没有加载（检查 /vrmpet3d/window/lib/core.js 是否 404）。");
-          return;
-        }
-        show("初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/settings）。");
+        if (!window.__VRMPET3D_CORE__) { show(WORDS.coreMissing); return; }
+        show(WORDS.stuck);
       }, 2000);
     })();
   </script>

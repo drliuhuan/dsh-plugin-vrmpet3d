@@ -39,7 +39,9 @@ contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
    * plugin's own storage. The host stays the only writer of that list, and the `VRMPET3D_MODEL_FILES_FILE` /
    * `VRMPET3D_IMPORT_DIR` overrides the suites rely on are not bypassed.
    */
-  pickModelFile: () => ipcRenderer.invoke('vrmpet3d:pick-path', { kind: 'model' }),
+  pickModelFile: (language) => ipcRenderer.invoke('vrmpet3d:pick-path', {
+    kind: 'model', language: language === 'zh' || language === 'en' ? language : undefined,
+  }),
 
   /**
    * The same dialog for an imported MOTION folder (`/vrmpet3d/motions`), which stays a DIRECTORY: a motion pack is
@@ -47,7 +49,9 @@ contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
    *
    * One channel for both, with `kind` deciding a FILE dialog from a folder one and the title each shows.
    */
-  pickMotionDir: () => ipcRenderer.invoke('vrmpet3d:pick-path', { kind: 'motion' }),
+  pickMotionDir: (language) => ipcRenderer.invoke('vrmpet3d:pick-path', {
+    kind: 'motion', language: language === 'zh' || language === 'en' ? language : undefined,
+  }),
 
   /**
    * Tell the launcher that a VIEW ORBIT is starting or ending — and let IT take the pointer lock.
