@@ -341,7 +341,7 @@ report(service?.assetRoutes === null,
     report(JSON.stringify(ids) === JSON.stringify([
       'resetView', 'resetSize', 'globalSettings', 'switchModel', 'dance', 'reloadModel', 'modelSettings', 'surface', 'gravity', 'closePet',
     ]), `the shared list is the operator's entries in order, without 重启/退出 (${ids.join(', ') || 'none'})`);
-    report(/surfaceWindow: '切换回窗口外'/.test(menuSource) && /surfaceApp: '切换回窗口内'/.test(menuSource),
+    report(/surfaceWindow: '切换为独立宠物'/.test(menuSource) && /surfaceApp: '切换回窗口内'/.test(menuSource),
       'and the 切换 row still carries both directions in the table');
     report(/closePetApp: '隐藏宠物'/.test(menuSource) && /closePetWindow: '关闭独立宠物'/.test(menuSource),
       "and 关闭宠物's two meanings are two words: the app's pet is hidden, the window's is handed back");
@@ -521,9 +521,9 @@ report(service?.assetRoutes === null,
     const preloadSource = readFileSync(join(ROOT, 'desktop', 'preload.js'), 'utf8');
     const launcherSource = readFileSync(join(ROOT, 'desktop', 'main.js'), 'utf8');
     const configSource = readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8');
-    report(/pickModelFile: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{ kind: 'model' \}\)/.test(preloadSource),
+    report(/pickModelFile: \(language\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{\s*kind: 'model', language: language === 'zh' \|\| language === 'en' \? language : undefined,\s*\}\)/.test(preloadSource),
       'the preload bridge exposes the native FILE picker for a model import');
-    report(/pickMotionDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{ kind: 'motion' \}\)/.test(preloadSource),
+    report(/pickMotionDir: \(language\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{\s*kind: 'motion', language: language === 'zh' \|\| language === 'en' \? language : undefined,\s*\}\)/.test(preloadSource),
       'and a folder picker for motion directories, on the same channel');
     /**
      * The titles come from the launcher's OWN two-language table rather than from literals here.
