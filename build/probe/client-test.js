@@ -2018,14 +2018,20 @@
    * dead-ahead gaze. Asserting this pins the reference frame: measured against the
    * window instead, the same point would aim up and left from a bottom-right pet.
    */
-  check('a pointer on the pet centre aims straight ahead', function () {
+  check('a pointer on the projected gaze origin aims straight ahead', function () {
     var pixels = widget.placement.pixels();
+    var eye = widget.scene.gazeOrigin();
+    if (!eye) return false;
+    var realTick = widget.scene.tick;
+    // This check isolates pointer coordinates; do not advance the prior head pose.
+    widget.scene.tick = function () {};
     document.dispatchEvent(new PointerEvent('pointermove', {
       bubbles: true, pointerId: 72,
-      clientX: pixels.left + widget.placement.width / 2,
-      clientY: pixels.top + widget.placement.height / 2
+      clientX: pixels.left + eye.x * widget.placement.width / widget.scene.width,
+      clientY: pixels.top + eye.y * widget.placement.height / widget.scene.height
     }));
     widget.tick(1 / 60);
+    widget.scene.tick = realTick;
     var gaze = widget.scene.motion.gaze;
     report.gazeCentre = gaze ? { yaw: +gaze.yaw.toFixed(6), pitch: +gaze.pitch.toFixed(6) } : null;
     return Boolean(gaze) && Math.abs(gaze.yaw) < 1e-9 && Math.abs(gaze.pitch) < 1e-9;
@@ -2598,6 +2604,17 @@
   check('the right-click menu is the shared definition, with the operator\'s entries', function () {
     var menuApi = globalThis.__VRMPET3D_MENU__;
     widget.closeMenu();
+    var savedBridge = window.dshDesktop;
+    var savedStatus = widget.desktopStatus;
+    widget.desktopStatus = null;
+    widget.openMenuAt(120, 140);
+    var hiddenUntilDetected = !widget.menu.items().some(function (item) { return item.id === 'surface'; });
+    window.dshDesktop = { deviceInfo: function () {} };
+    widget.desktopStatus = { electronAvailable: false };
+    widget.openMenuAt(120, 140);
+    var hiddenWithoutElectron = !widget.menu.items().some(function (item) { return item.id === 'surface'; });
+    widget.desktopStatus = { electronAvailable: true };
+    window.dshDesktop = undefined;
     var opened = widget.openMenuAt(120, 140);
     var items = widget.menu ? widget.menu.items() : [];
     var ids = items.map(function (item) { return item.id; });
@@ -2619,7 +2636,7 @@
       && zh.reloadModel === '重载模型'
       // 跳支舞: the dance row, and the ONLY one whose effect ends by itself (the clip, a double-click, or work starting).
       && zh.dance === '跳支舞'
-      && zh.surfaceWindow === '切换回窗口外' && zh.surfaceApp === '切换回窗口内'
+      && zh.surfaceWindow === '切换为独立宠物' && zh.surfaceApp === '切换回窗口内'
       && zh.gravity === '重力'
       // The two meanings of the last row, and they are NOT the same words: the app's pet is hidden, the
       // window's pet is handed back inside. Asserted from the table, so a surface cannot invent its own.
@@ -2641,6 +2658,8 @@
     var autoNode = menuItem('surface');
     var enabledOutsideDebug = Boolean(autoRow && autoRow.disabled !== true)
       && Boolean(autoNode && autoNode.disabled !== true && !autoNode.title);
+    window.dshDesktop = savedBridge;
+    widget.desktopStatus = savedStatus;
     widget.closeMenu();
     report.menu = {
       opened: opened,
@@ -2655,7 +2674,7 @@
       // The ORDER, pinned: 重载模型 sits directly after 切换模型, because both are about WHICH model is on screen (one picks
       // it, the other re-reads the file of the one already there).
       && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,reloadModel,modelSettings,surface,gravity,closePet'
-      && disabledInDebug && enabledOutsideDebug;
+      && disabledInDebug && enabledOutsideDebug && hiddenUntilDetected && hiddenWithoutElectron;
   });
 
   /**
@@ -3600,47 +3619,42 @@
    * a straight line (`curve: 1`) and a 100 px span — and checks the applied gaze equals what `pointerAim`
    * predicts for them, then puts the shipped settings back and checks "auto" resolves to the frame's width.
    */
-  check('the gaze settings drive the applied gaze, and auto means the frame', function () {
-    var scene = widget.scene;
+  check('the two gaze modes drive the applied gaze, and auto means half the screen width', function () {
+    var scene = widget.scene, placement = widget.placement;
     if (!scene || !scene.motion) return false;
-    var placement = widget.placement;
-    var centreX = placement.pixels().left + placement.width / 2;
-    var centreY = placement.pixels().top + placement.height / 2;
-    // Somewhere to the side, so the aim is well inside the curve and a wrong span shows up loudly.
-    widget.movePointer(centreX + 300, centreY);
-    var predict = function (spanX, curve) {
+    var saved = Object.assign({}, widget.preferences);
+    var screenWidth = Number(window.screen && window.screen.width) || placement.viewportWidth;
+    var pixels = placement.pixels();
+    widget.movePointer(pixels.left + placement.width / 2 + 300, pixels.top + placement.height / 2 + 100);
+    function predict() {
+      var eye = scene.gazeOrigin();
       return scene.gazeFromAim(CORE.pointerAim({
         pointerX: widget.pointer.x, pointerY: widget.pointer.y,
-        centreX: centreX, centreY: centreY,
-        spanX: spanX, spanY: CORE.GAZE_SPAN.y, curve: curve,
-      })).yaw;
-    };
-
-    widget.preferences.gazeCurve = 1;
-    widget.preferences.gazeSpanX = 100;
-    widget.preferences.gazeSpanY = 0;
+        centreX: pixels.left + eye.x * placement.width / scene.width,
+        centreY: pixels.top + eye.y * placement.height / scene.height,
+        spanX: CORE.resolveGazeSpan(widget.preferences.gazeSpanX, screenWidth),
+        spanY: CORE.resolveGazeSpan(widget.preferences.gazeSpanY, screenWidth),
+        mode: widget.preferences.gazeCurveMode, curveSpatial: widget.preferences.gazeCurveSpatial,
+        curveRadial: widget.preferences.gazeCurveRadial, distance: widget.preferences.gazeDistance,
+      }));
+    }
+    widget.preferences.gazeCurveMode = 'spatial'; widget.preferences.gazeCurveSpatial = 1;
+    widget.preferences.gazeDistance = 0.1; widget.preferences.gazeSpanX = 100; widget.preferences.gazeSpanY = 100;
     widget.tick(1 / 60);
-    var straight = scene.motion.gaze ? scene.motion.gaze.yaw : null;
-
-    widget.preferences.gazeCurve = CORE.DEFAULTS.gazeCurve;
-    widget.preferences.gazeSpanX = 0;
+    var spatial = scene.motion.gaze, expectedSpatial = predict();
+    widget.preferences.gazeCurveMode = 'radial'; widget.preferences.gazeCurveRadial = 0.1;
+    widget.preferences.gazeSpanX = 0; widget.preferences.gazeSpanY = 0;
     widget.tick(1 / 60);
-    var auto = scene.motion.gaze ? scene.motion.gaze.yaw : null;
-    var autoSpan = CORE.resolveGazeSpan(widget.preferences.gazeSpanX, placement.viewportWidth);
-
-    report.gazeSettings = {
-      straight: straight === null ? null : +straight.toFixed(4),
-      expectedStraight: +predict(100, 1).toFixed(4),
-      auto: auto === null ? null : +auto.toFixed(4),
-      expectedAuto: +predict(placement.viewportWidth, CORE.DEFAULTS.gazeCurve).toFixed(4),
-      autoSpan: autoSpan,
-      viewportWidth: placement.viewportWidth,
-    };
-    return straight !== null && auto !== null
-      && Math.abs(straight - predict(100, 1)) < 1e-9
-      && Math.abs(auto - predict(placement.viewportWidth, CORE.DEFAULTS.gazeCurve)) < 1e-9
-      && Math.abs(straight - auto) > 1e-6
-      && autoSpan === placement.viewportWidth;
+    var radial = scene.motion.gaze, expectedRadial = predict();
+    var autoSpan = CORE.resolveGazeSpan(0, screenWidth);
+    widget.preferences = saved;
+    report.gazeSettings = { spatial: spatial, expectedSpatial: expectedSpatial,
+      radial: radial, expectedRadial: expectedRadial, autoSpan: autoSpan, screenWidth: screenWidth };
+    return spatial && radial && Math.abs(spatial.yaw - expectedSpatial.yaw) < 1e-9
+      && Math.abs(spatial.pitch - expectedSpatial.pitch) < 1e-9
+      && Math.abs(radial.yaw - expectedRadial.yaw) < 1e-9
+      && Math.abs(radial.pitch - expectedRadial.pitch) < 1e-9
+      && autoSpan === screenWidth / 2;
   });
 
   /**
@@ -4887,6 +4901,10 @@
          * must come back the moment the mode does. A row that still acted would turn the debug mode off without
          * saying so — the one thing this switch must never do quietly.
          */
+        var savedBridge = window.dshDesktop;
+        var savedStatus = widget.desktopStatus;
+        window.dshDesktop = { deviceInfo: function () {} };
+        widget.desktopStatus = { electronAvailable: true };
         widget.preferences.petSurface = 'both';
         widget.openMenuAt(40, 40);
         var debugRow = widget.menu.items().filter(function (item) { return item.id === 'surface'; })[0] || null;
@@ -4897,6 +4915,8 @@
         var normalRow = widget.menu.items().filter(function (item) { return item.id === 'surface'; })[0] || null;
         var surfaceEnabledOutsideDebug = Boolean(normalRow && normalRow.disabled !== true);
         widget.closeMenu();
+        window.dshDesktop = savedBridge;
+        widget.desktopStatus = savedStatus;
         widget.preferences.petSurface = before;
         report.debugSurface = {
           bothVisible: bothVisible,

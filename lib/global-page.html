@@ -110,10 +110,31 @@
     <div class="row"><label class="k" for="pref-look" data-i18n="lookAtPointer">看向光标</label><label class="inline"><input type="checkbox" id="pref-look"> <span data-i18n="on">开启</span></label></div>
 
     <div class="row">
-      <label class="k" for="pref-gaze-curve" data-i18n="curve">曲率</label>
-      <input type="range" id="pref-gaze-curve" min="5" max="100" step="5">
-      <span class="value" id="pref-gaze-curve-value">0.10</span>
-      <button id="pref-gaze-curve-reset" class="ghost" data-i18n="reset">复位</button>
+      <label class="k" for="pref-gaze-mode" data-i18n="gazeCurveMode">曲线模式</label>
+      <select id="pref-gaze-mode"><option value="spatial" data-i18n="gazeSpatial">空间角度</option><option value="radial" data-i18n="gazeRadial">二维距离曲线</option></select>
+    </div>
+    <div id="gaze-curves-radial" hidden>
+    <div class="row">
+      <label class="k" for="pref-gaze-curve-radial" data-i18n="gazeCurveRadial">二维距离曲率</label>
+      <input type="range" id="pref-gaze-curve-radial" min="5" max="100" step="5">
+      <span class="value" id="pref-gaze-curve-radial-value">0.10</span>
+      <button id="pref-gaze-curve-radial-reset" class="ghost" data-i18n="reset">复位</button>
+    </div>
+    </div>
+    <p class="hint" data-i18n="gazeCurveHint">数值越小，中心附近越灵敏；1 为线性。二维距离模式按满偏距离归一化后计算方向与强度，可减少远处光标上下穿过视线水平线时的俯仰跳变。各模式的参数分别保存。</p>
+    <div id="gaze-curves-spatial">
+    <div class="row">
+      <label class="k" for="pref-gaze-curve-spatial" data-i18n="gazeCurveSpatial">空间角度曲率</label>
+      <input type="range" id="pref-gaze-curve-spatial" min="5" max="100" step="5">
+      <span class="value" id="pref-gaze-curve-spatial-value">1.00</span>
+      <button id="pref-gaze-curve-spatial-reset" class="ghost" data-i18n="reset">复位</button>
+    </div>
+    <div class="row">
+      <label class="k" for="pref-gaze-distance" data-i18n="gazeDistance">注视距离</label>
+      <input type="number" id="pref-gaze-distance" min="0.1" max="5" step="0.1"> ×
+      <button id="pref-gaze-distance-reset" class="ghost" data-i18n="reset">复位</button>
+    </div>
+    <p class="hint" data-i18n="gazeSpatialHint">距离以满偏距离为单位，越大转头越缓。同高时，鼠标越偏向左右，俯仰越小；与双眼同高时俯仰为零。默认曲率 1、注视距离 0.1。</p>
     </div>
     <div class="row">
       <label class="k" for="pref-gaze-span-x" data-i18n="span">满偏距离</label>
@@ -126,6 +147,15 @@
       <input type="number" id="pref-gaze-idle" step="1" min="0" max="600"> <span data-i18n="secondsUnit">秒</span>
       <button id="pref-gaze-idle-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
+    <div class="row">
+      <label class="k" for="pref-gaze-pitch-up" data-i18n="gazePitchUp">最大抬头角度</label>
+      <input type="number" id="pref-gaze-pitch-up" min="0" max="60" step="0.1"> °
+      <label class="k sub" for="pref-gaze-pitch-down" data-i18n="gazePitchDown">最大低头角度</label>
+      <input type="number" id="pref-gaze-pitch-down" min="0" max="60" step="0.1"> °
+      <button id="pref-gaze-pitch-reset" class="ghost" data-i18n="auto">自动</button>
+    </div>
+    <p class="hint" data-i18n="gazePitchHint">自动为抬头、低头各 60°。范围 0–60°；0 表示不向该方向转头。这是视线跟踪的附加角度，动作本身的头部姿势仍会保留。</p>
+    <p class="hint" data-i18n="gazeSpanHint">满偏距离填 0 为自动：水平和垂直均使用屏幕宽度的一半。</p>
     <p class="hint" id="pref-gaze-span-auto"></p>
     <p class="hint applied" id="pref-gaze-applied" data-i18n="readingWindow">（正在读取悬浮窗…）</p>
   </div>

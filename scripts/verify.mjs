@@ -4228,10 +4228,10 @@ group('13. pointer aim (which way the pet looks)');
 
   // `0` means auto — the caller's own frame — so a settings file from before these keys existed, or one
   // with the field zeroed, keeps the shipping behaviour instead of collapsing the span to nothing.
-  eq(core.resolveGazeSpan(0, 1920), 1920, 'a span of 0 means auto: the caller frame is used');
+  eq(core.resolveGazeSpan(0, 1920), 960, 'a span of 0 means auto: half the screen width is used');
   eq(core.resolveGazeSpan(600, 1920), 600, 'a positive span overrides the frame');
-  eq(core.resolveGazeSpan(null, 900), 900, 'a missing span means auto as well');
-  eq(core.resolveGazeSpan(-5, 900), 900, 'a negative span is treated as auto, not as a zero-distance gaze');
+  eq(core.resolveGazeSpan(null, 900), 450, 'a missing span means auto as well');
+  eq(core.resolveGazeSpan(-5, 900), 450, 'a negative span is treated as auto, not as a zero-distance gaze');
   eq(core.resolveGazeSpan(0, 0), core.GAZE_SPAN.x, 'with no frame to quote, the fallback span is used');
   eq(core.resolveGazeSpan(99999, 1920), core.GAZE_SPAN_RANGE.max, 'an absurd span is clamped, not trusted');
 

@@ -162,7 +162,9 @@ console.log('\n0a. the launcher and the pages PARSE, before anything is spawned'
      * the window has to read the same field, or the two surfaces disagree.
      */
     const win = readFileSync(join(ROOT, 'lib', 'desktop-page.js'), 'utf8');
-    ok(win.includes("drawn === 'dancing' && scene.playback && scene.playback.record && scene.playback.record.finished === true")
+    // Completion now goes through the scene's motionFinished(record) helper;
+    // pin that record path and the dancing state rather than the old inline flag check.
+    ok(win.includes("drawn === 'dancing' && scene.playback && scene.playback.state === 'dancing' && scene.playback.record && scene.motionFinished(scene.playback.record)")
       && win.includes('danceEndedReported')
       && win.includes("body: '{}'")
       // And the wrong object must never come back: `scene.playback.finished` is the exact shape that made this
@@ -1231,8 +1233,8 @@ if (live.skipped) {
          * saw, because this half only runs when the window does. The literal pin for WHAT that number is belongs to
          * the core suite, which owns the constant; this half's claim is that the PAGE agrees with it.
          */
-        ok(Math.abs(Number(gaze.curve) - core.DEFAULTS.gazeCurve) < 1e-9,
-          `whose curve defaults to the shipped slope (${gaze.curve}, shipped ${core.DEFAULTS.gazeCurve})`);
+        ok(Math.abs(Number(gaze.curve) - core.DEFAULTS.gazeCurveSpatial) < 1e-9,
+          `whose curve defaults to the shipped spatial slope (${gaze.curve}, shipped ${core.DEFAULTS.gazeCurveSpatial})`);
         ok(Number(gaze.spanX) > 0 && Number(gaze.spanY) > 0,
           `and whose "auto" spans resolve to a real distance (${gaze.spanX} x ${gaze.spanY})`);
         /**
