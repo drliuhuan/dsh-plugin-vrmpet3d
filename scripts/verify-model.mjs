@@ -1435,7 +1435,7 @@ group('8. registered routes and both catalogs over HTTP');
   const server = await serveRoutes(routes);
 
   eq(routes.map(route => `${route.kind} ${route.path}`).sort().join(' | '),
-    'exact /vrmpet3d/catalog | exact /vrmpet3d/config | exact /vrmpet3d/desktop | exact /vrmpet3d/global'
+    'exact /vrmpet3d/catalog | exact /vrmpet3d/config | exact /vrmpet3d/desktop | exact /vrmpet3d/game | exact /vrmpet3d/global'
       + ' | exact /vrmpet3d/llm'
       + ' | exact /vrmpet3d/model-info | exact /vrmpet3d/model-thumbnail | exact /vrmpet3d/models'
       + ' | exact /vrmpet3d/motions'
@@ -1854,10 +1854,10 @@ group('8. registered routes and both catalogs over HTTP');
    */
   const expectedType = name => sourceTypes[extname(name).toLowerCase()]
     ?? (name.endsWith('.js') ? 'text/javascript; charset=utf-8' : null);
-  ok(sourceNames.length === 11 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js')
+  ok(sourceNames.length === 14 && sourceNames.includes('pages.css') && sourceNames.includes('config-page.js')
     && sourceNames.includes('setup-page.js') && sourceNames.includes('model-picker.js')
     && sourceNames.includes('picker-page.js'),
-    'the whitelist being checked is the route\'s own (eleven names, the stylesheet, the three page scripts and the shared model picker among them)');
+    'the whitelist being checked is the route\'s own (fourteen names including the independent mini-game sources)');
   for (const name of sourceNames) {
     const source = await server.call(`/vrmpet3d/window/lib/${name}`);
     eq(source.headers['content-type'], expectedType(name),

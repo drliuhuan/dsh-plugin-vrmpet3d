@@ -23,6 +23,9 @@ build/probe/settings-layout-qa-profile/
 build/probe/*-preview.html
 build/probe/settings-*-dom.html
 build/probe/settings-*.png
+build/probe/mini-game-*.png
+build/probe/mini-game-browser.html
+build/probe/mini-game-browser-profile/
 build/*.png
 
 # Build-only; `cd vendor && npm install` restores it. The compiled chunk in

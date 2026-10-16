@@ -2677,7 +2677,7 @@
     return opened && sharedClass && stylesheet && words
       // The ORDER, pinned: 重载模型 sits directly after 切换模型, because both are about WHICH model is on screen (one picks
       // it, the other re-reads the file of the one already there).
-      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,reloadModel,modelSettings,surface,gravity,closePet'
+      && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,miniGame,reloadModel,modelSettings,surface,gravity,closePet'
       && disabledInDebug && enabledOutsideDebug && hiddenUntilDetected && hiddenWithoutElectron;
   });
 
@@ -6379,7 +6379,7 @@
       restoreFetch();
       return danceOk && opened === true && closed && sharedClass && stylesheet && noSwitchRow
         && closeWordsDiffer && gravityRowOff && gravityMarked
-        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,reloadModel,modelSettings,gravity,closePet'
+        && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,miniGame,reloadModel,modelSettings,gravity,closePet'
         && Boolean(rect) && rect.width > 0 && rect.height > 0;
     });
   });

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>开饭啦 · 桌宠弹球</title>
+  <link rel="stylesheet" href="/vrmpet3d/window/lib/mini-game.css">
+</head>
+<body>
+  <main id="game" aria-label="开饭啦，桌宠弹球游戏">
+    <canvas id="arena" aria-label="鼠标移动横杆，左键发射，Esc 暂停"></canvas>
+    <canvas id="pet" aria-hidden="true"></canvas>
+    <header><div class="brand">开饭啦 <small>PET BREAKOUT</small></div><div id="score" aria-live="polite"></div><button id="pause">暂停 <kbd>Esc</kbd></button><button id="fullscreen">全屏 ↗</button></header>
+    <button id="notice" hidden></button>
+    <p id="hint">移动鼠标控制横杆 · 左键发射 · Esc 暂停</p>
+    <p id="model-status" role="status">正在准备桌宠模型…</p>
+    <section id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="panel"><span class="eyebrow">TAKE A LITTLE BREAK</span><h1 id="pause-title">休息一下</h1><p id="pause-copy">饭还热着，随时回来继续。</p><div id="sessions"></div><div class="actions"><button id="resume" class="primary">继续开饭</button><button id="restart">重新开始</button></div><p id="connection" role="status"></p></div>
+    </section>
+  </main>
+  <script src="/vrmpet3d/window/lib/core.js"></script>
+  <script src="/vrmpet3d/window/lib/client.vendor.js"></script>
+  <script src="/vrmpet3d/window/lib/scene.js"></script>
+  <script src="/vrmpet3d/window/lib/mini-game-core.js"></script>
+  <script src="/vrmpet3d/window/lib/mini-game-page.js"></script>
+</body></html>

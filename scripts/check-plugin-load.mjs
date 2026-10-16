@@ -195,8 +195,8 @@ report(service?.assetRoutes === null,
   // the settings window drives, the live state the in-app pet publishes for the floating window, the AI 碎碎念
   // pair (one generated line, and the provider catalog the settings offer), and DSH's own animated whale mark
   // for the status prompt's mask.
-  report(lateRegistrations.length === 21,
-    `a late webServer receives all twenty-one routes (${lateRegistrations.join(', ') || 'none'})`);
+  report(lateRegistrations.length === 22,
+    `a late webServer receives all twenty-two routes (${lateRegistrations.join(', ') || 'none'})`);
   report(lateRegistrations.some((entry) => entry === 'exact /vrmpet3d/catalog'),
     'the catalog route is among them');
   report(lateRegistrations.some((entry) => entry === 'prefix /vrmpet3d/asset'),
@@ -339,7 +339,7 @@ report(service?.assetRoutes === null,
     const list = /var ITEMS = \[([\s\S]*?)\];/.exec(menuSource);
     const ids = list ? [...list[1].matchAll(/'([a-zA-Z]+)'/g)].map((match) => match[1]) : [];
     report(JSON.stringify(ids) === JSON.stringify([
-      'resetView', 'resetSize', 'globalSettings', 'switchModel', 'dance', 'reloadModel', 'modelSettings', 'surface', 'gravity', 'closePet',
+      'resetView', 'resetSize', 'globalSettings', 'switchModel', 'dance', 'miniGame', 'reloadModel', 'modelSettings', 'surface', 'gravity', 'closePet',
     ]), `the shared list is the operator's entries in order, without 重启/退出 (${ids.join(', ') || 'none'})`);
     report(/surfaceWindow: '切换为独立宠物'/.test(menuSource) && /surfaceApp: '切换回窗口内'/.test(menuSource),
       'and the 切换 row still carries both directions in the table');
@@ -455,7 +455,7 @@ report(service?.assetRoutes === null,
     const launcherSource = readFileSync(join(ROOT, 'desktop', 'main.js'), 'utf8');
     report(/new this\.core\.SpeechMachine\(function \(\) \{ return Date\.now\(\); \}\)/.test(clientSource),
       'the app owns a speech machine (the window has no session to react to)');
-    report(/this\.publishState\(state, speech, touch, clock, null, this\.machine \? this\.machine\.unreadCount : 0, this\.decisionWhy\(\)\)/.test(clientSource),
+    report(/this\.publishState\(state, speech, touch, clock, null, snapshot\.completedUnreadCount \|\| 0, this\.decisionWhy\(\)\)/.test(clientSource),
       'and publishes the line WITH the state, the press, and the TURN clock, so none of the three can be dropped on the way');
     report(/const nextStateLine = cleanSpeechLine\(body && body\.line\)/.test(hostSource)
       && /petStateLine = nextStateLine/.test(hostSource),
@@ -780,7 +780,7 @@ report(service?.assetRoutes === null,
 
   // Registering twice must not happen: the server throws on a duplicate (kind, path).
   lateCtx.pending[0].callback(scope);
-  report(lateRegistrations.length === 21,
+  report(lateRegistrations.length === 22,
     `a second arrival does not re-register (${lateRegistrations.length} total)`);
 
   // Read the service THIS activation provided, not a Map entry: a second apply

@@ -300,6 +300,7 @@ app.whenReady().then(async () => {
     // settings form. Read from the argument rather than from a separate entry point, because the rest of
     // the launcher (the borrowed runtime, the watchdog, the parent-pid handshake) is identical for both.
     const isConfig = options.config === true;
+    const isGame = isConfig && new URL(options.url).pathname === '/vrmpet3d/game';
 
     /**
      * Arm the self-test's own deadline before anything can hang.
@@ -329,7 +330,8 @@ app.whenReady().then(async () => {
       height: 860,
       minWidth: 560,
       minHeight: 420,
-      title: 'vrmpet3d - model settings',
+      title: isGame ? '开饭啦 · 桌宠弹球' : 'vrmpet3d - model settings',
+      fullscreen: isGame,
       backgroundColor: '#16171c',
       show: true,
       webPreferences: {
