@@ -29,6 +29,13 @@ build/*.png
 # lib/client.vendor.js is committed instead, so the plugin runs with no toolchain.
 vendor/node_modules/
 
+# The generated DEV TWIN (`scripts/make-dev-package.mjs`): a second, identity-shifted copy of
+# this plugin — `dsh-plugin-vrmpet3d-dev`, routes `/vrmpet3d-dev/...` — that DSH composes beside
+# the real one. A build product like the client chunks, and never a source of truth: the second
+# entry is the scratch tree `--check` rebuilds into.
+build/dev-package/
+build/.dev-package-check/
+
 node_modules/
 *.log
 .DS_Store

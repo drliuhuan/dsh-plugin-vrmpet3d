@@ -7,9 +7,9 @@
  * hot-reloaded, so a change can be green in every suite and simply absent from the pet on screen — and the first
  * symptom is a route answering 404 or a page script that is one revision behind.
  *
- * What is checked, all of it from the RUNNING process:
- *   * the guide's own routes (`/vrmpet3d/setup-state`, `/vrmpet3d/setup`) and what its state file says;
- *   * the page sources the two settings pages and the guide actually fetch (`/vrmpet3d/window/lib/<name>`), each
+ * What is checked, all of it from the RUNNING process (under the selected prefix, `/vrmpet3d`):
+ *   * the guide's own routes (`<prefix>/setup-state`, `<prefix>/setup`) and what its state file says;
+ *   * the page sources the two settings pages and the guide actually fetch (`<prefix>/window/lib/<name>`), each
  *     against a marker that only exists in the current revision — so "the app is current" is a fact and not a hope;
  *   * 通用设置's 其他 section, which is where 重新运行引导 lives.
  *
@@ -20,17 +20,25 @@
  * Usage:
  *   node scripts/live-check.mjs                # the app on 127.0.0.1:19387
  *   node scripts/live-check.mjs --port 1234    # another port
+ *   node scripts/live-check.mjs --dev          # the DEV TWIN's routes (/vrmpet3d-dev/...)
  *   VRMPET3D_PORT=1234 node scripts/live-check.mjs
+ *
+ * `--dev` exists because two plugins may now be composed at once: the released one
+ * (`dsh-plugin-vrmpet3d`) and the generated twin (`dsh-plugin-vrmpet3d-dev`, see
+ * `scripts/make-dev-package.mjs`). They are two halves of one running app and two
+ * independent route prefixes, so "the app is serving the current code" is a different
+ * question about each — and the same assertion, asked twice.
  *
  * Non-zero exit when anything is missing, so it can be chained.
  */
+const argv = process.argv.slice(2);
 const PORT = (() => {
-  const argv = process.argv.slice(2);
   const at = argv.indexOf('--port');
   if (at !== -1 && argv[at + 1]) return argv[at + 1];
   return process.env.VRMPET3D_PORT || '19387';
 })();
 const BASE = `http://127.0.0.1:${PORT}`;
+const PREFIX = argv.includes('--dev') ? '/vrmpet3d-dev' : '/vrmpet3d';
 
 async function get(path) {
   try {
@@ -48,30 +56,37 @@ async function get(path) {
  * check exists to catch.
  */
 const CHECKS = [
-  ['/vrmpet3d/setup-state', '"completed"', 'the host serves the first-run guide\'s own state'],
-  ['/vrmpet3d/setup', 'setup-page.js', 'and serves the guide page itself'],
-  ['/vrmpet3d/window/lib/core.js', 'STATUS_STATES.concat(INTERACTION_STATES)',
-    'the served core derives the nine motion states from both families'],
-  ['/vrmpet3d/window/lib/scene.js', 'computeBoundingBox',
+  [`${PREFIX}/setup-state`, '"completed"', 'the host serves the first-run guide\'s own state'],
+  [`${PREFIX}/setup`, 'setup-page.js', 'and serves the guide page itself'],
+  /**
+   * The motion-state expression, and it is pinned by its CURRENT shape: `dancing` was appended to
+   * `STATUS_STATES.concat(INTERACTION_STATES)` (six status states + three interaction ones), and the
+   * old marker had been answering MISS for every checkout that carried it — a false alarm for a tool
+   * whose whole job is to tell a stale app from a current one.
+   */
+  [`${PREFIX}/window/lib/core.js`, "STATUS_STATES.concat(INTERACTION_STATES, ['dancing'])",
+    'the served core derives the ten motion states from both families, dancing included'],
+  [`${PREFIX}/window/lib/scene.js`, 'computeBoundingBox',
     'the served scene refreshes the skin bounds on every press'],
-  ['/vrmpet3d/window/lib/config-page.js', '拖动中', 'the served panel labels the pointer poses'],
-  ['/vrmpet3d/window/lib/setup-page.js', 'setup-state', 'the served guide script writes its own state'],
+  [`${PREFIX}/window/lib/config-page.js`, '拖动中', 'the served panel labels the pointer poses'],
+  [`${PREFIX}/window/lib/setup-page.js`, 'setup-state', 'the served guide script writes its own state'],
   // The model picker (2026-10-13): 切换模型's page and the ONE component it shares with the guide's ② 偏好模型 step.
-  ['/vrmpet3d/picker', 'model-picker.js', "the served app has 切换模型's page, built from the shared picker"],
-  ['/vrmpet3d/window/lib/model-picker.js', 'createModelPicker',
+  [`${PREFIX}/picker`, 'model-picker.js', "the served app has 切换模型's page, built from the shared picker"],
+  [`${PREFIX}/window/lib/model-picker.js`, 'createModelPicker',
     'and serves that component to both the picker page and the guide'],
-  ['/vrmpet3d/window/lib/setup-page.js', 'setup-model-picker', "with the guide's ② 偏好模型 step mounting it"],
-  ['/vrmpet3d/global', 'settings-7', '通用设置 has the 其他 section (重新运行引导)'],
+  [`${PREFIX}/window/lib/setup-page.js`, 'setup-model-picker', "with the guide's ② 偏好模型 step mounting it"],
+  [`${PREFIX}/global`, 'settings-7', '通用设置 has the 其他 section (重新运行引导)'],
 ];
 
 async function main() {
+  console.log(`prefix: ${PREFIX}`);
   const rows = [];
   for (const [path, marker, label] of CHECKS) {
     const answer = await get(path);
     rows.push({ path, status: answer.status, found: answer.body.includes(marker), label, error: answer.error });
   }
 
-  const state = await get('/vrmpet3d/setup-state');
+  const state = await get(`${PREFIX}/setup-state`);
   let setup = null;
   try { setup = JSON.parse(state.body); } catch { /* not JSON: reported as null below */ }
 
@@ -85,8 +100,8 @@ async function main() {
 
   const missing = rows.filter((row) => !row.found || row.status !== 200);
   console.log(missing.length
-    ? `\nlive-check: ${missing.length} of ${rows.length} MISSING — the app is not serving the current code`
-    : `\nlive-check: all ${rows.length} present, and the guide's state answered`);
+    ? `\nlive-check ${PREFIX}: ${missing.length} of ${rows.length} MISSING — the app is not serving the current code`
+    : `\nlive-check ${PREFIX}: all ${rows.length} present, and the guide's state answered`);
   process.exit(missing.length ? 1 : 0);
 }
 

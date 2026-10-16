@@ -13,6 +13,77 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
+## ▶ dev 版与正式版同时在 DSH 里跑：生成式 dev 孪生（2026-10-16）
+
+操作者：「本地是 dev 分支，可以在 dev 分支的插件名字后面加上 -dev 吗？让我可以同时在 dsh 中调试正式版插件和 dev 版本。」
+
+* **为什么不是"在源码里改名"**：插件名不只是一个字符串，它贯穿着约 2400 处——每一条路由（DSH 的 webserver 对重复路由**直接抛错**，
+  `duplicate exact route`，所以只改包名的第二份插件连一条路由都注册不上）、服务名与 `ctx.remote.vrmpet3d`、每个 `__VRMPET3D_*`
+  全局与 chunk id、`localStorage` 键、profile 里的设置/引导/导入文件名、Electron 运行时目录与 IPC 通道、CSS 类名。任何一处共用，
+  两个实例就会打架。而在源码里整套改名的代价是两个分支身份永久分叉：`main` 有 34 个 dev 没有的提交、dev 有 118 个 main 没有的，
+  且 `main` 的发布树是从 dev 生成的（`make-release-pages.mjs`）——之后每次同步都会在提到新名字的每一行冲突，发布变换还得改回来。
+* **做法**：身份平移放进一个**生成物**（与 `client-chunks.mjs` / `vendor-build.mjs` / `make-release-pages.mjs` 同一个套路）。
+  `node scripts/make-dev-package.mjs` 按 `package.json` 的 `files[]`（含它的两条排除）生成 `build/dev-package/`：
+  包与 bundle 行 `dsh-plugin-vrmpet3d` → `dsh-plugin-vrmpet3d-dev`、路由/文件名/CSS `vrmpet3d` → `vrmpet3d-dev`、
+  驼峰标识符 `vrmpet3dX` → `vrmpet3dDevX`、`VRMPET3D` → `VRMPET3D_DEV`、类名 `VrmPet3D` → `VrmPet3DDev`。
+  生成物**不进 git**（`.gitignore` 的 `build/dev-package/`），源码树永远只有一个名字。
+* **三处要小心的形状**（都由脚本按名字处理，别改成"顺手统一"）：`dsh-plugin-vrmpet3d` 必须整体替换（否则 `-dev` 会被套两次）；
+  驼峰标识符里的连字符是语法错误（所以是 `vrmpet3dDevDesktop` 而不是 `vrmpet3d-devDesktop`）；`remote.vrmpet3d` 是**属性访问**，
+  平移后的服务名不是合法属性名，脚本把它写成 `remote['vrmpet3d-dev']`（4 处代码 + 2 处注释）。
+* **生成时当场验证**（22 条，`--check` 时 23 条）：副本的各自身份（包名、patch 行、`PLUGIN_ID`、四个 chunk 的注册 id）；
+  全部文本文件里**不残留**任何未平移的 token；每个 `.js` 过 `node --check`、每个 `.json` 过 `JSON.parse`；两个随包清单
+  （`vrmpet3d-dev-models.json` / `vrmpet3d-dev-motions.json`）跟着读它们的常量一起改名；最后把副本的宿主半边在 stub ctx 上
+  `apply` 一次，断言它 provide 的是 `vrmpet3d-dev`，且延迟到达的 webServer 收到的 **21 条路由全在 `/vrmpet3d-dev/` 下**
+  （这条是文本扫描看不见的那半身份：路由是在 `apply` 里拼出来的，没平移不会留下"残留字符串"，只会变成和正式版抢同一条路径）。
+  应用到插件时会写设置文件，所以脚本先把副本的全部存储路径用 `VRMPET3D_DEV_*` 指到 `build/probe-out/` 的临时目录。
+* **安装与并存**：`node scripts/make-dev-package.mjs` 然后
+  `node scripts/install-desktop-plugin.mjs --package build/dev-package`（等价的一条：`npm run install:dev`）。
+  `install-desktop-plugin.mjs` 只是多了一个 `--package <dir>`（登记的是**那棵树**的包名、patch 与联接目标），别的没动。
+  两版各自的设置文件（`vrmpet3d-dev-settings.json`、`vrmpet3d-dev-desktop/`、`vrmpet3d-dev-setup.json`）、各自的浮窗运行时目录
+  （`vrmpet3d-dev-desktop-runtime`）、各自的 `localStorage` 键、各自的 CSS 类名——所以两个宠物可以同时开着，各自拖动、
+  各自缩放、各自开设置页与模型选择页；调试用的接口读数是 `/vrmpet3d-dev/...`。
+* **实测：不用重启就已经组合进来了**（2026-10-16，操作者这台机器）。写进 profile 后约几秒，运行中的这个 build 自己把新 bundle 组进了树：
+  `GET /vrmpet3d-dev/catalog` 与 `/vrmpet3d-dev/state` 都答 200，`state.seq` 在往前走、`why.physics.frames` 有值——也就是**副本的客户端
+  半边也被 DSH 的模块系统投递并跑起来了**（会往 `/vrmpet3d-dev/state` 上报的，只可能是知道这个前缀的那份代码），并且 profile 里同时出现了
+  它自己的 `vrmpet3d-dev-desktop/` 与 `vrmpet3d-dev-setup.json`（与正式版的两个文件并列，互不覆盖）。`install-desktop-plugin.mjs` 末尾那句
+  "restart DSH" 仍然保留（那是文档里的稳妥说法），但组合进来之后要问"这一版是不是当前代码"，用的是两条各自带前缀的工具：
+  `node scripts/live-check.mjs --dev`（10/10 全绿）与 `node scripts/check-profile.mjs --dev`（profile 侧 6 条，断言联接指向
+  `build/dev-package` 而不是本仓库）。
+* **第一次组合会看到什么**：副本是全新 profile（`completed=false`），所以它的**内置桌宠**起来之后会按首启逻辑请宿主开一次引导窗口
+  （`/vrmpet3d-dev/setup`，即那个 `window-config` 进程），同时它的位置、大小、模型都是默认值——它和正式版各自一个浮窗、各自的右键菜单。
+  想让它安静下来：在引导窗口里走完或直接关掉（`completed` 会落进 `vrmpet3d-dev-setup.json`），浮窗用自己右键菜单里的那几项。
+* **日常成本**：改过 `lib/` 或 `desktop/` 之后重跑一次生成（约 1 s），`node scripts/make-dev-package.mjs --check` 是廉价的漂移断言
+  （约 1.4 s，只重建到 `build/.dev-package-check` 再逐文件比哈希），与 `client-chunks.mjs --check` 同级——**副本陈旧不会自己报错**，
+  它只会是一个跑着昨天代码的 dev 宠物，所以这条要跟着一起跑。
+* **故意不动的两样**：pre-rename 的 `pet3d-settings.json` / `pet3d-model-dirs.json` / `PET3D_*` 不跟着平移——它们是 2026-10-12
+  改名那次**迁移要读的旧名**，不是这个插件的身份，跟着平移只会让副本的迁移永远不触发（本机已经没有这些文件，两种做法都一样）。
+  `assets/whale-tail.apng` 与 `assets/screenshots` 不进副本，与真实安装的 `files[]` 一致（前者见 `docs/ASSET-CONTRACT.md` §1），
+  所以副本的 `/vrmpet3d-dev/whale` 会 404、两个提示回落到静态 SVG——这正是正式版安装的行为。
+* **本机装的是哪一份**：profile 的 `node_modules/dsh-plugin-vrmpet3d` 是 npm 上的 `^0.1.0` **真实目录**（不是联接），dev 孪生是以
+  `link:` 加进去的第二条 bundle。注意 `check-profile.mjs`（不带 `--dev`）对正式版会一直报 1 FAIL："points at this checkout" ——
+  本机装的是 npm 那份、不是本仓库联接，而它给的修复建议（`install-desktop-plugin.mjs` 重装）会把正式版也换成 dev 源码，
+  **别照着做**，除非那正是你要的（那就是"两份都是 dev"，只剩前缀不同）。
+* **想把孪生摘干净**（`purge-plugin-records.mjs` 只认正式版那条，别指望它）：①从 profile 的 `package.json` 里删掉
+  `dependencies["dsh-plugin-vrmpet3d-dev"]` 与 `dsh.profile.bundles` 里的同名项（先备份一份，运行中的应用会按内存里的树回写这个文件）；
+  ②删 `node_modules/dsh-plugin-vrmpet3d-dev` 联接；③删 `vrmpet3d-dev-desktop/`（设置）与 `vrmpet3d-dev-setup.json`（首启记录）；
+  ④删它自己的浮窗运行时目录 `vrmpet3d-dev-desktop-runtime`（在 DSH 安装目录旁边，约 300 MB，删掉下次启用浮窗会重建）；
+  ⑤`pnpm-lock.yaml` 里若有它的 importer 行，一起删（残留会让 pnpm 把它装回来）。重启后 `check-profile --dev` 应当报"未组合"。
+  装进来这件事本身不动 lock：profile 的 `pnpm-lock.yaml` 现在还没有这条 `link:` 依赖，下一次插件管理器用 pnpm 装/卸东西时它会被补上
+  （`--frozen-lockfile` 只在管理器回滚那条路径上使用）。
+* **验证（AGENTS.md 的窄验证，不是全量）**：`make-dev-package` 22 条 + `--check` 23 条全绿（生成、逆平移残留扫描、24 个 `.js` 过
+  `node --check`、宿主半边在 stub 上激活且 21 条路由全在 `/vrmpet3d-dev/` 下）；`install-desktop-plugin --package` 的 `--dry-run`
+  与真实安装；`client-chunks --check` 3/3；`check-profile --dev --no-http` 6/6；`live-check`（`/vrmpet3d` 10/10）、
+  `live-check --dev`（`/vrmpet3d-dev` 10/10，组合进来之后实测）；文档面：`check-docs` 的**第 1、2 组**（文档引用的路径与命令）
+  单独跑了一遍，188 条 0 FAIL。**没跑**：完整的 `check-docs`（它会把 `verify-desktop` 的实时半场强行打开——真实置顶窗口——
+  按上一次的做法把时机留给操作者）、`verify-all`、以及任何代码套件（这次没动 `lib/`、`desktop/`、`build/probe/`）。
+* **顺带记录/修掉的两处陈旧读数**：(1) `check-plugin-load.mjs` 有 2 条断言还在期待双语化之前的 `desktop/preload.js`
+  （断言写的是 `pickModelFile: () => invoke(...)`，而文件现在是 `pickModelFile: (language) => invoke(...)` 的多行形式），
+  **这是 dev 分支 HEAD 上就有的失败**——我用 `git worktree add --detach` 拉了 HEAD 的干净树复现过，同样 2 FAILED——与本次改动无关，
+  我没有动它；(2) `live-check.mjs` 的 core 标记还写着 `STATUS_STATES.concat(INTERACTION_STATES)`，而 `dancing` 加进去之后那个表达式
+  已经不存在了，于是它对**当前代码**永远报 1 MISSING ——这条我改了（标记与说明都按 `…, ['dancing']` 的十个状态写），因为不修它
+  `live-check --dev` 就会假报，那正好毁掉它存在的理由。
+
+
 ## ▶ 全部界面中英双语（2026-10-15）
 
 操作者：「把全部界面做中英双语自动识别，并在通用设置和初始安装引导页的第一页欢迎页面中加上语言选择」。

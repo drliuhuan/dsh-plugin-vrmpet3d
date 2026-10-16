@@ -38,7 +38,8 @@
     "fetch:fixtures": "node scripts/verify-model.mjs --fetch",
     "fetch:whale": "node scripts/whale-asset.mjs",
     "vendor:build": "node scripts/vendor-build.mjs",
-    "install:profile": "node scripts/install-desktop-plugin.mjs"
+    "install:profile": "node scripts/install-desktop-plugin.mjs",
+    "install:dev": "node scripts/make-dev-package.mjs && node scripts/install-desktop-plugin.mjs --package build/dev-package"
   },
   "engines": {
     "node": ">=22"

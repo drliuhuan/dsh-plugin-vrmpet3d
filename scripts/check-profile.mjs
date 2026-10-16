@@ -2,7 +2,14 @@
 /**
  * Is the plugin actually WIRED INTO the profile, and is it LIVE in the running app?
  *
- * Run:  node scripts/check-profile.mjs [--profile <dir>] [--no-http]
+ * Run:  node scripts/check-profile.mjs [--profile <dir>] [--no-http] [--dev]
+ *
+ * `--dev` asks the same two questions about the generated DEV TWIN
+ * (`dsh-plugin-vrmpet3d-dev`, `scripts/make-dev-package.mjs`): is IT the declared dependency
+ * whose node_modules link resolves to `build/dev-package`, and is ITS half live under
+ * `/vrmpet3d-dev/...`. The twin is a `link:` to a generated tree, so the "points at this
+ * checkout" assertion becomes "points at the generated copy" — which is the one thing that
+ * distinguishes a working twin from an install of the released package under a dev name.
  *
  * ## Why this exists
  *
@@ -41,7 +48,15 @@ const skipHttp = args.includes('--no-http');
 const base = process.env.DSH_WEB_URL || 'http://127.0.0.1:19387';
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-const NAME = pkg.name;
+/**
+ * Which of the two composed plugins this pass is about — and they are two independent
+ * prefixes, so the live half has to ask about the same one the profile half does.
+ */
+const DEV = args.includes('--dev');
+const NAME = DEV ? `${pkg.name}-dev` : pkg.name;
+const PREFIX = DEV ? '/vrmpet3d-dev' : '/vrmpet3d';
+/** Where the dependency is expected to point: this checkout, or the twin it generates. */
+const EXPECTED = DEV ? join(ROOT, 'build', 'dev-package') : ROOT;
 
 let passed = 0;
 const failures = [];
@@ -52,7 +67,8 @@ function report(ok, label) {
 }
 
 console.log(`plugin:  ${ROOT}`);
-console.log(`profile: ${profileDir}\n`);
+console.log(`profile: ${profileDir}`);
+console.log(`asking about: ${NAME} (${PREFIX})\n`);
 
 // ---------------------------------------------------------------------------------------------
 // 1. The profile
@@ -81,14 +97,16 @@ report(typeof declared === 'string' && declared.length > 0,
   `${NAME} is a declared dependency${declared ? ` (${declared})` : ''}`);
 if (typeof declared === 'string' && declared.startsWith('link:')) {
   const target = resolve(declared.slice('link:'.length));
-  report(target === ROOT, `the dependency links to THIS checkout (${target})`);
+  report(target === EXPECTED,
+    `the dependency links to ${DEV ? 'the generated twin' : 'THIS checkout'} (${target})`);
 }
 const linkPath = join(profileDir, 'node_modules', ...NAME.split('/'));
 report(existsSync(linkPath), `the profile's node_modules resolves ${NAME}`);
 if (existsSync(linkPath)) {
   try {
     const real = realpathSync(linkPath);
-    report(resolve(real) === ROOT, `and it points at this checkout (${real})`);
+    report(resolve(real) === EXPECTED,
+      `and it points at ${DEV ? 'the generated twin' : 'this checkout'} (${real})`);
   } catch (error) {
     report(false, `the link could be read (${error.message})`);
   }
@@ -123,18 +141,18 @@ if (!skipHttp) {
     }
   };
 
-  const catalog = await probe('/vrmpet3d/catalog');
+  const catalog = await probe(`${PREFIX}/catalog`);
   const reachable = catalog.status !== 0;
   if (!reachable) {
     notes.push(`the app is not answering at ${base} — start it, or set DSH_WEB_URL`);
   } else {
     report(catalog.status === 200,
-      `the host half is live (/vrmpet3d/catalog -> ${catalog.status}${catalog.status === 404 ? '; 404 means the plugin is not composed' : ''})`);
+      `the host half is live (${PREFIX}/catalog -> ${catalog.status}${catalog.status === 404 ? '; 404 means the plugin is not composed' : ''})`);
   }
 
   if (reachable) {
-    const state = await probe('/vrmpet3d/state');
-    report(state.status === 200, `the state channel answers (/vrmpet3d/state -> ${state.status})`);
+    const state = await probe(`${PREFIX}/state`);
+    report(state.status === 200, `the state channel answers (${PREFIX}/state -> ${state.status})`);
     httpState = state.payload;
     if (state.status === 200 && state.payload) {
       const error = state.payload.error;
@@ -163,13 +181,15 @@ const profileOk = profileFailures === 0;
  */
 if (!profileOk) {
   console.log(`profile wiring: ${profileFailures} FAILED`);
-  console.error(`\nRepair it with:\n  node scripts/install-desktop-plugin.mjs --profile "${profileDir}"\nthen restart DSH.`);
+  console.error(`\nRepair it with:\n  ${DEV
+    ? `node scripts/make-dev-package.mjs && node scripts/install-desktop-plugin.mjs --package build/dev-package --profile "${profileDir}"`
+    : `node scripts/install-desktop-plugin.mjs --profile "${profileDir}"`}\nthen restart DSH.`);
   process.exitCode = 1;
 } else if (failures.length > 0) {
   // The profile is right; only the running app disagrees. Both app-side failures at once mean the plugin is
   // simply not in the tree this process booted with, which no page reload can change.
   console.log(`profile wiring: PASSED (${passed} checks)`);
-  console.error(`running app:  the plugin is NOT composed in the app that is running at ${base}`);
+  console.error(`running app:  ${NAME} is NOT composed in the app that is running at ${base}`);
   console.error('  A restart is what is missing here — the profile itself needs no change, so do NOT rerun');
   console.error('  install-desktop-plugin.mjs. The composition is built at startup, so a running app keeps');
   console.error('  the tree it booted with. Restart DSH, then reload the page.');

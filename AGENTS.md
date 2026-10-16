@@ -30,6 +30,11 @@ is.
    `lib/scene.js` or `lib/menu.js` — the delivered chunks are committed copies, and a stale one is a *silent*
    failure. That is a build step, not verification; the cheap freshness assertion is
    `node scripts/client-chunks.mjs --check`.
+   Where the DEV TWIN is installed (`build/dev-package` — the generated `dsh-plugin-vrmpet3d-dev` that runs beside
+   the real plugin, see `HANDOFF.md`'s 2026-10-16 entry), any edit to `lib/` or `desktop/` invalidates that too:
+   regenerate with `node scripts/make-dev-package.mjs`, and its freshness assertion is
+   `node scripts/make-dev-package.mjs --check`. A stale twin is just as silent — it is a dev pet running yesterday's
+   code.
 3. **Report which suites ran and what they said** — "core: 786 passed", not "all green". Never write
    "the tree is green", "verify-all passes" or any equivalent from a partial run; that claim belongs to whoever
    ran the whole tree.
@@ -76,6 +81,7 @@ in the docs look wrong.
 | the release tree — what `main` ships and what it must NOT carry | `node scripts/check-release.mjs <tree>` (`--prune` deletes uncompressed `.vrm`/`.vrma`; a `.br` twin always wins, and dev material must be absent) |
 | the release tree's GENERATED files (regenerate after any `lib/` sync) | `node scripts/make-release-pages.mjs` (strips the 调试模式 row from 通用设置) and `node scripts/make-release-readme.mjs` (dev's README minus the developer sections) — `check-release` fails when either is stale |
 | the profile wiring, or "is the running app current?" | `node scripts/check-profile.mjs` |
+| the generated DEV TWIN — what DSH loads as `dsh-plugin-vrmpet3d-dev`, or the identity shift itself | `node scripts/make-dev-package.mjs --check` (regenerate with `node scripts/make-dev-package.mjs`; installing it is `node scripts/install-desktop-plugin.mjs --package build/dev-package`) |
 | removing the plugin from THIS machine — the manager only unregisters it | `node scripts/purge-plugin-records.mjs` (`--dry-run` first; it backs the profile side up, then deletes the plugin's own profile dir, the guide record, the `node_modules` link and both runtime dirs, and finally rescans) |
 | what the RUNNING app is actually serving (routes, page sources), after a restart | `node scripts/live-check.mjs` |
 

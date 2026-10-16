@@ -3,6 +3,12 @@
  * Install this plugin into a DSH profile, reversibly.
  *
  * Run:  node scripts/install-desktop-plugin.mjs --profile "<...>/profiles/desktop" [--dry-run]
+ *       node scripts/install-desktop-plugin.mjs --package build/dev-package    # the DEV TWIN
+ *
+ * `--package <dir>` registers a tree OTHER than this checkout — in practice the dev twin that
+ * `scripts/make-dev-package.mjs` generates, so DSH composes this plugin twice: once as
+ * `dsh-plugin-vrmpet3d` and once as `dsh-plugin-vrmpet3d-dev`, side by side. The name, the patch and
+ * every route come from the tree that is named, so the two never collide.
  *
  * Why a script instead of `dsh plugin add`: the Electron application manages the
  * `desktop` profile exclusively and the CLI refuses it, and pnpm is not on PATH in
@@ -31,6 +37,13 @@ const dryRun = args.includes('--dry-run');
 
 // This file lives in <plugin>/scripts/, so the package root is one level up.
 const pluginDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+/**
+ * The tree to register. `--package` exists for the generated dev twin
+ * (`scripts/make-dev-package.mjs`), which is a second copy of the package under a second
+ * name: it declares its own `dsh.bundle.patch` and everything below is derived from ITS
+ * manifest, so nothing here has to know which of the two it is registering.
+ */
+const packageDir = resolve(argOf('--package') ?? pluginDir);
 const profileDir = argOf('--profile')
   ?? join(process.env.USERPROFILE ?? process.env.HOME ?? '.', '.dsh', 'profiles', 'desktop');
 
@@ -39,8 +52,13 @@ if (!existsSync(manifestPath)) {
   console.error(`no profile manifest at ${manifestPath}`);
   process.exit(2);
 }
+if (!existsSync(join(packageDir, 'package.json'))) {
+  console.error(`no package manifest at ${join(packageDir, 'package.json')}`);
+  console.error('Build the dev twin first: node scripts/make-dev-package.mjs');
+  process.exit(2);
+}
 
-const pkg = JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8'));
+const pkg = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
 const NAME = pkg.name;
 
 if (pkg.dsh?.bundle?.patch === undefined) {
@@ -57,8 +75,8 @@ const linkPath = join(modulesDir, ...NAME.split('/'));
 const changes = [];
 manifest.dependencies ??= {};
 if (manifest.dependencies[NAME] === undefined) {
-  manifest.dependencies[NAME] = `link:${pluginDir.replace(/\\/g, '/')}`;
-  changes.push(`dependencies["${NAME}"] = link:${pluginDir}`);
+  manifest.dependencies[NAME] = `link:${packageDir.replace(/\\/g, '/')}`;
+  changes.push(`dependencies["${NAME}"] = link:${packageDir}`);
 }
 manifest.dsh ??= {};
 manifest.dsh.profile ??= {};
@@ -68,9 +86,9 @@ if (!manifest.dsh.profile.bundles.includes(NAME)) {
   changes.push(`dsh.profile.bundles += ${NAME}`);
 }
 const linkExists = existsSync(linkPath);
-changes.push(linkExists ? `node_modules link already present: ${linkPath}` : `create link ${linkPath} -> ${pluginDir}`);
+changes.push(linkExists ? `node_modules link already present: ${linkPath}` : `create link ${linkPath} -> ${packageDir}`);
 
-console.log(JSON.stringify({ pluginDir, profileDir, manifestPath, backupPath, dryRun, changes }, null, 2));
+console.log(JSON.stringify({ packageDir, profileDir, manifestPath, backupPath, dryRun, changes }, null, 2));
 
 if (dryRun) {
   console.log('\n--dry-run: nothing written.');
@@ -88,12 +106,12 @@ if (!linkExists) {
   try {
     // A junction on Windows, a directory symlink elsewhere. `junction` needs no
     // elevation and survives the target being a relative path.
-    symlinkSync(pluginDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+    symlinkSync(packageDir, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
     console.log(`linked ${linkPath}`);
   } catch (error) {
     console.error(`could not create the link: ${error.message}`);
     console.error('The manifest is already updated; restore the backup and retry, or create the link by hand:');
-    console.error(`  ${linkPath}  ->  ${pluginDir}`);
+    console.error(`  ${linkPath}  ->  ${packageDir}`);
     process.exit(1);
   }
 }
