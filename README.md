@@ -11,7 +11,7 @@
 > 当前为早期版本，仍在修复和完善。3D 渲染会占用 GPU 与内存；遇到异常时，请附上 DSH 版本、显示方式和复现步骤反馈。
 
 ```
-no runtime dependencies · 9 verification suites · 2543 checks · works offline
+no runtime dependencies · 9 verification suites · 2609 checks · works offline
 ```
 
 ## 效果展示
@@ -42,6 +42,7 @@ no runtime dependencies · 9 verification suites · 2543 checks · works offline
 | 互动 | 点击与长按部位触发表情和碎碎念；拖动、缩放、旋转视角、视线跟随和弹簧骨物理 |
 | 碎碎念 | 内置台词、自定义台词，或使用 DSH 模型 / OpenAI 兼容接口生成 AI 台词 |
 | 导入 | 模型以文件导入、动作包以文件夹导入，复制到插件存储后不依赖原路径 |
+| 界面语言 | 全部界面中英双语，默认跟随系统 / DSH 自动识别；「通用设置 → 显示与外观」和初次引导欢迎页各有一个语言选择（自动 / 中文 / English） |
 
 ## 运行要求
 
@@ -155,6 +156,7 @@ The marketplace screenshot order is declared in the root [screenshots.json](scre
 | Interaction | Click or hold body parts for expressions and chatter; drag, resize, rotate the view, follow the pointer and use spring-bone physics |
 | Chatter | Built-in or custom lines, or AI-generated lines using a DSH model or an OpenAI-compatible service |
 | Import | Import models as files and motion packs as folders. Imported files are copied into plugin storage and no longer depend on their original paths |
+| Language | The whole interface is Chinese and English, auto-detected from the system or DSH by default; a chooser (Auto / 中文 / English) sits in General settings → Display, and on the first-run guide's welcome screen |
 
 ### Requirements
 
@@ -235,7 +237,7 @@ Report issues through [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vr
 
 ## Verification
 
-**9 verification suites, 2543 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2609 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -246,12 +248,12 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 
 | Command | Checks |
 |---|---|
-| `node scripts/verify.mjs` | 1274 — state machine, the nine motion states, the session aggregate's completion rules (a helper's stop is not the user's, a completion that gets retracted doubles that session's settle window, and WHY a notice ended is recorded), the shipped 部位 碎碎念 (两个手势 × 中英), and the pack's 状态与动作 template (per-clip 循环/表情/口型/凝视, merged field by field under the profile's own) |
+| `node scripts/verify.mjs` | 1316 — state machine, the nine motion states, the session aggregate's completion rules (a helper's stop is not the user's, a completion that gets retracted doubles that session's settle window, and WHY a notice ended is recorded), the shipped 部位 碎碎念 (两个手势 × 中英), 界面语言 (the preference, the resolver and the shared text machinery), and the pack's 状态与动作 template (per-clip 循环/表情/口型/凝视, merged field by field under the profile's own) |
 | `node scripts/verify-model.mjs` | 796 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and its per-clip template, the live-state channel's WHY block (including the last dismissal), and the first-run guide's state |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 111 — the widget, the menu, the desktop page, the shipped 部位 台词 per gesture, the background pump that keeps a throttled window alive, the pack template through a real scene, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar, a posed model's part hit test, and 通用设置's 状态与动作 rows with their per-clip 碎碎念 and AI 提示词 |
-| `node scripts/verify-desktop.mjs` | 308 — the pet's own window, borrowed Electron and all, plus the four pages' scripts |
+| `node scripts/verify-desktop.mjs` | 332 — the pet's own window, borrowed Electron and all, plus the four pages' scripts and the 界面语言 markup contract (every `data-i18n` key has a table entry, and each table's two halves hold the same keys) |
 | `node scripts/check-plugin-load.mjs` | the manifest, activation and clean disposal |
 | `node scripts/vendor-build.mjs --check` | the committed 3D chunk is reproducible from the pinned versions |
 | `node scripts/check-docs.mjs` | documented paths, commands and counts match reality |

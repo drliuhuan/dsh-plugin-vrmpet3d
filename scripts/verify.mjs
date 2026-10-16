@@ -4291,6 +4291,107 @@ group('13. pointer aim (which way the pet looks)');
 }
 
 // ---------------------------------------------------------------------------
+group('14. 界面语言: the preference, the resolver, and the shared text machinery');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * Operator, 2026-10-15: 「把全部界面做中英双语自动识别，并在通用设置和初始安装引导页的第一页欢迎页面中加上语言选择」.
+   *
+   * Three things are asserted here and nowhere else: the PREFERENCE (which value is stored, and what an unknown
+   * one means), the RESOLVER (which hint wins, and what "no hint" answers), and the shared PER-SURFACE TEXT
+   * MACHINERY every page and both client halves read (`textFor` / `textOf` / `applyI18n`). The surfaces' own
+   * tables are the surfaces' business — `verify-desktop.mjs` checks the markup against them.
+   */
+  eq(core.LANGUAGE_SETTINGS.join(' '), 'auto zh en', 'three answers: 自动, 中文, English');
+  eq(core.cleanLanguage('en'), 'en', 'an explicit language survives the cleaner');
+  eq(core.cleanLanguage('zh'), 'zh', '...either of them');
+  eq(core.cleanLanguage('fr'), 'auto', 'and anything else is 自动 rather than a third language');
+  eq(core.cleanPreferences({}).language, 'auto', 'a fresh profile follows the surface it runs in');
+  eq(core.cleanPreferences({ language: 'en' }).language, 'en', 'and an explicit choice is stored as itself');
+  eq(core.cleanPreferences({ language: 'nope' }).language, 'auto', 'a stored typo resolves back to 自动');
+
+  eq(core.resolveLanguage('zh', ['en-US']), 'zh', 'an explicit choice beats every hint');
+  eq(core.resolveLanguage('auto', ['zh-CN', 'en-US']), 'zh', 'auto follows the most authoritative hint');
+  eq(core.resolveLanguage('auto', ['en-US', 'zh-CN']), 'en', 'and does not go looking further down the chain');
+  eq(core.resolveLanguage('auto', ['fr-FR', 'zh-CN']), 'en',
+    'a language this plugin does not have falls back to English rather than to a Chinese hint');
+  eq(core.resolveLanguage('auto', [null, '', undefined]), 'en', 'nothing to go on is English');
+  eq(core.resolveLanguage(undefined, []), 'en', 'and so is a preference nobody ever set');
+  eq(core.resolveLanguage('auto', ['ZH-hans']), 'zh', 'the hint match is case-insensitive and locale-shaped');
+  eq(core.resolveLanguage('auto', ['cn']), 'zh', 'and accepts cn as a spelling of Chinese');
+
+  // Which hint wins is a RULE, not an accident: the browser comes before the document's own `lang`, because
+  // every page this plugin serves ships `<html lang="zh">` — the page's own default must never decide for the
+  // user, or an English browser could never auto-detect anything but Chinese.
+  const fakeWin = { navigator: { language: 'en-GB' }, document: { documentElement: { lang: 'zh' } } };
+  eq(core.browserLanguageHints(fakeWin).join(' '), 'en-GB zh', 'the browser outranks the page it is showing');
+  eq(core.resolveLanguage('auto', core.browserLanguageHints(fakeWin)), 'en',
+    'so a Chinese-marked page in an English browser is English');
+  eq(core.browserLanguageHints({}).length, 2, 'a scope with neither still answers two (empty) hints');
+
+  // One table per surface, two halves — and a gap that SHOWS instead of hiding behind a default.
+  const table = { zh: { hello: '你好', only: '只在中文里' }, en: { hello: 'Hello' } };
+  eq(core.textFor(table, 'en').hello, 'Hello', 'a table answers in the language asked for');
+  eq(core.textFor(table, 'en').only, undefined, 'including where an entry was never written');
+  eq(core.textFor(table, 'zh').only, '只在中文里', 'and the other half is not mixed in');
+  eq(core.textOf(table, 'en', 'missing'), 'missing', 'a missing key returns the KEY, so a gap is visible');
+  eq(core.textFor(null, 'en').hello, undefined, 'a surface with no table answers nothing rather than throwing');
+
+  // applyI18n drives one text node and four attributes, on a stub document.
+  const made = [];
+  const node = (attrs) => {
+    const self = {
+      textContent: 'inline', innerHTML: '', set: {},
+      getAttribute: (name) => (Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null),
+      setAttribute: (name, value) => { self.set[name] = value; },
+    };
+    made.push(self);
+    return self;
+  };
+  const textNode = node({ 'data-i18n': 'hello' });
+  const htmlNode = node({ 'data-i18n-html': 'hello' });
+  const placeholderNode = node({ 'data-i18n-placeholder': 'hello' });
+  const titleNode = node({ 'data-i18n-title': 'hello' });
+  const ariaNode = node({ 'data-i18n-aria': 'hello' });
+  const absentNode = node({ 'data-i18n': 'missing' });
+  const doc = { querySelectorAll: () => made };
+  eq(core.applyI18n(doc, table, 'en'), 5, 'five marked places are rewritten, and a key with no entry is left alone');
+  eq(textNode.textContent, 'Hello', 'data-i18n writes the text node');
+  eq(htmlNode.innerHTML, 'Hello', 'data-i18n-html writes markup (our own literal, never anything a model wrote)');
+  eq(placeholderNode.set.placeholder, 'Hello', 'data-i18n-placeholder writes the attribute');
+  eq(titleNode.set.title, 'Hello', 'data-i18n-title too');
+  eq(ariaNode.set['aria-label'], 'Hello', 'and data-i18n-aria is the accessible name');
+  eq(absentNode.textContent, 'inline', 'a missing entry leaves the markup (the Chinese fallback) alone');
+  eq(core.applyI18n(null, table, 'en'), 0, 'no document is not an error, it is nothing to do');
+
+  // The shipped status lines are per language, and so is the CLOCK inside them.
+  eq(core.defaultStatusText('working', 'zh'), '深度求索中 ···', '工作中 speaks Chinese by default');
+  eq(core.defaultStatusText('done', 'en'), 'Task complete', 'and carries its own English half');
+  eq(core.defaultStatusText('resting', 'en'), '', '空闲 says nothing in either language');
+  eq(core.STATUS_STATES.every((state) => {
+    const entry = core.DEFAULT_STATUS_TEXT[state];
+    return entry && typeof entry.zh === 'string' && typeof entry.en === 'string';
+  }), true, 'every state carries BOTH languages, so neither interface falls through to the other');
+  eq(core.statusLineFor(core.cleanPreferences({}), 'done', 'en'), 'Task complete',
+    'an unconfigured profile shows the line of the language it is running in');
+  eq(core.statusLineFor(core.cleanPreferences({}), 'done'), '任务达成',
+    'and a caller that names no language keeps the Chinese one every older assertion pins');
+  eq(core.statusLineFor(core.cleanPreferences({ status: { done: { text: '我自己的话' } } }), 'done', 'en'),
+    '我自己的话', 'a line the user typed is ONE line and is not translated');
+  const clocked = core.cleanPreferences({ status: { working: { text: '用时 {duration}' } } });
+  eq(core.statusFor(clocked, 'working', 0, 61000, undefined, 'en').text, '用时 1m 1s',
+    'the elapsed clause is written in the language of the interface');
+  eq(core.statusFor(clocked, 'working', 0, 61000, undefined, 'zh').text, '用时 1分1秒',
+    'and the Chinese half keeps DSH\'s own units');
+  eq(core.statusFor(core.cleanPreferences({}), 'working', 0, 1000, undefined, 'en').icon, true,
+    'the running mark belongs to the STATE, so it is there in English too');
+  const speechEvents = ['working', 'done', 'error', 'waiting', 'approval', 'offline', 'idle'];
+  eq(speechEvents.every((event) => core.speechLines('zh', event).length > 0
+    && core.speechLines('en', event).length > 0), true,
+    'and every 碎碎念 pool is written in both languages, as it already was');
+}
+
+// ---------------------------------------------------------------------------
 console.log(`\n${'-'.repeat(60)}`);
 if (failed === 0) {
   console.log(`core: ${passed} checks passed`);

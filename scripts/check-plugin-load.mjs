@@ -525,9 +525,34 @@ report(service?.assetRoutes === null,
       'the preload bridge exposes the native FILE picker for a model import');
     report(/pickMotionDir: \(\) => ipcRenderer\.invoke\('vrmpet3d:pick-path', \{ kind: 'motion' \}\)/.test(preloadSource),
       'and a folder picker for motion directories, on the same channel');
+    /**
+     * The titles come from the launcher's OWN two-language table rather than from literals here.
+     *
+     * The launcher is a separate process with no `lib/core.js`, so it keeps its own copy of the repository's
+     * `{ zh: {...}, en: {...} }` shape (2026-10-15). What this assertion is for has not changed — the dialog is
+     * titled after what is being imported, a MODEL is a file dialog and a MOTION a folder one — but it now also
+     * pins that BOTH languages are written, because the launcher draws its words from the request's language.
+     */
+    const dialogTable = /const DIALOG_TEXT = \{([\s\S]*?)\n\};/.exec(launcherSource);
+    const dialogKeys = (half) => {
+      if (!dialogTable) return null;
+      const at = dialogTable[1].indexOf(`${half}: {`);
+      if (at === -1) return null;
+      const body = dialogTable[1].slice(at, dialogTable[1].indexOf('}', at));
+      return [...body.matchAll(/([A-Za-z_$][\w$]*)\s*:/g)].map((match) => match[1]).filter((key) => key !== half);
+    };
+    const zhKeys = dialogKeys('zh') || [];
+    const enKeys = dialogKeys('en') || [];
     report(/kind === 'motion' \? \{/.test(launcherSource)
-      && /title: '导入动作目录'/.test(launcherSource) && /title: '导入模型文件'/.test(launcherSource),
+      && /title: text\.motionTitle/.test(launcherSource) && /title: text\.modelTitle/.test(launcherSource),
       'the launcher titles the dialog after what is being imported, and a MODEL is a file dialog while a MOTION is a folder one');
+    report(zhKeys.length === 3 && zhKeys.join(' ') === enKeys.join(' '),
+      `and the title it draws is written in both languages (${zhKeys.join(', ')})`);
+    report(/motionTitle: '导入动作目录'[\s\S]*?modelTitle: '导入模型文件'/.test(launcherSource)
+      && /motionTitle: 'Import motion folder'[\s\S]*?modelTitle: 'Import model file'/.test(launcherSource)
+      && /modelFilter: 'VRM \/ glTF 模型'/.test(launcherSource)
+      && /modelFilter: 'VRM \/ glTF model'/.test(launcherSource),
+      'with the Chinese and English wording the two interfaces expect');
     report(/ipcMain\.handle\('vrmpet3d:pick-path'[\s\S]{0,700}?defaultPath/.test(launcherSource),
       'which opens at the home directory rather than guessing where models live');
     report(/properties: \['openFile'\][\s\S]{0,200}?extensions: \['vrm', 'glb', 'gltf'\]/.test(launcherSource),
@@ -575,7 +600,16 @@ report(service?.assetRoutes === null,
    */
   {
     const clientSource = readFileSync(join(ROOT, 'lib', 'client.js'), 'utf8');
-    report(/var api = globalThis\.__VRMPET3D_MENU__;[\s\S]{0,160}?if \(!api \|\| typeof api\.createMenu !== 'function'\) return null;/.test(clientSource),
+    /**
+     * The two lines are asserted IN ORDER rather than within a character budget, which is what this check was when
+     * the guard was the first thing in `buildMenu`. The 界面语言 round (2026-10-15) put a rebuild step in front of
+     * it — the menu carries its labels from `createMenu` and cannot be re-worded in place — so the distance between
+     * them grew for a reason that has nothing to do with the rule. What the rule IS has not changed: the module is
+     * looked for and may be absent, and the widget survives that.
+     */
+    report(/var api = globalThis\.__VRMPET3D_MENU__;/.test(clientSource)
+      && /if \(!api \|\| typeof api\.createMenu !== 'function'\) return null;/.test(clientSource)
+      && clientSource.indexOf('typeof api.createMenu') > clientSource.indexOf('var api = globalThis.__VRMPET3D_MENU__;'),
       'the widget checks for the shared menu module instead of requiring it');
     report(!clientSource.includes('lib/menu.js is not loaded'),
       'and no longer throws when it is absent — the menu is a feature, the pet is the product');
@@ -656,12 +690,13 @@ report(service?.assetRoutes === null,
      * labels, and the page reads the one that matches `speech.source` — so a new source cannot silently inherit
      * 「用内置短语」.
      */
-    report(/builtin: '用内置短语'/.test(configSource)
-      && /custom: '用内置短语'/.test(configSource)
-      && /ai: '用内置 AI 生成提示词'/.test(configSource)
-    && /EMPTY_LINES_LABEL/.test(configSource),
-      'the settings page names an empty box per SOURCE: the built-in table, silence, or the AI prompt');
-    report(/row\.count\.textContent = lines\.length \? lines\.length \+ ' 条' : emptyLabel;/.test(configSource)
+    report(/emptyLinesBuiltin: '用内置短语'/.test(configSource)
+      && /emptyLinesAi: '用内置 AI 生成提示词'/.test(configSource)
+      && /emptyLinesBuiltin: 'uses the built-in phrases'/.test(configSource)
+      && /emptyLinesAi: 'generated from the built-in AI prompt'/.test(configSource)
+      && /function emptyLinesLabel\(source\)[\s\S]{0,200}?source === 'ai' \? t\('emptyLinesAi'\) : t\('emptyLinesBuiltin'\)/.test(configSource),
+      'the settings page names an empty box per SOURCE — the built-in table, or the AI prompt — in both languages');
+    report(/row\.count\.textContent = lines\.length \? fill\(t\('lineCount'\), \{ n: lines\.length \}\) : emptyLabel;/.test(configSource)
       && /row\.lines\.placeholder = emptyPlaceholder;/.test(configSource),
       'and both the count beside each state and the box placeholder follow it, recomputed on every change');
     /**
@@ -688,10 +723,11 @@ report(service?.assetRoutes === null,
     report(/partSpeechLines\(item, true, language, gesture\)/.test(coreSource)
       && /core\.partSpeechLines\(item, true, language, reason\)/.test(windowSource),
       'both press paths pass the SAME source argument to the shipped part lines, plus the gesture and the locale');
-    report(/core\.partSpeechLines\(item, true, 'zh', 'click'\)/.test(configSource)
-      && /core\.partSpeechLines\(item, true, 'zh', 'hold'\)/.test(configSource)
-      && !/partSpeechLines\(item, partSource/.test(configSource),
-      'and the settings page reads the table ONLY to publish it — both pools of it, never to word a hint with it');
+    report(/core\.partSpeechLines\(item, true, language, 'click'\)/.test(configSource)
+      && /core\.partSpeechLines\(item, true, language, 'hold'\)/.test(configSource)
+      && !/partSpeechLines\(item, partSource/.test(configSource)
+      && !/partSpeechLines\(item, true, 'zh'/.test(configSource),
+      'and the settings page reads the table ONLY to publish it — both pools of it, in the language it is drawn in and never a literal, never to word a hint with it');
     /**
      * The DATA-LOSS LATCH, pinned in the source.
      *

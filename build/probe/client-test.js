@@ -166,7 +166,14 @@
       new CLIENT.Placement(CORE.cleanPreferences(null), function () { return 0; });
       return false;
     } catch (error) {
-      return /core module/.test(error.message);
+      /**
+       * The refusal is drawn in the language the PREFERENCES name (2026-10-15: the whole interface is bilingual),
+       * and this probe has no widget to ask, so it resolves against the browser — which is the operator's own
+       * machine language. What is asserted is therefore the part BOTH halves carry: the module that is missing,
+       * named `core`, and the claim that it is required. A hard-coded 'core module' would assert the language of
+       * whoever ran it.
+       */
+      return /core/.test(error.message) && /module|模块/.test(error.message);
     }
   });
 
@@ -583,7 +590,48 @@
         return false;
       }
     }
-    return true;
+    var originalEnsure = widget.ensureMotion;
+    var originalIds = widget.danceClipIds;
+    var originalRandom = Math.random;
+    var danceOk = false;
+    try {
+      machine.reset();
+      widget.aggregate.setInput({ connected: true, scope: 'global',
+        catalog: { byId: { s1: {} }, phase: 'ready' }, statuses: new Map(), currentSessionId: 's1' });
+      widget.ensureMotion = function () { return { then: function (done) { done(); } }; };
+      widget.danceClipIds = function () { return ['dance-a', 'dance-b']; };
+      Math.random = function () { return 0; };
+      widget.startDance('dance-a');
+      widget.startDance();
+      var different = machine.dancing.motionId === 'dance-b';
+      widget.danceClipIds = function () { return ['dance-b']; };
+      var previousRun = machine.dancing;
+      widget.scene.playback = { id: 'dance-b', state: 'dancing', record: { finished: true } };
+      widget.startDance();
+      var restarted = machine.dancing !== previousRun && widget.scene.playback === null
+        && widget.scene.preview.motionId === 'dance-b';
+      widget.pet.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, button: 0 }));
+      var stopped = !machine.dancing && widget.scene.preview === null
+        && widget.pet.getAttribute('data-state') === 'resting';
+      widget.startDance();
+      var afterStop = Boolean(machine.dancing) && widget.scene.preview.motionId === 'dance-b';
+      // Some clips reach their duration before three emits a finished event.
+      widget.scene.playback = { id: 'dance-b', state: 'dancing',
+        record: { playingLoop: false, duration: 1, action: { time: 1 } } };
+      widget.tick(0);
+      var ended = !machine.dancing;
+      widget.startDance();
+      var afterEnd = Boolean(machine.dancing) && widget.scene.preview.motionId === 'dance-b';
+      danceOk = different && restarted && stopped && afterStop && ended && afterEnd;
+      report.danceLifecycle = { different: different, restarted: restarted, stopped: stopped,
+        afterStop: afterStop, ended: ended, afterEnd: afterEnd };
+    } finally {
+      widget.ensureMotion = originalEnsure;
+      widget.danceClipIds = originalIds;
+      Math.random = originalRandom;
+      widget.stopDance();
+    }
+    return danceOk;
   });
 
   /**
@@ -628,6 +676,16 @@
     var decoration = label ? label.querySelector('.vrmpet3d-status-decoration') : null;
     var shown = texts[0] ? texts[0].getAttribute('data-shimmer-text') : null;
     var fontPx = label ? label.style.getPropertyValue('--vrmpet3d-status-font') : null;
+    /**
+     * The clock's UNITS follow the interface language (`core.formatRunDuration`), and this widget was mounted with
+     * an EXPLICIT `language: 'en'` (see the widget check above) so the expected unit is a fact about the widget
+     * rather than about the machine it runs on — `auto` would resolve to the browser's own language, and this
+     * probe runs in whatever browser the operator has.
+     *
+     * Both the pattern and the language are reported, so a failure says WHICH of the two moved instead of leaving
+     * "the units are wrong" to be re-derived from a screenshot.
+     */
+    var unitPattern = new RegExp('\\d' + (widget.language === 'zh' ? '秒' : 's') + ' ···$');
     var path = icon ? icon.querySelector('path') : null;
     /**
      * The animated half of DSH's mark: a span masked through the APNG the host serves. Asserted because the
@@ -646,10 +704,17 @@
       decorationVisible: Boolean(decoration) && decoration.hidden === false,
       fontPx: fontPx,
       expectedFontPx: CORE.statusPromptFontPx() + 'px',
+      language: widget.language,
+      unitPattern: String(unitPattern),
+      unitMatches: unitPattern.test(String(shown)),
     };
     var ok = Boolean(label) && label.hidden === false
       && String(shown).indexOf('深度求索中，用时 ') === 0
-      && /秒 ···$/.test(String(shown))
+      /**
+       * The prefix above is the user's OWN line and is not translated; only the unit is read from the widget's
+       * language, because that is the part `core.formatRunDuration` writes.
+       */
+      && report.inAppStatus.unitMatches === true
       && texts.length === 2
       && report.inAppStatus.highlightMatches === true
       && report.inAppStatus.iconDrawn === true
@@ -709,8 +774,19 @@
 
     report.toneStyles = { done: done, error: failed, ordinary: ordinary };
     widget.machine.reset();
-    return done.text === '任务达成' && done.tone === 'gold' && done.bold === '1'
-      && failed.text === '遇到问题了...' && failed.tone === 'danger' && failed.bold === null
+    /**
+     * The WORDS are the shipped default of the language THIS WIDGET resolved, not a Chinese literal: the app now
+     * passes its own language to `core.statusFor` (which is also what writes the clock's units), and this probe
+     * mounts the widget in English. Built from `DEFAULT_STATUS_TEXT` so a shipped default that went missing still
+     * fails, in either language.
+     */
+    var widgetLanguage = widget.language === 'zh' ? 'zh' : 'en';
+    var shippedLine = function (state) {
+      var entry = CORE.DEFAULT_STATUS_TEXT[state] || {};
+      return typeof entry[widgetLanguage] === 'string' ? entry[widgetLanguage] : '';
+    };
+    return done.text === shippedLine('done') && done.tone === 'gold' && done.bold === '1'
+      && failed.text === shippedLine('error') && failed.tone === 'danger' && failed.bold === null
       && ordinary.tone === null && ordinary.bold === null
       && done.weight === '700' && failed.weight !== '700'
       && Boolean(done.color) && done.color !== ordinary.color && failed.color !== ordinary.color
@@ -4151,12 +4227,40 @@
       if (zhWidget && typeof zhWidget.dispose === 'function') { try { zhWidget.dispose(); } catch (_error) { /* gone */ } }
       zhHost.remove();
     }
+    // A DSH locale change must reach a mounted pet without any settings write.
+    var savedLocale = widget.locale;
+    var savedOverride = widget.injectedLanguage;
+    var savedPreference = widget.preferences.language;
+    var localeLanguage = 'en';
+    var followsLocale = false;
+    try {
+      widget.locale = { getSnapshot: function () { return { language: localeLanguage }; } };
+      widget.injectedLanguage = null;
+      widget.preferences.language = 'auto';
+      widget.focusCheckedAt = 0;
+      widget.pump();
+      var wasEnglish = widget.language === 'en';
+      localeLanguage = 'zh';
+      widget.focusCheckedAt = 0;
+      widget.pump();
+      var becameChinese = widget.language === 'zh' && widget.restore.textContent === '显示宠物';
+      widget.preferences.language = 'en';
+      widget.focusCheckedAt = 0;
+      widget.pump();
+      followsLocale = wasEnglish && becameChinese && widget.language === 'en';
+    } finally {
+      widget.locale = savedLocale;
+      widget.injectedLanguage = savedOverride;
+      widget.preferences.language = savedPreference;
+      widget.adoptLanguage();
+    }
     report.hideRestore = {
+      followsLocale: followsLocale,
       clicked: clicked, hidden: hidden, shown: shown,
       rowLabel: rowLabel, buttonLabel: buttonLabel, zhButtonLabel: zhButtonLabel,
       atBottomRight: atBottomRight, box: [Math.round(box.left), Math.round(box.top)],
     };
-    return clicked && hidden && shown && rowWordsRight && zhButtonLabel === '显示宠物' && atBottomRight;
+    return followsLocale && clicked && hidden && shown && rowWordsRight && zhButtonLabel === '显示宠物' && atBottomRight;
   });
 
   // --- authored motion picker ----------------------------------------------
@@ -5637,6 +5741,13 @@
         pet.publish();
         var statusReadout = globalThis.__VRMPET3D_DESKTOP_STATE__;
         var statusOrigin = statusReadout && statusReadout.status ? statusReadout.status.origin : null;
+        /**
+         * The language THIS PAGE resolved, from its own published readout — which of the two is the harness's
+         * business (the page takes the browser's hints), so every expectation built on the shipped defaults or on
+         * the clock's units is built from the same half the page is drawing in. Read here, where the publish above
+         * has just refreshed the readout, and used by the status, tone and clock assertions below.
+         */
+        var pageLanguage = statusReadout && statusReadout.language === 'zh' ? 'zh' : 'en';
         var statusNode = document.querySelector('.vrmpet3d-desktop-status');
         // TWO copies of the line, as DSH's TextShimmer has: the real one and the masked highlight. Both read
         // their words from `data-shimmer-text`.
@@ -5727,7 +5838,8 @@
         var expectedFontPx = CORE.statusPromptFontPx() + 'px';
         var statusOk = statusQuiet === null
           && statusLabel.indexOf('深度求索中，用时 ') === 0
-          && /秒 ···$/.test(statusLabel)
+          // The clock's units are the interface's own (`core.formatRunDuration`): 秒 in Chinese, s in English.
+          && new RegExp('\\d' + (pageLanguage === 'en' ? 's' : '秒') + ' ···$').test(statusLabel)
           // Both copies carry the SAME string: that is what keeps the moving glyphs on the still ones.
           && found.status.highlightText === statusLabel
           && found.status.iconDrawn === true
@@ -5753,7 +5865,17 @@
          * The two notices, drawn the way the operator asked for on 2026-10-11: 任务达成 in gold and bold, 出错 in
          * red. The tone is DECIDED in core and merely rendered here, so this asserts both halves — the element
          * wears it AND the page publishes it, which is what the launcher's own report copies.
+         *
+         * The WORDS are the shipped default of the language THIS PAGE resolved (see `pageLanguage` above), not the
+         * Chinese literal: 界面语言 reaches `core.statusFor` as its sixth argument now, and which hint this mounted
+         * page took (the harness's own locale) is the harness's business rather than this assertion's — the same
+         * rule the press-speech check below follows. The expected half is built from the page's own published
+         * `language`, so a shipped default that went MISSING still fails, in either language.
          */
+        var shippedLine = function (state) {
+          var entry = CORE.DEFAULT_STATUS_TEXT[state] || {};
+          return typeof entry[pageLanguage] === 'string' ? entry[pageLanguage] : '';
+        };
         var toneStyleOf = function (state) {
           pet.setState(state);
           var node = document.querySelector('.vrmpet3d-desktop-status');
@@ -5773,9 +5895,10 @@
         var doneLook = toneStyleOf('done');
         var errorLook = toneStyleOf('error');
         found.status.tones = { done: doneLook, error: errorLook, ordinaryColor: ordinaryStatusColor };
-        var toneOk = doneLook.text === '任务达成' && doneLook.tone === 'gold' && doneLook.bold === '1'
+        found.status.language = pageLanguage;
+        var toneOk = doneLook.text === shippedLine('done') && doneLook.tone === 'gold' && doneLook.bold === '1'
           && doneLook.weight === '700' && doneLook.publishedTone === 'gold' && doneLook.publishedBold === true
-          && errorLook.text === '遇到问题了...' && errorLook.tone === 'danger' && errorLook.bold === null
+          && errorLook.text === shippedLine('error') && errorLook.tone === 'danger' && errorLook.bold === null
           && errorLook.weight !== '700' && errorLook.publishedTone === 'danger'
           && Boolean(doneLook.color) && Boolean(ordinaryStatusColor)
           && doneLook.color !== ordinaryStatusColor && errorLook.color !== ordinaryStatusColor
@@ -5858,8 +5981,15 @@
           return node ? node.getAttribute('data-shimmer-text') : null;
         })();
         var stateClockReadout = (globalThis.__VRMPET3D_DESKTOP_STATE__ || {}).state || {};
+        /**
+         * The clock's UNITS follow the interface language (`core.formatRunDuration`), which is why the suffix is
+         * built from the same half `pageLanguage` names rather than pinned to 秒: this page passes its resolved
+         * language to `core.statusFor` now, and an English window writes `1m 30s` inside the user's own line. The
+         * prefix is the user's own text and is NOT translated, which is the point being asserted here.
+         */
         var stateClockOk = Boolean(stateClockText)
-          && stateClockText.indexOf('深度求索中，用时 ') === 0 && /秒 ···$/.test(stateClockText)
+          && stateClockText.indexOf('深度求索中，用时 ') === 0
+          && new RegExp('\\d' + (pageLanguage === 'en' ? 's' : '秒') + ' ···$').test(stateClockText)
           && stateClockReadout.clock === 'state';
 
         found.flags = {
@@ -6091,7 +6221,23 @@
     canvas.height = 600;
     host.appendChild(canvas);
 
+    var previewListener = null;
+    var originalPreviewWatch = CORE.watchHostPreview;
+    CORE.watchHostPreview = function (options) {
+      previewListener = options.onPreview;
+      return { start: function () { return this; }, stop: function () {} };
+    };
+    var danceRequests = [];
+    var danceCatalog = { motions: [
+      { id: 'dance-a', name: 'dance/a.vrma', format: 'vrma' },
+      { id: 'dance-b', name: 'dance/b.vrma', format: 'vrma' },
+    ] };
     var restoreFetch = stubFetch({
+      '/vrmpet3d/motions': function () { return { ok: true, json: function () { return Promise.resolve(danceCatalog); } }; },
+      '/vrmpet3d/preview': function (_url, options) {
+        if (options && options.method === 'POST') danceRequests.push(JSON.parse(options.body));
+        return { ok: true, json: function () { return Promise.resolve({ seq: 0, preview: null }); } };
+      },
       '/vrmpet3d/settings': function () { return { status: 404, ok: false }; },
       '/vrmpet3d/catalog': function () { return { ok: true, json: function () { return Promise.resolve({ models: [] }); } }; },
       '/vrmpet3d/asset': function () { return { ok: true, arrayBuffer: function () { return Promise.resolve(new ArrayBuffer(64)); } }; },
@@ -6104,7 +6250,8 @@
       storage: { getItem: function () { return null; }, setItem: function () {} },
     });
 
-    return pet.ready.then(function () {
+    CORE.watchHostPreview = originalPreviewWatch;
+    return pet.ready.then(async function () {
       var opened = pet.openMenuAt(300, 420);
       var element = pet.menu();
       var api = pet.menuApi ? pet.menuApi() : null;
@@ -6146,6 +6293,45 @@
       var rect = pet.menuRect ? pet.menuRect() : null;
       var box = element ? element.getBoundingClientRect() : null;
 
+      // Repeat the same sole dance twice, then switch libraries and double-click.
+      await globalThis.__VRMPET3D_DESKTOP_MOTIONS__();
+      var sceneTick = pet.scene.tick;
+      pet.scene.tick = function () {};
+      var danceOk = false;
+      try {
+        function finishDance() {
+          previewListener({ state: 'dancing', motionId: 'dance-a' });
+          pet.setState('dancing');
+          pet.stepFrame(0);
+          pet.scene.playback = { id: 'dance-a', state: 'dancing',
+            record: { playingLoop: false, duration: 1, action: { time: 1 } } };
+          pet.stepFrame(0);
+        }
+        finishDance();
+        var firstEnd = danceRequests.filter(function (body) { return !body.preview; }).length;
+        previewListener({ state: 'dancing', motionId: 'dance-a' });
+        var clearedFinished = pet.scene.playback === null && pet.scene.preview === null;
+        finishDance();
+        var secondEnd = danceRequests.filter(function (body) { return !body.preview; }).length;
+        pet.openMenuAt(300, 420);
+        pet.menu().querySelector('[data-item="dance"]').click();
+        var different = danceRequests[danceRequests.length - 1].preview.motionId === 'dance-b';
+        danceCatalog.motions.splice(1);
+        await globalThis.__VRMPET3D_DESKTOP_MOTIONS__();
+        pet.openMenuAt(300, 420);
+        pet.menu().querySelector('[data-item="dance"]').click();
+        var sole = danceRequests[danceRequests.length - 1].preview.motionId === 'dance-a';
+        canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, button: 0 }));
+        pet.stepFrame(0);
+        var stopped = pet.scene.preview === null && pet.scene.state === 'resting'
+          && !danceRequests[danceRequests.length - 1].preview;
+        danceOk = firstEnd === 1 && secondEnd === 2 && clearedFinished && different && sole && stopped;
+        report.desktopDance = { firstEnd: firstEnd, secondEnd: secondEnd,
+          clearedFinished: clearedFinished, different: different, sole: sole, stopped: stopped };
+      } finally {
+        pet.scene.tick = sceneTick;
+      }
+
       report.sharedMenu = {
         opened: opened,
         ids: ids,
@@ -6167,7 +6353,7 @@
       pet.destroy();
       host.remove();
       restoreFetch();
-      return opened === true && closed && sharedClass && stylesheet && noSwitchRow
+      return danceOk && opened === true && closed && sharedClass && stylesheet && noSwitchRow
         && closeWordsDiffer && gravityRowOff && gravityMarked
         && ids.join(',') === 'resetView,resetSize,globalSettings,switchModel,dance,reloadModel,modelSettings,gravity,closePet'
         && Boolean(rect) && rect.width > 0 && rect.height > 0;
@@ -7058,7 +7244,10 @@
               // — the SHAPE is asserted here, and the wording itself is pinned by the core suite.
               && found.stateSwitch.status
               && String(found.stateSwitch.status.text).indexOf('深度求索中，用时 ') === 0
-              && /秒 ···$/.test(String(found.stateSwitch.status.text))
+              // The clock's units are the interface's own (`core.formatRunDuration`), and this page resolved its
+              // language from the browser: 秒 in Chinese, s in English. The prefix is the user's own text.
+              && new RegExp('\\d' + (readout && readout.language === 'zh' ? '秒' : 's') + ' ···$')
+                .test(String(found.stateSwitch.status.text))
               && found.stateSwitch.status.animation === 'shimmer'
               && found.stateSwitch.status.icon === true
               && found.stateSwitch.back.drawn === 'resting'
@@ -8238,6 +8427,30 @@
                   ? globalThis.__VRMPET3D_SETUP_STEPS__(false)
                   : null;
                 /**
+                 * The stepper's words are TRANSLATED now, so what this asserts is the PAIR: the language the page
+                 * resolved (operator, 2026-10-15: 「把全部界面做中英双语自动识别，并在…第一页欢迎页面中加上语言选择」) and
+                 * that language's own words.
+                 *
+                 * Written as a pair rather than as the Chinese list alone because this probe document is
+                 * `<html lang="en">` with Chromium's own en-US `navigator.language`, so `auto` resolves to ENGLISH
+                 * here: a hard-coded Chinese expectation would fail for the machine rather than for the page. The
+                 * words still come from the page's own `<li>` nodes (`__VRMPET3D_SETUP_STEPS__` reads the same ones),
+                 * so this pins the shipped wording in both languages, and `data-screen` / `data-hidden` never move.
+                 */
+                var stepWords = {
+                  zh: {
+                    desktop: ['欢迎', '偏好模型', '桌宠界面', 'AI 碎碎念', '完成'],
+                    web: ['欢迎', '偏好模型', 'AI 碎碎念', '完成'],
+                  },
+                  en: {
+                    desktop: ['Welcome', 'Preferred model', 'Pet surface', 'AI chit-chat', 'Done'],
+                    web: ['Welcome', 'Preferred model', 'AI chit-chat', 'Done'],
+                  },
+                };
+                var stepLanguage = (document.documentElement.lang || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+                var expectedShown = stepWords[stepLanguage].desktop;
+                var expectedWeb = stepWords[stepLanguage].web;
+                /**
                  * 完成 writes `completed` AND closes the window — one click, not two.
                  *
                  * Operator, 2026-10-13: 「点击完成后直接退出，而不是要再点一下关闭窗口」. `globalThis.close` is spied so
@@ -8267,6 +8480,7 @@
                     shownSteps: shownSteps,
                     numbered: numbered,
                     webSteps: webSteps,
+                    stepLanguage: stepLanguage,
                     aiNoteShown: aiNoteShown,
                     ready: ready,
                     uploaded: uploaded,
@@ -8295,9 +8509,9 @@
                      */
                     && flow === 5
                     && sameList(visited, ['setup-0', 'setup-1', 'setup-2', 'setup-3', 'setup-5'])
-                    && sameList(shownSteps, ['欢迎', '偏好模型', '桌宠界面', 'AI 碎碎念', '完成'])
+                    && sameList(shownSteps, expectedShown)
                     && numbered === false
-                    && sameList(webSteps, ['欢迎', '偏好模型', 'AI 碎碎念', '完成'])
+                    && sameList(webSteps, expectedWeb)
                     && aiNoteShown === true
                     && uploaded && preferred && imported && finished
                     // 完成 closed the window itself, and the button is there only because it could not.

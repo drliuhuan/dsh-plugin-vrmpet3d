@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>vrmpet3d · 初次安装引导</title>
+  <title data-i18n="pageTitle">vrmpet3d · 初次安装引导</title>
   <meta name="color-scheme" content="dark light">
   <!--
     The first-run guide: its screens and a finish, on its own route (`/vrmpet3d/setup`). Which of the six the flow
@@ -49,8 +49,8 @@
 <body data-page="setup">
   <header class="page-header">
     <div class="eyebrow">VRMPET3D · SETUP</div>
-    <h1>初次安装引导</h1>
-    <div id="status" role="status" aria-live="polite">正在读取…</div>
+    <h1 data-i18n="guideTitle">初次安装引导</h1>
+    <div id="status" role="status" aria-live="polite" data-i18n="reading">正在读取…</div>
   </header>
 
   <!--
@@ -62,29 +62,44 @@
     step that is not there and a gap where one never was. The words live here and the policy in the attributes; both
     files are read together by `verify-desktop.mjs`.
   -->
-  <ol class="setup-steps" id="setup-steps" aria-label="引导进度">
-    <li data-screen="setup-0">欢迎</li>
-    <li data-screen="setup-1">偏好模型</li>
-    <li data-screen="setup-2" data-desktop-only="1">桌宠界面</li>
-    <li data-screen="setup-3">AI 碎碎念</li>
-    <li data-screen="setup-4" data-hidden="1">模型动作</li>
-    <li data-screen="setup-5">完成</li>
+  <ol class="setup-steps" id="setup-steps" aria-label="引导进度" data-i18n-aria="stepsAria">
+    <li data-screen="setup-0" data-i18n="stepWelcome">欢迎</li>
+    <li data-screen="setup-1" data-i18n="stepModel">偏好模型</li>
+    <li data-screen="setup-2" data-desktop-only="1" data-i18n="stepSurface">桌宠界面</li>
+    <li data-screen="setup-3" data-i18n="stepSpeech">AI 碎碎念</li>
+    <li data-screen="setup-4" data-hidden="1" data-i18n="stepMotions">模型动作</li>
+    <li data-screen="setup-5" data-i18n="stepDone">完成</li>
   </ol>
 
   <main>
     <!-- ① 欢迎 -->
     <section class="settings-section setup-screen" id="setup-0">
-      <h2>欢迎，也先说清楚风险</h2>
+      <h2 data-i18n="welcomeTitle">欢迎，也先说清楚风险</h2>
       <div class="card">
-        <p>这是一个<strong>早期版本</strong>的插件，作者也是第一次开发 DSH 插件。它<strong>还没有经过系统性的验证</strong>，
-          可能存在 bug，也可能带来性能下降；设置页面的排版也可能比较混乱。</p>
-        <p class="setup-warning">如果你在使用中遇到任何性能问题，请<strong>第一时间禁用这个插件</strong>，再慢慢排查。</p>
+        <!--
+          界面语言 sits ABOVE the risk note (operator, 2026-10-15: 「在初始安装引导页的第一页欢迎页面中加上语言选择」):
+          a reader who cannot read the paragraphs picks the language before reading them. It is the one choice on this
+          page that is written and applied the moment it changes rather than at 完成 — see `wireChoices` in setup-page.js.
+
+          The paragraphs below are single-line on purpose: `core.applyI18n` rewrites their whole `innerHTML`, and the
+          markup's own text is the no-JS fallback a parity check compares against the zh half of the table.
+        -->
+        <div class="row">
+          <label class="k" for="setup-language" data-i18n="language">界面语言</label>
+          <select id="setup-language">
+            <option value="auto" data-i18n="languageAuto">自动</option>
+            <option value="zh" data-i18n="languageZh">中文</option>
+            <option value="en" data-i18n="languageEn">English</option>
+          </select>
+        </div>
+        <p data-i18n-html="welcomeRisk">这是一个<strong>早期版本</strong>的插件，作者也是第一次开发 DSH 插件。它<strong>还没有经过系统性的验证</strong>，可能存在 bug，也可能带来性能下降；设置页面的排版也可能比较混乱。</p>
+        <p class="setup-warning" data-i18n-html="welcomeWarning">如果你在使用中遇到任何性能问题，请<strong>第一时间禁用这个插件</strong>，再慢慢排查。</p>
       </div>
     </section>
 
     <!-- ② 偏好模型 -->
     <section class="settings-section setup-screen" id="setup-1" hidden>
-      <h2>偏好模型</h2>
+      <h2 data-i18n="stepModel">偏好模型</h2>
       <!--
         The picker itself is `lib/model-picker.js`, mounted here and mounted again on the 切换模型 page
         (`/vrmpet3d/picker`, opened from either pet's right-click menu). The operator, 2026-10-13:
@@ -100,13 +115,13 @@
 
     <!-- ③ 桌宠界面 -->
     <section class="settings-section setup-screen" id="setup-2" hidden>
-      <h2>桌宠出现在哪里</h2>
+      <h2 data-i18n="surfaceTitle">桌宠出现在哪里</h2>
       <div class="card">
         <div class="setup-choice" id="setup-surface">
           <label><input type="radio" name="setup-surface" value="auto">
-            <strong>自动</strong><span class="note">Desktop端自动开启独立桌宠</span></label>
+            <strong data-i18n="surfaceAuto">自动</strong><span class="note" data-i18n="surfaceAutoNote">Desktop端自动开启独立桌宠</span></label>
           <label><input type="radio" name="setup-surface" value="app">
-            <strong>只在内置桌宠</strong></label>
+            <strong data-i18n="surfaceApp">只在内置桌宠</strong></label>
         </div>
         <p class="hint" id="setup-surface-note"></p>
       </div>
@@ -119,36 +134,33 @@
         所以这里说的是**本次真正会用的那个目录**，不是一句泛泛的话。
       -->
       <div class="card">
-        <p><strong>浮窗会借用一份 DSH 自带的运行时。</strong>独立浮窗需要无边框、置顶、点击穿透的系统窗口，这只有 Electron 能给，而插件
-          不自带（那会多出两百多兆）。所以启用浮窗时，启动器会在 <strong>DSH 安装目录所在的分区</strong>里建一个运行时目录，用
-          <strong>硬链接</strong>指向 DSH 自己的那批客户端文件 —— 于是它看起来就是一份没改动过的 DSH。</p>
-        <p><strong>硬链接与 DSH 共享同一份数据，不额外占盘</strong>（新增的只有一个小 app 壳），并且它<strong>必须与 DSH 同盘</strong>：
-          硬链接不能跨卷。删掉这个目录是安全的，下次启用浮窗会重新建一份。</p>
+        <p data-i18n-html="runtimeBorrow"><strong>浮窗会借用一份 DSH 自带的运行时。</strong>独立浮窗需要无边框、置顶、点击穿透的系统窗口，这只有 Electron 能给，而插件不自带（那会多出两百多兆）。所以启用浮窗时，启动器会在 <strong>DSH 安装目录所在的分区</strong>里建一个运行时目录，用 <strong>硬链接</strong>指向 DSH 自己的那批客户端文件 —— 于是它看起来就是一份没改动过的 DSH。</p>
+        <p data-i18n-html="runtimeLinks"><strong>硬链接与 DSH 共享同一份数据，不额外占盘</strong>（新增的只有一个小 app 壳），并且它<strong>必须与 DSH 同盘</strong>：硬链接不能跨卷。删掉这个目录是安全的，下次启用浮窗会重新建一份。</p>
         <p class="hint" id="setup-runtime-path"></p>
       </div>
     </section>
 
     <!-- ④ AI 碎碎念 -->
     <section class="settings-section setup-screen" id="setup-3" hidden>
-      <h2>AI 碎碎念</h2>
+      <h2 data-i18n="speechTitle">AI 碎碎念</h2>
       <div class="card">
         <div class="row">
-          <label class="k" for="setup-speech-enabled">开启碎碎念</label>
+          <label class="k" for="setup-speech-enabled" data-i18n="speechEnabled">开启碎碎念</label>
           <input type="checkbox" id="setup-speech-enabled">
         </div>
         <div class="setup-choice" id="setup-speech-source">
           <label><input type="radio" name="setup-speech-source" value="builtin">
-            <strong>内置台词</strong><span class="note">内置台词基本已经够用</span></label>
+            <strong data-i18n="speechBuiltin">内置台词</strong><span class="note" data-i18n="speechBuiltinNote">内置台词基本已经够用</span></label>
           <label><input type="radio" name="setup-speech-source" value="ai">
-            <strong>AI 生成</strong></label>
+            <strong data-i18n="speechAi">AI 生成</strong></label>
         </div>
         <div class="row" id="setup-ai-row">
-          <label class="k" for="setup-ai-provider">AI 来源</label>
+          <label class="k" for="setup-ai-provider" data-i18n="speechProvider">AI 来源</label>
           <select id="setup-ai-provider"></select>
           <select id="setup-ai-model"></select>
         </div>
         <!-- Shown with the row above: the AI's own words are configured on the OTHER page, in the same 碎碎念 section. -->
-        <p class="hint" id="setup-ai-note" hidden>人格信息和不同状态的提示词，都在 通用设置 → 碎碎念 里设置。</p>
+        <p class="hint" id="setup-ai-note" hidden data-i18n="speechAiNote">人格信息和不同状态的提示词，都在 通用设置 → 碎碎念 里设置。</p>
         <p class="hint" id="setup-speech-note"></p>
       </div>
       <!--
@@ -161,12 +173,8 @@
         is about the SOFTWARE, this one about what the pet SAYS and what the plugin touches.
       -->
       <div class="card" id="setup-speech-disclaimer">
-        <p><strong>碎碎念只是玩笑，请勿当真。</strong>这些话要么来自内置台词，要么由你配置的模型即兴生成，都属于角色扮演：
-          不是宠物的真实判断，也不构成任何建议。</p>
-        <p>插件<strong>不会对你的项目或文件做任何实际操作</strong>（不执行命令、不改动代码），只读取会话的<strong>运行状态</strong>
-          （进行中 / 等待确认 / 完成 等）来决定表情和动作，会话文字、工具参数与附件都不会被它读取；你导入的模型或动作，
-          只会被复制到插件自己的目录里。<strong>它也不会干扰 DSH 本身的运行</strong>，且不带任何运行时依赖。不过在配置较差的
-          机器上，3D 渲染与弹簧骨物理可能带来轻微的性能影响 —— 关掉桌宠，或把尺寸调小一些，就能缓解。</p>
+        <p data-i18n-html="speechDisclaimerA"><strong>碎碎念只是玩笑，请勿当真。</strong>这些话要么来自内置台词，要么由你配置的模型即兴生成，都属于角色扮演：不是宠物的真实判断，也不构成任何建议。</p>
+        <p data-i18n-html="speechDisclaimerB">插件<strong>不会对你的项目或文件做任何实际操作</strong>（不执行命令、不改动代码），只读取会话的<strong>运行状态</strong>（进行中 / 等待确认 / 完成 等）来决定表情和动作，会话文字、工具参数与附件都不会被它读取；你导入的模型或动作，只会被复制到插件自己的目录里。<strong>它也不会干扰 DSH 本身的运行</strong>，且不带任何运行时依赖。不过在配置较差的机器上，3D 渲染与弹簧骨物理可能带来轻微的性能影响 —— 关掉桌宠，或把尺寸调小一些，就能缓解。</p>
       </div>
     </section>
 
@@ -177,17 +185,17 @@
       where the same import lives for anyone who does want it.
     -->
     <section class="settings-section setup-screen" id="setup-4" hidden>
-      <h2>模型动作</h2>
+      <h2 data-i18n="motionsTitle">模型动作</h2>
       <div class="card">
         <div class="setup-actions">
-          <button id="setup-motion-pick" class="primary">选择动作文件夹…</button>
-          <button id="setup-motion-manual" class="ghost">手动输入路径</button>
+          <button id="setup-motion-pick" class="primary" data-i18n="motionsPick">选择动作文件夹…</button>
+          <button id="setup-motion-manual" class="ghost" data-i18n="motionsManual">手动输入路径</button>
           <span class="note" id="setup-motion-count"></span>
         </div>
         <div class="row" id="setup-motion-manual-row" hidden>
-          <label class="k" for="setup-motion-path">文件夹路径</label>
+          <label class="k" for="setup-motion-path" data-i18n="motionsPath">文件夹路径</label>
           <input type="text" id="setup-motion-path" class="grow" placeholder="D:\motions\my-pack">
-          <button id="setup-motion-add" class="ghost">导入</button>
+          <button id="setup-motion-add" class="ghost" data-i18n="motionsAdd">导入</button>
         </div>
         <div class="setup-list" id="setup-motion-list"></div>
         <p class="hint" id="setup-motion-note"></p>
@@ -197,12 +205,12 @@
 
     <!-- 完成 -->
     <section class="settings-section setup-screen" id="setup-5" hidden>
-      <h2>完成</h2>
+      <h2 data-i18n="doneTitle">完成</h2>
       <div class="card">
-        <p class="setup-done">配置已保存。</p>
+        <p class="setup-done" data-i18n="doneSaved">配置已保存。</p>
         <div class="setup-actions">
-          <button id="setup-finish" class="primary">完成</button>
-          <button id="setup-close" class="ghost" hidden>关闭窗口</button>
+          <button id="setup-finish" class="primary" data-i18n="finishButton">完成</button>
+          <button id="setup-close" class="ghost" hidden data-i18n="closeWindow">关闭窗口</button>
         </div>
         <p class="hint" id="setup-finish-note"></p>
       </div>
@@ -210,16 +218,27 @@
   </main>
 
   <footer class="setup-nav">
-    <button id="setup-later" class="ghost">稍后配置</button>
+    <button id="setup-later" class="ghost" data-i18n="later">稍后配置</button>
     <div class="setup-nav-right">
-      <button id="setup-back" class="ghost">上一步</button>
-      <button id="setup-next" class="primary">下一步</button>
+      <button id="setup-back" class="ghost" data-i18n="back">上一步</button>
+      <button id="setup-next" class="primary" data-i18n="next">下一步</button>
     </div>
   </footer>
 
-  <!-- The same watchdog the two settings pages carry: a page that cannot initialise says so rather than sitting blank. -->
+  <!--
+    The same watchdog the two settings pages carry: a page that cannot initialise says so rather than sitting blank.
+
+    It runs BEFORE core.js, so it cannot use the shared table or `resolveLanguage` — hence the two-line map and picker
+    below. A stalled page is exactly the page whose reader needs a sentence they can read, and this is the only place
+    on the page where English and Chinese both have to fit in one script with no dependency.
+  -->
   <script>
     (function () {
+      var STUCK = {
+        zh: '初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/setup-state）。',
+        en: 'Initialisation stalled: the script loaded but never finished (check the window console, or whether the host serves /vrmpet3d/setup-state).',
+      };
+      var language = /^(zh|cn|chinese)/i.test(navigator.language || '') ? 'zh' : 'en';
       function show(text) {
         var node = document.getElementById('status');
         if (node) { node.textContent = text; node.className = 'warn'; }
@@ -227,7 +246,7 @@
       window.setTimeout(function () {
         var node = document.getElementById('status');
         if (node && !node.getAttribute('data-ready')) {
-          show('初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/setup-state）。');
+          show(STUCK[language]);
         }
       }, 3000);
     })();

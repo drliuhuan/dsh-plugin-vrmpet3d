@@ -3,7 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>vrmpet3d · 通用设置</title>
+  <!--
+    The title, the nav and every row below carry `data-i18n*`, and the Chinese text stays INLINE as the no-JS
+    fallback: this page's script can fail to load (that is what the watchdog at the bottom reports), and a page
+    that failed should still read in one language rather than show nothing. `lib/config-page.js` owns the table
+    and `core.applyI18n` writes these places; a key the table lacks leaves the markup alone.
+  -->
+  <title data-i18n="titleGlobal">vrmpet3d · 通用设置</title>
   <meta name="color-scheme" content="dark light">
   <!--
     The stylesheet both settings pages share. One file rather than a copy in each page: the two pages render
@@ -26,42 +32,54 @@
 -->
 <div class="page-loading" role="status" aria-live="polite">
   <span class="page-loading-spinner" aria-hidden="true"></span>
-  <span>正在加载设置…</span>
+  <span data-i18n="loading">正在加载设置…</span>
 </div>
 
-  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1>通用设置</h1><div id="status" role="status" aria-live="polite">正在读取…</div></header>
-  <nav class="section-nav" aria-label="设置分组"><a href="#settings-0">显示与外观</a><a href="#settings-1">视线</a><a href="#settings-2">鼠标互动与物理</a><a href="#settings-3">状态与动作</a><a href="#settings-4">碎碎念</a><a href="#settings-5">模型导入</a><a href="#settings-6">动作导入</a><a href="#settings-7">其他</a></nav>
+  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1 data-i18n="headingGlobal">通用设置</h1><div id="status" role="status" aria-live="polite" data-i18n="reading">正在读取…</div></header>
+  <nav class="section-nav" aria-label="设置分组" data-i18n-aria="navSections"><a href="#settings-0" data-i18n="sectionDisplay">显示与外观</a><a href="#settings-1" data-i18n="sectionGaze">视线</a><a href="#settings-2" data-i18n="sectionMouse">鼠标互动与物理</a><a href="#settings-3" data-i18n="sectionState">状态与动作</a><a href="#settings-4" data-i18n="sectionSpeech">碎碎念</a><a href="#settings-5" data-i18n="sectionModelImport">模型导入</a><a href="#settings-6" data-i18n="sectionMotionImport">动作导入</a><a href="#settings-7" data-i18n="sectionOther">其他</a></nav>
   <main>
 <section class="settings-section" id="settings-0">
-  <h2>显示与外观</h2>
+  <h2 data-i18n="sectionDisplay">显示与外观</h2>
   <div class="card">
 
+    <!--
+      界面语言 — the FIRST row, because everything under it is written in whichever answer it holds.
+      -->
+    <div class="row">
+      <label class="k" for="pref-language" data-i18n="language">界面语言</label>
+      <select id="pref-language">
+        <option value="auto" data-i18n="languageAuto">自动</option>
+        <option value="zh" data-i18n="languageZh">中文</option>
+        <option value="en" data-i18n="languageEn">English</option>
+      </select>
+    </div>
+
     <div class="row" id="pref-surface-row" hidden>
-      <span class="k">桌宠界面</span>
-      <label class="inline"><input type="radio" name="pref-surface" value="app"> 内置宠物</label>
-      <label class="inline"><input type="radio" name="pref-surface" value="auto"> 自动</label>
+      <span class="k" data-i18n="petSurface">桌宠界面</span>
+      <label class="inline"><input type="radio" name="pref-surface" value="app"> <span data-i18n="surfaceApp">内置宠物</span></label>
+      <label class="inline"><input type="radio" name="pref-surface" value="auto"> <span data-i18n="auto">自动</span></label>
     </div>
     <div class="row">
-      <label class="k" for="pref-size">应用内大小</label>
+      <label class="k" for="pref-size" data-i18n="sizeApp">应用内大小</label>
       <input type="range" id="pref-size" min="40" max="260" step="1">
       <span class="value" id="pref-size-value">100%</span>
-      <button id="pref-size-reset" class="ghost">复位</button>
+      <button id="pref-size-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-window-size">悬浮窗大小</label>
+      <label class="k" for="pref-window-size" data-i18n="sizeWindow">悬浮窗大小</label>
       <input type="range" id="pref-window-size" min="10" max="400" step="1">
       <span class="value" id="pref-window-size-value">100%</span>
-      <button id="pref-window-size-reset" class="ghost">复位</button>
+      <button id="pref-window-size-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <!--
       Legacy nap control: retained hidden and disabled for compatibility. Idle stays resting.
     -->
     <div class="row" hidden>
-      <label class="k" for="pref-sleep">空闲休眠</label>
+      <label class="k" for="pref-sleep" data-i18n="idleNap">空闲休眠</label>
       <select id="pref-sleep" disabled>
-        <option value="30000">30 秒</option>
-        <option value="120000">2 分钟</option>
-        <option value="300000">5 分钟</option>
+        <option value="30000" data-i18n="sleep30">30 秒</option>
+        <option value="120000" data-i18n="sleep120">2 分钟</option>
+        <option value="300000" data-i18n="sleep300">5 分钟</option>
       </select>
     </div>
     <!--
@@ -77,79 +95,79 @@
       <label class="inline"><input type="checkbox" id="pref-both"> 独立桌宠与内置桌宠同时显示</label>
     </div>
     <div class="row">
-      <label class="k" for="pref-hidden">视角</label>
-      <button id="pref-view-reset">复位视角</button>
-      <span class="k sub">宠物</span>
-      <label class="inline"><input type="checkbox" id="pref-hidden"> 隐藏</label>
+      <label class="k" for="pref-hidden" data-i18n="view">视角</label>
+      <button id="pref-view-reset" data-i18n="viewReset">复位视角</button>
+      <span class="k sub" data-i18n="pet">宠物</span>
+      <label class="inline"><input type="checkbox" id="pref-hidden"> <span data-i18n="hide">隐藏</span></label>
     </div>
   </div>
 
 </section>
 
 <section class="settings-section" id="settings-1">
-  <h2>视线</h2>
+  <h2 data-i18n="sectionGaze">视线</h2>
   <div class="card" id="gaze-body">
-    <div class="row"><label class="k" for="pref-look">看向光标</label><label class="inline"><input type="checkbox" id="pref-look"> 开启</label></div>
+    <div class="row"><label class="k" for="pref-look" data-i18n="lookAtPointer">看向光标</label><label class="inline"><input type="checkbox" id="pref-look"> <span data-i18n="on">开启</span></label></div>
 
     <div class="row">
-      <label class="k" for="pref-gaze-curve">曲率</label>
+      <label class="k" for="pref-gaze-curve" data-i18n="curve">曲率</label>
       <input type="range" id="pref-gaze-curve" min="5" max="100" step="5">
       <span class="value" id="pref-gaze-curve-value">0.10</span>
-      <button id="pref-gaze-curve-reset" class="ghost">复位</button>
+      <button id="pref-gaze-curve-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-gaze-span-x">满偏距离</label>
-      <input type="number" id="pref-gaze-span-x" step="10" min="0" max="6000"> px 横向
-      <input type="number" id="pref-gaze-span-y" step="10" min="0" max="6000"> px 纵向
-      <button id="pref-gaze-span-reset" class="ghost">自动</button>
+      <label class="k" for="pref-gaze-span-x" data-i18n="span">满偏距离</label>
+      <input type="number" id="pref-gaze-span-x" step="10" min="0" max="6000"> <span data-i18n="pxHorizontal">px 横向</span>
+      <input type="number" id="pref-gaze-span-y" step="10" min="0" max="6000"> <span data-i18n="pxVertical">px 纵向</span>
+      <button id="pref-gaze-span-reset" class="ghost" data-i18n="auto">自动</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-gaze-idle">静止停看</label>
-      <input type="number" id="pref-gaze-idle" step="1" min="0" max="600"> 秒
-      <button id="pref-gaze-idle-reset" class="ghost">复位</button>
+      <label class="k" for="pref-gaze-idle" data-i18n="gazeIdle">静止停看</label>
+      <input type="number" id="pref-gaze-idle" step="1" min="0" max="600"> <span data-i18n="secondsUnit">秒</span>
+      <button id="pref-gaze-idle-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <p class="hint" id="pref-gaze-span-auto"></p>
-    <p class="hint applied" id="pref-gaze-applied">（正在读取悬浮窗…）</p>
+    <p class="hint applied" id="pref-gaze-applied" data-i18n="readingWindow">（正在读取悬浮窗…）</p>
   </div>
 
 </section>
 
 <section class="settings-section" id="settings-2">
-  <h2>鼠标互动与物理</h2>
+  <h2 data-i18n="sectionMouse">鼠标互动与物理</h2>
   <div class="card">
-    <div class="row"><label class="k" for="pref-physics">弹簧骨物理</label><label class="inline"><input type="checkbox" id="pref-physics"> 开启</label></div>
+    <div class="row"><label class="k" for="pref-physics" data-i18n="springPhysics">弹簧骨物理</label><label class="inline"><input type="checkbox" id="pref-physics"> <span data-i18n="on">开启</span></label></div>
 
     <div class="row">
-      <label class="k" for="pref-wind-power">划过强度</label>
+      <label class="k" for="pref-wind-power" data-i18n="windPower">划过强度</label>
       <input type="range" id="pref-wind-power" min="0" max="200" step="5">
       <span class="value" id="pref-wind-power-value">1.00</span>
-      <button id="pref-wind-power-reset" class="ghost">复位</button>
+      <button id="pref-wind-power-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-wind-radius">作用范围</label>
+      <label class="k" for="pref-wind-radius" data-i18n="windRadius">作用范围</label>
       <input type="range" id="pref-wind-radius" min="0" max="100" step="5">
       <span class="value" id="pref-wind-radius-value">15%</span>
-      <button id="pref-wind-radius-reset" class="ghost">复位</button>
+      <button id="pref-wind-radius-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-wind-decay">余韵</label>
-      <input type="number" id="pref-wind-decay" step="0.02" min="0.02" max="2"> 秒
-      <button id="pref-wind-decay-reset" class="ghost">复位</button>
+      <label class="k" for="pref-wind-decay" data-i18n="windDecay">余韵</label>
+      <input type="number" id="pref-wind-decay" step="0.02" min="0.02" max="2"> <span data-i18n="secondsUnit">秒</span>
+      <button id="pref-wind-decay-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-wind-speed">满力速度</label>
-      <input type="number" id="pref-wind-speed" step="100" min="100" max="6000"> px/秒
-      <button id="pref-wind-speed-reset" class="ghost">复位</button>
+      <label class="k" for="pref-wind-speed" data-i18n="windSpeed">满力速度</label>
+      <input type="number" id="pref-wind-speed" step="100" min="100" max="6000"> <span data-i18n="pxPerSecond">px/秒</span>
+      <button id="pref-wind-speed-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
-    <p class="hint applied" id="pref-wind-applied">（正在读取悬浮窗…）</p>
+    <p class="hint applied" id="pref-wind-applied" data-i18n="readingWindow">（正在读取悬浮窗…）</p>
   </div>
 
 </section>
 
 <section class="settings-section" id="settings-3">
-  <h2>状态与动作 <span id="motion-count"></span></h2>
+  <h2><span data-i18n="sectionState">状态与动作</span> <span id="motion-count"></span></h2>
   <div class="card">
-    <div class="row"><label class="k" for="pref-motion">播放动画</label><label class="inline"><input type="checkbox" id="pref-motion"> 开启</label></div>
+    <div class="row"><label class="k" for="pref-motion" data-i18n="playMotion">播放动画</label><label class="inline"><input type="checkbox" id="pref-motion"> <span data-i18n="on">开启</span></label></div>
 
     <div id="motion-list"></div>
     <p class="hint" id="motion-note"></p>
@@ -158,13 +176,19 @@
 </section>
 
 <section class="settings-section" id="settings-4">
-  <h2>碎碎念</h2>
+  <h2 data-i18n="sectionSpeech">碎碎念</h2>
   <!--
     碎碎念的免责说明 (operator, 2026-10-15): 「碎碎念说的话都是玩笑，请勿当真，该插件并不会进行任何实际操作，也不会干扰dsh运行，
     在配置较差的机器上可能轻微影响性能」.
 
     设置页这份是**精简版**（操作者同一条消息里也说了「设置页面精简一些」）：引导页讲全，因为那是用户第一次决定"让不让它说话"
     的地方；这里只留一句提醒加一句性能提示，压在碎碎念这一段的最上面 —— 改台词来源、调频率的人都会先看到它。
+
+    This paragraph's TAG is not touched, and that is deliberate: `verify-desktop.mjs` reads it by matching its
+    opening tag with the class and id written in that exact order and in that exact spelling (so an extra attribute
+    or a wrapping `<span>` would hide the copy from the check), and it then compares the copy's length against the
+    guide's longer one. `lib/config-page.js` gives the paragraph `data-i18n-html` at boot instead (see
+    `tagFixedRows`), which is enough for every later pass.
   -->
   <p class="hint" id="speech-disclaimer">
     <strong>碎碎念只是玩笑，请勿当真。</strong>它不会对你的项目或文件做任何实际操作，也不会干扰 DSH 的运行；低配机器上
@@ -172,50 +196,50 @@
   </p>
   <div class="card">
     <div class="row">
-      <label class="k" for="pref-speech">开启</label>
-      <label class="inline"><input type="checkbox" id="pref-speech"> 说话</label>
+      <label class="k" for="pref-speech" data-i18n="speechEnable">开启</label>
+      <label class="inline"><input type="checkbox" id="pref-speech"> <span data-i18n="speechTalk">说话</span></label>
     </div>
     <div class="row">
-      <label class="k" for="pref-speech-hold">每句显示</label>
-      <input type="number" id="pref-speech-hold" min="1" max="30" step="1"> 秒
-      <button id="pref-speech-hold-reset" class="ghost">复位</button>
+      <label class="k" for="pref-speech-hold" data-i18n="speechHold">每句显示</label>
+      <input type="number" id="pref-speech-hold" min="1" max="30" step="1"> <span data-i18n="secondsUnit">秒</span>
+      <button id="pref-speech-hold-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-speech-gap">最短间隔</label>
-      <input type="number" id="pref-speech-gap" min="0" max="600" step="1"> 秒
-      <button id="pref-speech-gap-reset" class="ghost">复位</button>
+      <label class="k" for="pref-speech-gap" data-i18n="speechGap">最短间隔</label>
+      <input type="number" id="pref-speech-gap" min="0" max="600" step="1"> <span data-i18n="secondsUnit">秒</span>
+      <button id="pref-speech-gap-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-speech-idle-min">空闲嘀咕间隔</label>
+      <label class="k" for="pref-speech-idle-min" data-i18n="speechIdleInterval">空闲嘀咕间隔</label>
       <input type="number" id="pref-speech-idle-min" min="0" max="3600" step="5"> –
-      <input type="number" id="pref-speech-idle-max" min="0" max="3600" step="5"> 秒
-      <button id="pref-speech-idle-reset" class="ghost">复位</button>
+      <input type="number" id="pref-speech-idle-max" min="0" max="3600" step="5"> <span data-i18n="secondsUnit">秒</span>
+      <button id="pref-speech-idle-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <!--
       工作中 talks more often than 静息态 does (operator, 2026-10-13: 「工作中的嘀咕可以增加频率到12-36秒一次」), so it
       gets its own window rather than a share of the idle one — the two are different remarks on different clocks.
     -->
     <div class="row">
-      <label class="k" for="pref-speech-work-min">工作嘀咕间隔</label>
+      <label class="k" for="pref-speech-work-min" data-i18n="speechWorkInterval">工作嘀咕间隔</label>
       <input type="number" id="pref-speech-work-min" min="0" max="3600" step="5"> –
-      <input type="number" id="pref-speech-work-max" min="0" max="3600" step="5"> 秒
-      <button id="pref-speech-work-reset" class="ghost">复位</button>
+      <input type="number" id="pref-speech-work-max" min="0" max="3600" step="5"> <span data-i18n="secondsUnit">秒</span>
+      <button id="pref-speech-work-reset" class="ghost" data-i18n="reset">复位</button>
     </div>
     <div class="row">
-      <label class="k" for="pref-speech-source">台词来源</label>
+      <label class="k" for="pref-speech-source" data-i18n="speechSource">台词来源</label>
       <select id="pref-speech-source">
-        <option value="builtin">内置短语</option>
-        <option value="custom">自定义短语</option>
-        <option value="ai">AI 生成</option>
+        <option value="builtin" data-i18n="sourceBuiltin">内置短语</option>
+        <option value="custom" data-i18n="sourceCustom">自定义短语</option>
+        <option value="ai" data-i18n="sourceAi">AI 生成</option>
       </select>
     </div>
     <div id="speech-states"></div>
     <div id="speech-ai">
       <div class="row">
-        <label class="k" for="pref-speech-provider">AI 来源</label>
+        <label class="k" for="pref-speech-provider" data-i18n="speechAiFrom">AI 来源</label>
         <select id="pref-speech-provider">
-          <option value="dsh">DSH 的 Provider</option>
-          <option value="custom">自定义 Provider</option>
+          <option value="dsh" data-i18n="providerDsh">DSH 的 Provider</option>
+          <option value="custom" data-i18n="providerCustom">自定义 Provider</option>
         </select>
       </div>
       <div class="row" id="speech-dsh-provider-row">
@@ -223,7 +247,7 @@
         <select id="pref-speech-dsh-provider"></select>
       </div>
       <div class="row" id="speech-dsh-model-row">
-        <label class="k" for="pref-speech-dsh-model">模型</label>
+        <label class="k" for="pref-speech-dsh-model" data-i18n="speechModel">模型</label>
         <select id="pref-speech-dsh-model"></select>
       </div>
       <div class="row" id="speech-custom-url-row">
@@ -231,24 +255,24 @@
         <input type="text" id="pref-speech-base-url" placeholder="https://api.example.com/v1" spellcheck="false">
       </div>
       <div class="row" id="speech-custom-model-row">
-        <label class="k" for="pref-speech-model">模型</label>
+        <label class="k" for="pref-speech-model" data-i18n="speechModel">模型</label>
         <input type="text" id="pref-speech-model" placeholder="deepseek-chat" spellcheck="false">
       </div>
       <div class="row" id="speech-custom-key-row">
         <label class="k" for="pref-speech-api-key">API Key</label>
         <input type="password" id="pref-speech-api-key" spellcheck="false" autocomplete="off">
-        <button id="pref-speech-key-clear" class="ghost">清除</button>
+        <button id="pref-speech-key-clear" class="ghost" data-i18n="speechKeyClear">清除</button>
       </div>
-      <div class="row"><span class="k">人格</span></div>
+      <div class="row"><span class="k" data-i18n="persona">人格</span></div>
       <textarea id="pref-speech-persona" class="speech-persona" rows="3" spellcheck="false"></textarea>
       <div class="row">
-        <label class="k" for="pref-speech-temperature">温度</label>
+        <label class="k" for="pref-speech-temperature" data-i18n="temperature">温度</label>
         <input type="range" id="pref-speech-temperature" min="0" max="20" step="1">
         <span class="value" id="pref-speech-temperature-value">0.50</span>
       </div>
       <div class="row">
-        <label class="k" for="pref-speech-timeout">超时</label>
-        <input type="number" id="pref-speech-timeout" min="1" max="60" step="1"> 秒
+        <label class="k" for="pref-speech-timeout" data-i18n="timeout">超时</label>
+        <input type="number" id="pref-speech-timeout" min="1" max="60" step="1"> <span data-i18n="secondsUnit">秒</span>
       </div>
       <!--
         试一句 and its own answer, in ONE row.
@@ -258,9 +282,9 @@
         sibling of 生成 now, on a full line of its own under it, and gold while it is a refusal.
       -->
       <div class="row">
-        <label class="k" for="pref-speech-test-state">试一句</label>
+        <label class="k" for="pref-speech-test-state" data-i18n="speechTest">试一句</label>
         <select id="pref-speech-test-state"></select>
-        <button id="pref-speech-test" class="ghost">生成</button>
+        <button id="pref-speech-test" class="ghost" data-i18n="generate">生成</button>
         <p class="hint" id="pref-speech-test-result" role="status" aria-live="polite"></p>
       </div>
       <p class="hint" id="speech-llm-note"></p>
@@ -270,17 +294,17 @@
 </section>
 
 <section class="settings-section" id="settings-5">
-  <h2>模型导入</h2>
+  <h2 data-i18n="sectionModelImport">模型导入</h2>
   <div class="card">
     <div class="row">
-      <span class="k">导入模型</span>
-      <button id="model-import-pick">选择模型文件…</button>
-      <button id="model-import-manual" class="ghost">手动输入路径</button>
+      <span class="k" data-i18n="importModel">导入模型</span>
+      <button id="model-import-pick" data-i18n="pickModelFile">选择模型文件…</button>
+      <button id="model-import-manual" class="ghost" data-i18n="manualPath">手动输入路径</button>
     </div>
     <div class="row" id="model-import-manual-row" hidden>
-      <label class="k" for="model-import-path">文件路径</label>
+      <label class="k" for="model-import-path" data-i18n="filePath">文件路径</label>
       <input type="text" id="model-import-path" class="grow" placeholder="D:\Models\my.vrm">
-      <button id="model-import-add">导入</button>
+      <button id="model-import-add" data-i18n="import">导入</button>
     </div>
     <div id="model-import-list"></div>
     <p class="hint" id="model-import-note"></p>
@@ -289,17 +313,17 @@
 </section>
 
 <section class="settings-section" id="settings-6">
-  <h2>动作导入</h2>
+  <h2 data-i18n="sectionMotionImport">动作导入</h2>
   <div class="card">
     <div class="row">
-      <span class="k">导入目录</span>
-      <button id="motion-import-pick">选择文件夹…</button>
-      <button id="motion-import-manual" class="ghost">手动输入路径</button>
+      <span class="k" data-i18n="importFolder">导入目录</span>
+      <button id="motion-import-pick" data-i18n="pickMotionDir">选择文件夹…</button>
+      <button id="motion-import-manual" class="ghost" data-i18n="manualPath">手动输入路径</button>
     </div>
     <div class="row" id="motion-import-manual-row" hidden>
-      <label class="k" for="motion-import-path">路径</label>
+      <label class="k" for="motion-import-path" data-i18n="path">路径</label>
       <input type="text" id="motion-import-path" class="grow" placeholder="D:\Motions">
-      <button id="motion-import-add">添加</button>
+      <button id="motion-import-add" data-i18n="add">添加</button>
     </div>
     <div id="motion-import-list"></div>
     <p class="hint" id="motion-import-note"></p>
@@ -308,11 +332,11 @@
 </section>
 
 <section class="settings-section" id="settings-7">
-  <h2>其他</h2>
+  <h2 data-i18n="sectionOther">其他</h2>
   <div class="card">
     <div class="row">
-      <span class="k">初次安装引导</span>
-      <button id="pref-setup-open">重新运行引导</button>
+      <span class="k" data-i18n="setupSection">初次安装引导</span>
+      <button id="pref-setup-open" data-i18n="setupRerun">重新运行引导</button>
       <span class="note" id="pref-setup-note"></span>
     </div>
   </div>
@@ -324,23 +348,40 @@
     A settings page that can only say "正在读取…" is useless when something fails: the text is the HTML's
     own placeholder, and a script that never ran, 404'd or threw at its first line looks exactly like a
     slow host. So this runs FIRST, catches what it can, and after two seconds says what is actually wrong.
+
+    It runs BEFORE `lib/core.js`, which is the whole point — the case it exists for is a core that never
+    loaded — so it cannot use `core.textFor` and carries its own tiny map instead: three sentences plus the
+    brackets a filename goes in, picked from `navigator.language` in one line. Chinese is the fallback,
+    because the markup around it is Chinese. Keep it small: this is a watchdog, not a second i18n system.
   -->
   <script>
     (function () {
+      var ZH = /^(zh|cn|chinese)/i.test(navigator.language || '');
+      var WORDS = ZH
+        ? {
+          error: "页面脚本出错：",
+          file: "（来自 {name}）",
+          coreMissing: "初始化卡住：core.js 没有加载（检查 /vrmpet3d/window/lib/core.js 是否 404）。",
+          stuck: "初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/settings）。",
+        }
+        : {
+          error: "Page script error: ",
+          file: "(from {name})",
+          coreMissing: "Stuck at startup: core.js did not load (check whether /vrmpet3d/window/lib/core.js is a 404).",
+          stuck: "Stuck at startup: the script loaded but never finished initialising (check the window console, or whether the host serves /vrmpet3d/settings).",
+        };
       function show(message) {
         var status = document.getElementById("status");
         if (status) { status.textContent = message; status.className = "warn"; }
       }
       window.addEventListener("error", function (event) {
-        show("页面脚本出错：" + (event.message || event.type) + (event.filename ? " （" + event.filename + "）" : ""));
+        show(WORDS.error + (event.message || event.type)
+          + (event.filename ? " " + WORDS.file.replace("{name}", event.filename) : ""));
       }, true);
       window.setTimeout(function () {
         if (window.__VRMPET3D_CONFIG_STATE__) return;
-        if (!window.__VRMPET3D_CORE__) {
-          show("初始化卡住：core.js 没有加载（检查 /vrmpet3d/window/lib/core.js 是否 404）。");
-          return;
-        }
-        show("初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/settings）。");
+        if (!window.__VRMPET3D_CORE__) { show(WORDS.coreMissing); return; }
+        show(WORDS.stuck);
       }, 2000);
     })();
   </script>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>vrmpet3d · 切换模型</title>
+  <title data-i18n="title">vrmpet3d · 切换模型</title>
   <meta name="color-scheme" content="dark light">
   <!--
     切换模型 — the model picker's own page (`/vrmpet3d/picker`), opened from either pet's right-click menu.
@@ -21,15 +21,21 @@
   <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
 </head>
 <body data-page="picker">
+  <!--
+    The page's own five pieces of text carry `data-i18n` and keep the Chinese inline: `lib/picker-page.js`
+    resolves the language and calls `core.applyI18n`, and a page whose script never ran still reads in one
+    language rather than showing empty nodes. `html lang` is that same Chinese default, and the script rewrites it
+    once it knows better — it is NOT what the language is resolved from (see `core.browserLanguageHints`).
+  -->
   <header class="page-header">
-    <div class="eyebrow">VRMPET3D · MODELS</div>
-    <h1>切换模型</h1>
-    <div id="status" role="status" aria-live="polite">正在读取…</div>
+    <div class="eyebrow" data-i18n="eyebrow">VRMPET3D · MODELS</div>
+    <h1 data-i18n="heading">切换模型</h1>
+    <div id="status" role="status" aria-live="polite" data-i18n="statusLoading">正在读取…</div>
   </header>
 
   <main>
     <section class="settings-section" id="settings-0">
-      <h2>模型</h2>
+      <h2 data-i18n="sectionModels">模型</h2>
       <div class="card" id="picker-mount"></div>
     </section>
   </main>
@@ -40,20 +46,40 @@
   -->
   <script>
     (function () {
+      /**
+       * The watchdog's OWN words, in its own two languages, because it runs BEFORE core.js and can use neither
+       * `core.textFor` nor the settings store. `navigator.language` is the whole of its rule: the document's own
+       * `lang` is the Chinese default every page here ships, so reading it would only ever say "Chinese".
+       */
+      var WORDS = {
+        zh: {
+          pageError: '页面脚本出错：',
+          stuckMissing: '初始化卡住：model-picker.js 没有加载（检查 /vrmpet3d/window/lib/model-picker.js 是否 404）。',
+          stuckSlow: '初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/models 与 /vrmpet3d/settings）。',
+        },
+        en: {
+          pageError: 'Script error: ',
+          stuckMissing: 'Stuck on startup: model-picker.js did not load — check whether /vrmpet3d/window/lib/model-picker.js is a 404.',
+          stuckSlow: 'Stuck on startup: the script loaded but never finished — check the window console, and whether the host serves /vrmpet3d/models and /vrmpet3d/settings.',
+        },
+      };
+      var language = /^(zh|cn|chinese)/i.test(navigator.language || '') ? 'zh' : 'en';
+      function t(key) { return WORDS[language][key]; }
       function show(message) {
         var status = document.getElementById("status");
         if (status) { status.textContent = message; status.className = "warn"; }
       }
       window.addEventListener("error", function (event) {
-        show("页面脚本出错：" + (event.message || event.type) + (event.filename ? " （" + event.filename + "）" : ""));
+        var where = event.filename ? (language === 'zh' ? ' （' + event.filename + '）' : ' (' + event.filename + ')') : '';
+        show(t('pageError') + (event.message || event.type) + where);
       }, true);
       window.setTimeout(function () {
         if (window.__VRMPET3D_PICKER_STATE__) return;
         if (!window.__VRMPET3D_MODEL_PICKER__) {
-          show("初始化卡住：model-picker.js 没有加载（检查 /vrmpet3d/window/lib/model-picker.js 是否 404）。");
+          show(t('stuckMissing'));
           return;
         }
-        show("初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/models 与 /vrmpet3d/settings）。");
+        show(t('stuckSlow'));
       }, 2000);
     })();
   </script>

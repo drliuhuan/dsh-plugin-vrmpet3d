@@ -13,6 +13,42 @@ what is left there is more clips, and the operator's own state→clip mapping, w
 **`assets/motions/idle.vrma` is new and still UNTRACKED in git** — the operator generated it, it is part of the pack,
 and it needs committing with the others.
 
+## ▶ 全部界面中英双语（2026-10-15）
+
+操作者：「把全部界面做中英双语自动识别，并在通用设置和初始安装引导页的第一页欢迎页面中加上语言选择」。
+
+* **一个偏好，一条解析规则**：`preferences.language` = `auto | zh | en`，默认 `auto`。`auto` 是**存进去**的、不是写入时解析的
+  ——否则 profile 会把创建当天的语言冻住，用户之后把 DSH 换成英文也跟不动。`core.resolveLanguage(preference, hints)`：显式值优先；
+  `auto` 取第一个有说法的提示；`fr-FR` 这类本插件没有的语言直接落英文，不继续往下找。提示顺序：应用内先用 DSH 的 locale，页面先用
+  `navigator.language`、再用文档自己的 `lang`（四个页面都写着 `<html lang="zh">`，先读自己就永远识别不出英文）。
+* **每个界面一张自己的表**（仓库原有形状 `{zh, en}`：menu.js 的 `LABELS`、model-picker.js 的 `TEXT`、设置页与引导页的 `TEXT`、
+  宠物半边的 `STRINGS`），用 `core.textFor / core.textOf` 在**调用时**读取，所以切换语言能到达那些只写一次的字符串。标记里同时
+  保留中文原文（`data-i18n` / `-html` / `-placeholder` / `-title` / `-aria`），脚本没跑起来时页面照样有话说；`verify-desktop.mjs`
+  断言标记的每个键都在该页的表里，且每张表的中英键集完全一致。
+* **两个选择器**：通用设置 → 显示与外观第一行，和引导页欢迎屏（第一屏就生效，因为引导只读一次）。两处写的都是**存起来的那个值**
+  （`auto` 也算），不是解析结果。
+* **状态提示默认值按语言**：`DEFAULT_STATUS_TEXT` 现在是 state → `{zh, en}`，`statusFor / statusLineFor / statusEntryFor` 多了可选的
+  language 参数（不传＝中文，既有断言原义不变）。英文界面里 `{duration}` 写 `1m 1s` 而不是 `1分1秒`。**用户自己敲的那句永不翻译**。
+* **宿主与启动器**：`/vrmpet3d/say` 的 12 条中文拒绝语双语化（语言本来就在请求里，没有新增管线），连拒绝语里的 `思考/正文/分片`
+  诊断标签也按语言写；启动器的原生对话框标题与过滤器双语化，页面没传语言时用 `app.getLocale()`。
+* **刻意没做**：启动器对话框还没拿页面自己的 `preferences.language`（`desktop/preload.js` 的 `pickModelFile()` / `pickMotionDir()`
+  不带参数，接上要动第三个文件）——只有「显式选中文 + 英文系统」这类组合看得出来。
+* **验证（AGENTS.md 的窄验证，不是全量）**：core 1316（+42，新增第 14 组）、host + model 796、chunk-delivery 39、
+  client-test 111、3D 套件 13、`check-plugin-load` PASSED、`client-chunks --check` 3/3、`speech-lines --check` 与
+  `part-lines --check` 与审阅稿一致；`verify-desktop --no-window` 的 Node 半场 162 全绿（HEAD 基线 138，本改动新增 24 条界面语言
+  断言），文档里的 332 = 162 + 未重测的实时半场 170。**未跑**：`verify-desktop` 的实时半场（会弹出真实置顶窗口，由操作者决定时机）、
+  `verify-all` 与 `check-docs`（后者会把实时半场强行打开）。
+* **顺带修的两条探针**（`build/probe/client-test.js`，属于这条窄验证面）：引导页步骤名改为按**页面实际解析出的语言**校验（原来写死
+  中文，而探针文档是 `<html lang="en">`，`auto` 在英文浏览器上解析成英文）；`Placement` 缺 core 的报错改为校验两种语言共同的
+  「core + module/模块」，因为那句话现在也随语言。
+* **发布变换已实测**：`make-release-pages.mjs` 仍能整段删掉「调试模式」行、并保留新的语言选择行——那两行（调试模式与碎碎念免责段）在
+  标记里保持与 HEAD 逐字节相同，翻译是**启动时**由 `tagFixedRows()` 补的，所以那个按原文匹配的 `DEBUG_BLOCK` 依然命中；我在临时树上实跑了
+  一次写入与 `--check`。
+* **⚠️ 留给操作者的两件事**：(1) `verify-desktop` 的**实时半场**没有重跑（要弹真实置顶窗口），文档里的 332 按「162 + 未变的 170」算；
+  (2) 实时半场里那些断言（`statusTexts.working === '深度求索中 ···'`、`emptyLabel === '用内置短语'`、`chipHint === '未识别'` 等）读的是页面
+  **发布出来的**读数，而发布读数现在跟随界面语言——本机 `navigator.language` 是 zh，所以它们照旧成立，但在英文区域的机器上会变。要让它们
+  与机器无关，就得在实时半场里先选中文（或在两处 publish 调用里钉 `'zh'`），那是操作者决定的事。
+
 ## ▶ 已修正，待实机复测：自动休眠与连续界面切换（2026-10-15）
 
 操作者停用空闲休眠：通用设置的旧行隐藏且禁用，不再绑定写入事件；保留旧配置字段供兼容读取。
@@ -84,7 +120,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**The tree is green: 9 suites, 2543 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
+**The tree is green: 9 suites, 2609 checks.** `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which

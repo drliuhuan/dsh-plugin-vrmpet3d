@@ -38,6 +38,47 @@ const DEFAULT_PET_WINDOW = { width: 240, height: 320 };
 const VRMPET3D_STATUS_PREFIX = 'vrmpet3d-desktop: ';
 
 /**
+ * The words THIS process puts on screen itself: the two native dialog titles and the model filter's name.
+ *
+ * Nothing else here is a string a user reads — every other sentence in this file is a log line or a self-test
+ * report — and these three are the exception because Electron, not a page, draws them. The window title is
+ * deliberately NOT in this table: it names the launcher's own window (`vrmpet3d - model settings`) and is the same
+ * ASCII wherever the user is, so a translated one would add a second name for a window the user finds by that one.
+ *
+ * The launcher is a SEPARATE PROCESS with no access to `lib/core.js`, so it keeps its own copy of the repository's
+ * two-language shape (`{ zh: {...}, en: {...} }`, identical key sets) rather than importing the host's rules.
+ */
+const DIALOG_TEXT = {
+  zh: { motionTitle: '导入动作目录', modelTitle: '导入模型文件', modelFilter: 'VRM / glTF 模型' },
+  en: { motionTitle: 'Import motion folder', modelTitle: 'Import model file', modelFilter: 'VRM / glTF model' },
+};
+
+/**
+ * Which of the two this process draws in, for one request.
+ *
+ * The PAGE wins whenever it says something this process understands. The settings page knows the user's
+ * `preferences.language`, which may be a deliberate 中文 on an English machine or the reverse, so it is the better
+ * authority when it speaks; it may pass that as `{ kind, language }`, and `'auto'` (or nothing at all) is not a
+ * language, so the fallback is `app.getLocale()` — the machine's own locale, which is exactly what `'auto'` means
+ * for a surface with no DSH locale to consult.
+ *
+ * The field is OPTIONAL and nothing here requires it: an older page that sends only `{ kind }` (without a language argument) gets the locale, and a page that sends a value neither of the two languages
+ * ignores it rather than having it guessed at.
+ */
+function dialogLanguage(options) {
+  const wanted = options && typeof options === 'object' ? options.language : null;
+  if (wanted === 'zh' || wanted === 'en') return wanted;
+  let locale = '';
+  try {
+    // After `ready`, which every handler here is; a locale that cannot be read is not a reason to fail a dialog.
+    locale = app.getLocale() || '';
+  } catch (_error) {
+    locale = '';
+  }
+  return /^(zh|cn|chinese)/i.test(String(locale).trim()) ? 'zh' : 'en';
+}
+
+/**
  * The payload the page expects for a cursor sample.
  *
  * `frame` is the window's origin, and it is load-bearing: the page positions its canvas in the VIRTUAL
@@ -590,15 +631,16 @@ app.whenReady().then(async () => {
      */
     ipcMain.handle('vrmpet3d:pick-path', async (_event, options) => {
       const kind = options && typeof options === 'object' && options.kind === 'motion' ? 'motion' : 'model';
+      const text = DIALOG_TEXT[dialogLanguage(options)] || DIALOG_TEXT.en;
       try {
         const result = await dialog.showOpenDialog(win, kind === 'motion' ? {
-          title: '导入动作目录',
+          title: text.motionTitle,
           properties: ['openDirectory'],
           defaultPath: app.getPath('home'),
         } : {
-          title: '导入模型文件',
+          title: text.modelTitle,
           properties: ['openFile'],
-          filters: [{ name: 'VRM / glTF 模型', extensions: ['vrm', 'glb', 'gltf'] }],
+          filters: [{ name: text.modelFilter, extensions: ['vrm', 'glb', 'gltf'] }],
           defaultPath: app.getPath('home'),
         });
         if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) return null;

@@ -800,6 +800,140 @@ console.log('\n5. the window object: start, idempotence, stop, failure');
 }
 
 // ---------------------------------------------------------------------------
+console.log('\n5c. 界面语言: every page is dual-language, and both choosers ship');
+// ---------------------------------------------------------------------------
+{
+  /**
+   * Operator, 2026-10-15: 「把全部界面做中英双语自动识别，并在通用设置和初始安装引导页的第一页欢迎页面中加上语言选择」.
+   *
+   * What can be asserted WITHOUT a browser is what the two halves agree on: a page's markup marks the text it wants
+   * translated (`data-i18n*`), the page's own script carries a table with that key in BOTH languages, and the
+   * script resolves the language through the one shared rule (`core.resolveLanguage`). The live half is what proves
+   * the words actually change; this is what stops a key from being marked and never written.
+   *
+   * One table per page pair, because `config-page.js` drives BOTH settings pages — that is the whole reason those
+   * two share a script, and the same reason they share a table.
+   */
+  const pageSources = [
+    ['config-page.html', 'config-page.js'],
+    ['global-page.html', 'config-page.js'],
+    ['setup-page.html', 'setup-page.js'],
+    ['picker-page.html', 'picker-page.js'],
+  ];
+
+  /**
+   * The keys of ONE object literal, `from` being the index of its `{`.
+   *
+   * A brace scan rather than a regex over `^\s*\w+:` alone, because these tables carry nested objects (the
+   * per-state maps) whose inner keys are not table entries: only DEPTH 1 relative to this literal is a key, which
+   * is exactly the set `core.textFor` hands a surface.
+   *
+   * The depth is sampled at the START of each line (`lineDepth`), not at its end, and that is the whole reason this
+   * is not a one-liner: a table entry whose value OPENS A BLOCK on its own line — `count: function (total) {` — has
+   * already moved the running depth by the time the newline is seen, so an end-of-line test reports the depth of the
+   * function body and silently skips the key. Both halves skipped it equally, so parity could not see a missing
+   * counterpart either; the depth of the line is what the entry actually lives at.
+   */
+  function objectKeys(source, from) {
+    if (from < 0) return null;
+    const keys = [];
+    let depth = 1;
+    let lineDepth = 1;
+    let line = '';
+    for (let index = from + 1; index < source.length; index += 1) {
+      const character = source[index];
+      if (character === '\n') {
+        if (lineDepth === 1) {
+          const match = /^\s*([A-Za-z_$][\w$]*)\s*:/.exec(line);
+          if (match) keys.push(match[1]);
+        }
+        line = '';
+        lineDepth = depth;
+        continue;
+      }
+      line += character;
+      if (character === '{' || character === '[' || character === '(') depth += 1;
+      else if (character === '}' || character === ']' || character === ')') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    return keys;
+  }
+
+  /** The keys of one language half of a `{ zh: {...}, en: {...} }` literal found after `startPattern`. */
+  function tableKeys(source, startPattern, language) {
+    const start = source.search(startPattern);
+    if (start === -1) return null;
+    const half = source.indexOf(`${language}: {`, start);
+    if (half === -1) return null;
+    return objectKeys(source, source.indexOf('{', half));
+  }
+
+  for (const [page, script] of pageSources) {
+    const html = readFileSync(join(ROOT, 'lib', page), 'utf8');
+    const source = readFileSync(join(ROOT, 'lib', script), 'utf8');
+    const marked = [...html.matchAll(/data-i18n(?:-html|-placeholder|-title|-aria)?="([^"]+)"/g)].map((m) => m[1]);
+    const missing = marked.filter((key) => !new RegExp(`(^|[\\s{,])${key}\\s*:`, 'm').test(source));
+    ok(marked.length > 0, `${page} marks its own text for translation (${marked.length} places)`);
+    eq(missing.join(', '), '', `and ${script} has an entry for every one of them`);
+    ok(source.includes('core.resolveLanguage') && source.includes('core.applyI18n')
+      && source.includes('core.browserLanguageHints'),
+      `${script} resolves the language through the shared rule and applies its own table`);
+  }
+
+  // Key PARITY: a missing English entry is a Chinese line in an English interface, which is the failure this whole
+  // feature exists to prevent. Compared as sets, because one half being ordered differently is not a defect.
+  const parity = [
+    ['config-page.js', /var TEXT = \{/],
+    ['setup-page.js', /var TEXT = \{/],
+    ['picker-page.js', /var TEXT = \{/],
+  ];
+  for (const [script, pattern] of parity) {
+    const source = readFileSync(join(ROOT, 'lib', script), 'utf8');
+    const zh = tableKeys(source, pattern, 'zh');
+    const en = tableKeys(source, pattern, 'en');
+    ok(Array.isArray(zh) && Array.isArray(en) && zh.length > 0,
+      `${script} carries one table with both halves (${zh ? zh.length : 0} / ${en ? en.length : 0})`);
+    const onlyZh = (zh || []).filter((key) => (en || []).indexOf(key) === -1);
+    const onlyEn = (en || []).filter((key) => (zh || []).indexOf(key) === -1);
+    eq(onlyZh.concat(onlyEn).join(', '), '', `${script}'s two halves hold the same keys, entry for entry`);
+  }
+
+  // The model picker's English half is a SECOND object literal inside `resolveText` — a `return { … }` after the
+  // `language === 'en'` branch — so it is read from there rather than from a second `en: {` half.
+  const pickerSource = readFileSync(join(ROOT, 'lib', 'model-picker.js'), 'utf8');
+  const pickerZh = tableKeys(pickerSource, /var TEXT = \{/, 'zh');
+  const pickerEnAt = pickerSource.search(/language === 'en'/);
+  const pickerEn = pickerEnAt === -1
+    ? null
+    : objectKeys(pickerSource, pickerSource.indexOf('{', pickerSource.indexOf('return {', pickerEnAt)));
+  ok(Array.isArray(pickerZh) && Array.isArray(pickerEn) && pickerZh.length > 0 && pickerEn.length > 0,
+    `the model picker has a table per language (${pickerZh ? pickerZh.length : 0} / ${pickerEn ? pickerEn.length : 0})`);
+  eq((pickerEn || []).filter((key) => (pickerZh || []).indexOf(key) === -1).join(', '), '',
+    'and its English half covers every entry the Chinese half has');
+
+  // The two choosers the operator asked for, in the two places he asked for them.
+  const globalMarkup = readFileSync(join(ROOT, 'lib', 'global-page.html'), 'utf8');
+  const setupMarkup = readFileSync(join(ROOT, 'lib', 'setup-page.html'), 'utf8');
+  const languageOptions = (markup, id) => {
+    const at = markup.indexOf(`id="${id}"`);
+    if (at === -1) return null;
+    const select = markup.slice(at, markup.indexOf('</select>', at));
+    return ['auto', 'zh', 'en'].filter((value) => select.includes(`value="${value}"`));
+  };
+  eq((languageOptions(globalMarkup, 'pref-language') || []).join(' '), 'auto zh en',
+    '通用设置 carries the 界面语言 chooser, with all three answers');
+  eq((languageOptions(setupMarkup, 'setup-language') || []).join(' '), 'auto zh en',
+    'and so does the first-run guide, on its welcome screen');
+  const welcome = setupMarkup.slice(setupMarkup.indexOf('id="setup-0"'), setupMarkup.indexOf('id="setup-1"'));
+  ok(welcome.includes('id="setup-language"'),
+    'the guide\'s chooser is on screen ① rather than buried behind 下一步');
+  ok(readFileSync(join(ROOT, 'lib', 'config-page.js'), 'utf8').includes("'pref-language'"),
+    'and the settings script writes the preference the pages read');
+}
+
+// ---------------------------------------------------------------------------
 console.log('\n6. the real launcher, a real window');
 // ---------------------------------------------------------------------------
 const live = await runLiveWindow();
