@@ -26,6 +26,9 @@ build/probe/settings-*.png
 build/probe/mini-game-*.png
 build/probe/mini-game-browser.html
 build/probe/mini-game-browser-profile/
+build/probe/level-two-bowl-preview.png
+build/probe/level-two-preview-profile/
+build/probe/preview-level-two.mjs
 build/*.png
 
 # Build-only; `cd vendor && npm install` restores it. The compiled chunk in

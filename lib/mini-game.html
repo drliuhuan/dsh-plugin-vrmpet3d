@@ -4,18 +4,41 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>吃白饭 · 桌宠弹球</title>
   <link rel="stylesheet" href="/vrmpet3d/window/lib/mini-game.css">
+  <style>.actions{flex-wrap:wrap}#test-controls{position:absolute;left:18px;bottom:64px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:90%;padding:10px;border-radius:12px;background:#101b24e8;font-size:12px}#test-controls button{padding:6px 10px}</style>
 </head>
 <body>
   <main id="game" aria-label="吃白饭，桌宠弹球游戏">
-    <canvas id="arena" aria-label="鼠标移动横杆，左键发射，Esc 暂停"></canvas>
-    <canvas id="pet" aria-hidden="true"></canvas>
-    <header><div class="brand">吃白饭 <small>PET BREAKOUT</small></div><div id="score" aria-live="polite"></div><div class="controls"><button id="pause">暂停 <kbd>Esc</kbd></button><button id="fullscreen">全屏 ↗</button></div></header>
+    <div id="playfield">
+      <canvas id="arena" aria-label="鼠标移动横杆，左键发射，Esc 暂停"></canvas>
+      <canvas id="pet" aria-hidden="true"></canvas>
+    </div>
+    <header><div class="brand">吃白饭 <small>PET BREAKOUT</small></div><div></div><div class="controls"><button id="pause">暂停 <kbd>Esc</kbd></button><button id="fullscreen">全屏 ↗</button></div></header>
+    <div id="game-hud"><span id="level" aria-live="polite"></span><span id="score" aria-live="polite"></span></div>
     <button id="notice" hidden></button>
+    <div id="lives" role="img" aria-label="备用 2 次机会"></div>
     <p id="hint">移动鼠标控制横杆 · 左键发射 · Esc 暂停</p>
     <p id="model-status" role="status">正在准备桌宠模型…</p>
     <section id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
-      <div class="panel"><span class="eyebrow">TAKE A LITTLE BREAK</span><h1 id="pause-title">休息一下</h1><p id="pause-copy">饭还热着，随时回来继续。</p><div id="sessions"></div><div class="actions"><button id="resume" class="primary">继续吃饭</button><button id="restart">重新开始</button></div><p id="connection" role="status"></p></div>
+      <fieldset id="debug-controls" class="model-controls" hidden><legend>DEBUG · 目前开放 2 关</legend>
+        <label for="debug-level">选择关卡</label><select id="debug-level"><option value="1">第1关 · DS / BALL</option><option value="2">第2关 · 蓝白大碗</option></select>
+        <small>切换关卡会重置所选关卡进度，保留当前机会和游戏设置。</small>
+      </fieldset>
+      <div class="panel"><span class="eyebrow">TAKE A LITTLE BREAK</span><h1 id="pause-title">休息一下</h1><p id="pause-copy">饭还热着，随时回来继续。</p><div id="sessions"></div><div class="actions"><button id="resume" class="primary">继续吃饭</button><button id="restart">重置当前关卡</button><button id="exit">保存并退出</button></div><p id="save-status" role="status"></p><p id="connection" role="status"></p></div>
+      <fieldset class="model-controls" hidden><legend>游戏模型</legend>
+        <label for="model-size">模型尺寸 <output id="model-size-value" for="model-size">90</output> px</label>
+        <input id="model-size" type="range" min="30" max="150" step="5" value="90">
+        <label for="spin-speed">旋转速度 <output id="spin-speed-value" for="spin-speed">7</output> rad/s</label>
+        <input id="spin-speed" type="range" min="0" max="30" step="1" value="7">
+        <label for="flight-speed">飞行速度 <output id="flight-speed-value" for="flight-speed">1</output> 倍</label>
+        <input id="flight-speed" type="range" min="0.5" max="2" step="0.1" value="1">
+        <label for="paddle-boost">每次撞杆加速 <output id="paddle-boost-value" for="paddle-boost">2</output> %</label>
+        <input id="paddle-boost" type="range" min="0" max="20" step="0.5" value="2">
+        <small>尺寸仅影响外观；自转设为 0 可停止旋转。飞行速度会改变游戏速度。</small>
+      </fieldset>
     </section>
+    <aside id="test-controls" hidden aria-label="独立测试模式">
+      <strong>独立测试模式</strong><button id="test-rice">测试吃饭</button><button id="test-bowl">测试撞碗</button><button id="test-loss">模拟漏球</button><button id="test-clear">模拟通关</button><button id="test-notice">模拟消息</button>
+    </aside>
   </main>
   <script src="/vrmpet3d/window/lib/core.js"></script>
   <script src="/vrmpet3d/window/lib/client.vendor.js"></script>

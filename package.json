@@ -26,6 +26,8 @@
     "LICENSE"
   ],
   "scripts": {
+    "game:dev": "node scripts/mini-game-dev.mjs",
+    "test:game": "node scripts/verify-mini-game.mjs",
     "verify": "node scripts/verify-all.mjs",
     "verify:core": "node scripts/verify.mjs",
     "verify:model": "node scripts/verify-model.mjs",
