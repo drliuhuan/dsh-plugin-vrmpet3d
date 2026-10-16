@@ -80,8 +80,8 @@ licensed third-party assets out of version control entirely, and it lets you kee
 several collections in their own folders.
 
 ```yaml
-- id: vrmpet3d
-  name: dsh-plugin-vrmpet3d
+- id: vrmpet3d-dev
+  name: dsh-plugin-vrmpet3d-dev
   config:
     modelDirs:
       - D:/models/vrm

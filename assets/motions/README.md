@@ -74,8 +74,8 @@ Every clip here carries one or two `E_*` channels (`E_neutral` / `E_relaxed` / `
 "the model keeps a leftover pose after a clip stops".
 
 **That attribution was wrong.** It was disproven by running the probe on the repository's own all-humanoid test clips
-in `build/fixtures/vrma/`: `vrmpet3d-wave.vrma` and `vrmpet3d-rest.vrma` contain **no `E_*` track at all** and failed the
-same two checks, while `vrmpet3d-test.vrma` — which drives only hips and head, and **no upper arm** — passed all 61.
+in `build/fixtures/vrma/`: `vrmpet3d-dev-wave.vrma` and `vrmpet3d-dev-rest.vrma` contain **no `E_*` track at all** and failed the
+same two checks, while `vrmpet3d-dev-test.vrma` — which drives only hips and head, and **no upper arm** — passed all 61.
 The real cause was in the plugin, not in these files: `core.aimDownQuaternion` returned a **non-unit axis** (its cross
 product's length is `sin(angle)`), so the caller built a non-unit arm quaternion (`|q| = 0.999599`), and the probe's
 `Quaternion.angleTo` — which does not normalise — read that length as a **4.59° pose residual**. The pose was always
@@ -105,7 +105,7 @@ That script is the tool to re-check any new clip with, and it is **not** wired i
 What it confirms for each file: the humanoid rig is driven, the rotations stay finite, the RAW skinned bone follows the
 clip, and a clip that stops returns the model to its procedural pose and to its rest pose.
 
-## `vrmpet3d-motions.json` — this folder's own manifest
+## `vrmpet3d-dev-motions.json` — this folder's own manifest
 
 The file beside the clips is what the host reads once per directory, and it declares three things:
 

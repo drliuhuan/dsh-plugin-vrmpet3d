@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title data-i18n="pageTitle">vrmpet3d · 初次安装引导</title>
+  <title data-i18n="pageTitle">vrmpet3d-dev · 初次安装引导</title>
   <meta name="color-scheme" content="dark light">
   <!--
-    The first-run guide: its screens and a finish, on its own route (`/vrmpet3d/setup`). Which of the six the flow
+    The first-run guide: its screens and a finish, on its own route (`/vrmpet3d-dev/setup`). Which of the six the flow
     VISITS depends on where it is running — see the stepper below.
 
     A THIRD page beside 模型参数 and 通用设置, opened the same way — by the launcher on DSH Desktop (a real window,
@@ -19,7 +19,7 @@
     (「安装成功后，彻底配置完之前，每次插件运行都会弹配置引导」), and a first-run page that the user has to go looking
     for is not a guide. The stylesheet is the shared `pages.css`; only the wizard's own layout lives below.
   -->
-  <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
+  <link rel="stylesheet" href="/vrmpet3d-dev/window/lib/pages.css">
   <style>
     /* One screen at a time, a stepper that says where you are, and a footer that cannot scroll away. */
     body[data-page="setup"] { display: flex; flex-direction: column; min-height: 100vh; }
@@ -48,7 +48,7 @@
 </head>
 <body data-page="setup">
   <header class="page-header">
-    <div class="eyebrow">VRMPET3D · SETUP</div>
+    <div class="eyebrow">VRMPET3D_DEV · SETUP</div>
     <h1 data-i18n="guideTitle">初次安装引导</h1>
     <div id="status" role="status" aria-live="polite" data-i18n="reading">正在读取…</div>
   </header>
@@ -102,7 +102,7 @@
       <h2 data-i18n="stepModel">偏好模型</h2>
       <!--
         The picker itself is `lib/model-picker.js`, mounted here and mounted again on the 切换模型 page
-        (`/vrmpet3d/picker`, opened from either pet's right-click menu). The operator, 2026-10-13:
+        (`/vrmpet3d-dev/picker`, opened from either pet's right-click menu). The operator, 2026-10-13:
         「下半部分显示现有模型（自带模型+已导入模型）的缩略图，点击对应的缩略图可以切换当前使用的模型」 and 「面板中和初次
         安装向导模型页完全一样」 — so there is ONE component behind both mounts and this element is its mount point.
 
@@ -235,8 +235,8 @@
   <script>
     (function () {
       var STUCK = {
-        zh: '初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/setup-state）。',
-        en: 'Initialisation stalled: the script loaded but never finished (check the window console, or whether the host serves /vrmpet3d/setup-state).',
+        zh: '初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d-dev/setup-state）。',
+        en: 'Initialisation stalled: the script loaded but never finished (check the window console, or whether the host serves /vrmpet3d-dev/setup-state).',
       };
       var language = /^(zh|cn|chinese)/i.test(navigator.language || '') ? 'zh' : 'en';
       function show(text) {
@@ -251,9 +251,9 @@
       }, 3000);
     })();
   </script>
-  <script src="/vrmpet3d/window/lib/core.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/core.js"></script>
   <!-- The picker component the ② 偏好模型 step mounts — the same file the 切换模型 page loads. -->
-  <script src="/vrmpet3d/window/lib/model-picker.js"></script>
-  <script src="/vrmpet3d/window/lib/setup-page.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/model-picker.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/setup-page.js"></script>
 </body>
 </html>

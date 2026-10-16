@@ -3,5 +3,5 @@
 # The row must be named exactly like the package, because the client module
 # system resolves a plugin's client bundle from its Loader entry name.
 - insert:
-    - id: vrmpet3d
-      name: dsh-plugin-vrmpet3d
+    - id: vrmpet3d-dev
+      name: dsh-plugin-vrmpet3d-dev

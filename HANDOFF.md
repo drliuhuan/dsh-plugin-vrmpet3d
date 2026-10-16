@@ -1,4 +1,4 @@
-# HANDOFF.md — resuming work on dsh-plugin-vrmpet3d
+# HANDOFF.md — resuming work on dsh-plugin-vrmpet3d-dev
 
 Last updated: 2026-10-12. **This file is STATE, not history.** The pass-by-pass log that used to fill ~6600 lines is
 in git (see §10); what is here is what a session on another machine needs to pick the project up without asking
@@ -19,8 +19,8 @@ and it needs committing with the others.
 
 * **它本来处在三处自相矛盾的状态**：dev 上这个文件**被跟踪**（21,631 B，DeepSeek 的 60 帧 APNG），而
   `scripts/whale-asset.mjs` 的注释说它「git-ignored」，`lib/index.js` 的注释说「NOT committed」，`files[]` 又把它排除
-  —— 于是 main/发布版从来没有它，`/vrmpet3d/whale` 404、两个提示回落静态 SVG。实测：`/vrmpet3d/whale` 与
-  `/vrmpet3d-dev/whale` 都是 404。
+  —— 于是 main/发布版从来没有它，`/vrmpet3d-dev/whale` 404、两个提示回落静态 SVG。实测：`/vrmpet3d-dev/whale` 与
+  `/vrmpet3d-dev-dev/whale` 都是 404。
 * **来源与可行性（都实测过）**：标记不是独立资源，而是内联在 DSH 客户端 bundle 的 CSS 里：
   `<install>/resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-client-ui-chat/lib/client.js`（551.8 KB）里的
   `mask:url(data:image/png;base64,…)`（28,844 个 base64 字符 → 21,631 B、60 帧、28×28，**与仓库里那份逐字节相同**）。
@@ -30,9 +30,9 @@ and it needs committing with the others.
   `scripts/whale-asset.mjs` 都 import 它。`apply()` **最早**就调一次 `resolveWhaleMark(...)`（操作者要的"最早加载插件的时候"），
   逐级回落：
   1. **正在跑的这个 DSH** 自己的 bundle（打包版读 `app.asar`，纯装版读真实文件）；
-  2. `assets/whale-tail.apng`（dev 预置过、或用户自己放了一份；`VRMPET3D_WHALE_FILE` 可改指向）；
-  3. **上一次激活缓存下来的副本**——落在插件自己的状态目录 `<profile>/vrmpet3d-desktop/whale-tail.apng`（= `importRootDir()`，
-     所以套件用 `VRMPET3D_IMPORT_DIR` 就把它关在 scratch 里，gotcha 37）；每次第 1 级成功都会刷新它；
+  2. `assets/whale-tail.apng`（dev 预置过、或用户自己放了一份；`VRMPET3D_DEV_WHALE_FILE` 可改指向）；
+  3. **上一次激活缓存下来的副本**——落在插件自己的状态目录 `<profile>/vrmpet3d-dev-desktop/whale-tail.apng`（= `importRootDir()`，
+     所以套件用 `VRMPET3D_DEV_IMPORT_DIR` 就把它关在 scratch 里，gotcha 37）；每次第 1 级成功都会刷新它；
   4. 都没有 → 404，两个提示回落静态 SVG。
   字节在**内存**里活一次激活（不去 552 KB 每请求一读），每条分支都记一行 `ctx.logger.info`，谁都不抛。
 * **不落进包目录**：npm 安装的包在 `node_modules/` 下，更新/重装就没了，而且往包目录写是不该做的事；状态目录才是插件写自己的地方。
@@ -44,7 +44,7 @@ and it needs committing with the others.
   ——因为运行时那一路已经覆盖了」；这一点变了语义，是因为**缺席不再是一种错误**。
 * **验证（AGENTS.md 的窄验证）**：`verify-model` **812**（+16，新增第 13d 组：marker 解析、rung 1/2/3/4 的顺序、
   成功时刷新缓存副本、以及"DSH 的 bundle 里是静止 PNG 时必须被拒绝并继续回落"），并把它那条 HTTP 断言钉在
-  `VRMPET3D_WHALE_FILE` 上（原来靠"本机恰好有那个文件"，现在由套件自己的 PNG 形状 fixture 决定，两个 `DSH_ASAR`
+  `VRMPET3D_DEV_WHALE_FILE` 上（原来靠"本机恰好有那个文件"，现在由套件自己的 PNG 形状 fixture 决定，两个 `DSH_ASAR`
   拼写按 `check-docs` 的老办法用空字符串清掉）；`check-plugin-load`（激活时多了一次解析，路由表不变）、
   `client-chunks --check`、`live-check`（两条前缀）、`make-dev-package` + `--check`。文档面：README/HANDOFF/ARCHITECTURE
   的计数 2609 → **2625**、verify-model 行 796 → **812**。**没跑**：完整 `check-docs`（会强行打开 `verify-desktop`
@@ -55,62 +55,62 @@ and it needs committing with the others.
 操作者：「本地是 dev 分支，可以在 dev 分支的插件名字后面加上 -dev 吗？让我可以同时在 dsh 中调试正式版插件和 dev 版本。」
 
 * **为什么不是"在源码里改名"**：插件名不只是一个字符串，它贯穿着约 2400 处——每一条路由（DSH 的 webserver 对重复路由**直接抛错**，
-  `duplicate exact route`，所以只改包名的第二份插件连一条路由都注册不上）、服务名与 `ctx.remote.vrmpet3d`、每个 `__VRMPET3D_*`
+  `duplicate exact route`，所以只改包名的第二份插件连一条路由都注册不上）、服务名与 `ctx.remote['vrmpet3d-dev']`、每个 `__VRMPET3D_DEV_*`
   全局与 chunk id、`localStorage` 键、profile 里的设置/引导/导入文件名、Electron 运行时目录与 IPC 通道、CSS 类名。任何一处共用，
   两个实例就会打架。而在源码里整套改名的代价是两个分支身份永久分叉：`main` 有 34 个 dev 没有的提交、dev 有 118 个 main 没有的，
   且 `main` 的发布树是从 dev 生成的（`make-release-pages.mjs`）——之后每次同步都会在提到新名字的每一行冲突，发布变换还得改回来。
 * **做法**：身份平移放进一个**生成物**（与 `client-chunks.mjs` / `vendor-build.mjs` / `make-release-pages.mjs` 同一个套路）。
   `node scripts/make-dev-package.mjs` 按 `package.json` 的 `files[]`（含它的两条排除）生成 `build/dev-package/`：
-  包与 bundle 行 `dsh-plugin-vrmpet3d` → `dsh-plugin-vrmpet3d-dev`、路由/文件名/CSS `vrmpet3d` → `vrmpet3d-dev`、
-  驼峰标识符 `vrmpet3dX` → `vrmpet3dDevX`、`VRMPET3D` → `VRMPET3D_DEV`、类名 `VrmPet3D` → `VrmPet3DDev`。
+  包与 bundle 行 `dsh-plugin-vrmpet3d-dev` → `dsh-plugin-vrmpet3d-dev-dev`、路由/文件名/CSS `vrmpet3d-dev` → `vrmpet3d-dev-dev`、
+  驼峰标识符 `vrmpet3dDevX` → `vrmpet3dDevDevX`、`VRMPET3D_DEV` → `VRMPET3D_DEV_DEV`、类名 `VrmPet3DDev` → `VrmPet3DDevDev`。
   生成物**不进 git**（`.gitignore` 的 `build/dev-package/`），源码树永远只有一个名字。
-* **三处要小心的形状**（都由脚本按名字处理，别改成"顺手统一"）：`dsh-plugin-vrmpet3d` 必须整体替换（否则 `-dev` 会被套两次）；
-  驼峰标识符里的连字符是语法错误（所以是 `vrmpet3dDevDesktop` 而不是 `vrmpet3d-devDesktop`）；`remote.vrmpet3d` 是**属性访问**，
-  平移后的服务名不是合法属性名，脚本把它写成 `remote['vrmpet3d-dev']`（4 处代码 + 2 处注释）。
+* **三处要小心的形状**（都由脚本按名字处理，别改成"顺手统一"）：`dsh-plugin-vrmpet3d-dev` 必须整体替换（否则 `-dev` 会被套两次）；
+  驼峰标识符里的连字符是语法错误（所以是 `vrmpet3dDevDevDesktop` 而不是 `vrmpet3d-dev-devDesktop`）；`remote['vrmpet3d-dev']` 是**属性访问**，
+  平移后的服务名不是合法属性名，脚本把它写成 `remote['vrmpet3d-dev-dev']`（4 处代码 + 2 处注释）。
 * **生成时当场验证**（22 条，`--check` 时 23 条）：副本的各自身份（包名、patch 行、`PLUGIN_ID`、四个 chunk 的注册 id）；
   全部文本文件里**不残留**任何未平移的 token；每个 `.js` 过 `node --check`、每个 `.json` 过 `JSON.parse`；两个随包清单
-  （`vrmpet3d-dev-models.json` / `vrmpet3d-dev-motions.json`）跟着读它们的常量一起改名；最后把副本的宿主半边在 stub ctx 上
-  `apply` 一次，断言它 provide 的是 `vrmpet3d-dev`，且延迟到达的 webServer 收到的 **21 条路由全在 `/vrmpet3d-dev/` 下**
+  （`vrmpet3d-dev-dev-models.json` / `vrmpet3d-dev-dev-motions.json`）跟着读它们的常量一起改名；最后把副本的宿主半边在 stub ctx 上
+  `apply` 一次，断言它 provide 的是 `vrmpet3d-dev-dev`，且延迟到达的 webServer 收到的 **21 条路由全在 `/vrmpet3d-dev-dev/` 下**
   （这条是文本扫描看不见的那半身份：路由是在 `apply` 里拼出来的，没平移不会留下"残留字符串"，只会变成和正式版抢同一条路径）。
-  应用到插件时会写设置文件，所以脚本先把副本的全部存储路径用 `VRMPET3D_DEV_*` 指到 `build/probe-out/` 的临时目录。
+  应用到插件时会写设置文件，所以脚本先把副本的全部存储路径用 `VRMPET3D_DEV_DEV_*` 指到 `build/probe-out/` 的临时目录。
 * **安装与并存**：`node scripts/make-dev-package.mjs` 然后
   `node scripts/install-desktop-plugin.mjs --package build/dev-package`（等价的一条：`npm run install:dev`）。
   `install-desktop-plugin.mjs` 只是多了一个 `--package <dir>`（登记的是**那棵树**的包名、patch 与联接目标），别的没动。
-  两版各自的设置文件（`vrmpet3d-dev-settings.json`、`vrmpet3d-dev-desktop/`、`vrmpet3d-dev-setup.json`）、各自的浮窗运行时目录
-  （`vrmpet3d-dev-desktop-runtime`）、各自的 `localStorage` 键、各自的 CSS 类名——所以两个宠物可以同时开着，各自拖动、
-  各自缩放、各自开设置页与模型选择页；调试用的接口读数是 `/vrmpet3d-dev/...`。
+  两版各自的设置文件（`vrmpet3d-dev-dev-settings.json`、`vrmpet3d-dev-dev-desktop/`、`vrmpet3d-dev-dev-setup.json`）、各自的浮窗运行时目录
+  （`vrmpet3d-dev-dev-desktop-runtime`）、各自的 `localStorage` 键、各自的 CSS 类名——所以两个宠物可以同时开着，各自拖动、
+  各自缩放、各自开设置页与模型选择页；调试用的接口读数是 `/vrmpet3d-dev-dev/...`。
 * **实测：不用重启就已经组合进来了**（2026-10-16，操作者这台机器）。写进 profile 后约几秒，运行中的这个 build 自己把新 bundle 组进了树：
-  `GET /vrmpet3d-dev/catalog` 与 `/vrmpet3d-dev/state` 都答 200，`state.seq` 在往前走、`why.physics.frames` 有值——也就是**副本的客户端
-  半边也被 DSH 的模块系统投递并跑起来了**（会往 `/vrmpet3d-dev/state` 上报的，只可能是知道这个前缀的那份代码），并且 profile 里同时出现了
-  它自己的 `vrmpet3d-dev-desktop/` 与 `vrmpet3d-dev-setup.json`（与正式版的两个文件并列，互不覆盖）。`install-desktop-plugin.mjs` 末尾那句
+  `GET /vrmpet3d-dev-dev/catalog` 与 `/vrmpet3d-dev-dev/state` 都答 200，`state.seq` 在往前走、`why.physics.frames` 有值——也就是**副本的客户端
+  半边也被 DSH 的模块系统投递并跑起来了**（会往 `/vrmpet3d-dev-dev/state` 上报的，只可能是知道这个前缀的那份代码），并且 profile 里同时出现了
+  它自己的 `vrmpet3d-dev-dev-desktop/` 与 `vrmpet3d-dev-dev-setup.json`（与正式版的两个文件并列，互不覆盖）。`install-desktop-plugin.mjs` 末尾那句
   "restart DSH" 仍然保留（那是文档里的稳妥说法），但组合进来之后要问"这一版是不是当前代码"，用的是两条各自带前缀的工具：
   `node scripts/live-check.mjs --dev`（10/10 全绿）与 `node scripts/check-profile.mjs --dev`（profile 侧 6 条，断言联接指向
   `build/dev-package` 而不是本仓库）。
 * **第一次组合会看到什么**：副本是全新 profile（`completed=false`），所以它的**内置桌宠**起来之后会按首启逻辑请宿主开一次引导窗口
-  （`/vrmpet3d-dev/setup`，即那个 `window-config` 进程），同时它的位置、大小、模型都是默认值——它和正式版各自一个浮窗、各自的右键菜单。
-  想让它安静下来：在引导窗口里走完或直接关掉（`completed` 会落进 `vrmpet3d-dev-setup.json`），浮窗用自己右键菜单里的那几项。
+  （`/vrmpet3d-dev-dev/setup`，即那个 `window-config` 进程），同时它的位置、大小、模型都是默认值——它和正式版各自一个浮窗、各自的右键菜单。
+  想让它安静下来：在引导窗口里走完或直接关掉（`completed` 会落进 `vrmpet3d-dev-dev-setup.json`），浮窗用自己右键菜单里的那几项。
 * **日常成本**：改过 `lib/` 或 `desktop/` 之后重跑一次生成（约 1 s），`node scripts/make-dev-package.mjs --check` 是廉价的漂移断言
   （约 1.4 s，只重建到 `build/.dev-package-check` 再逐文件比哈希），与 `client-chunks.mjs --check` 同级——**副本陈旧不会自己报错**，
   它只会是一个跑着昨天代码的 dev 宠物，所以这条要跟着一起跑。
 * **故意不动的两样**：pre-rename 的 `pet3d-settings.json` / `pet3d-model-dirs.json` / `PET3D_*` 不跟着平移——它们是 2026-10-12
   改名那次**迁移要读的旧名**，不是这个插件的身份，跟着平移只会让副本的迁移永远不触发（本机已经没有这些文件，两种做法都一样）。
   `assets/whale-tail.apng` 与 `assets/screenshots` 不进副本，与真实安装的 `files[]` 一致（前者见 `docs/ASSET-CONTRACT.md` §1），
-  所以副本的 `/vrmpet3d-dev/whale` 会 404、两个提示回落到静态 SVG——这正是正式版安装的行为。
-* **本机装的是哪一份**：profile 的 `node_modules/dsh-plugin-vrmpet3d` 是 npm 上的 `^0.1.0` **真实目录**（不是联接），dev 孪生是以
+  所以副本的 `/vrmpet3d-dev-dev/whale` 会 404、两个提示回落到静态 SVG——这正是正式版安装的行为。
+* **本机装的是哪一份**：profile 的 `node_modules/dsh-plugin-vrmpet3d-dev` 是 npm 上的 `^0.1.0` **真实目录**（不是联接），dev 孪生是以
   `link:` 加进去的第二条 bundle。注意 `check-profile.mjs`（不带 `--dev`）对正式版会一直报 1 FAIL："points at this checkout" ——
   本机装的是 npm 那份、不是本仓库联接，而它给的修复建议（`install-desktop-plugin.mjs` 重装）会把正式版也换成 dev 源码，
   **别照着做**，除非那正是你要的（那就是"两份都是 dev"，只剩前缀不同）。
 * **想把孪生摘干净**（`purge-plugin-records.mjs` 只认正式版那条，别指望它）：①从 profile 的 `package.json` 里删掉
-  `dependencies["dsh-plugin-vrmpet3d-dev"]` 与 `dsh.profile.bundles` 里的同名项（先备份一份，运行中的应用会按内存里的树回写这个文件）；
-  ②删 `node_modules/dsh-plugin-vrmpet3d-dev` 联接；③删 `vrmpet3d-dev-desktop/`（设置）与 `vrmpet3d-dev-setup.json`（首启记录）；
-  ④删它自己的浮窗运行时目录 `vrmpet3d-dev-desktop-runtime`（在 DSH 安装目录旁边，约 300 MB，删掉下次启用浮窗会重建）；
+  `dependencies["dsh-plugin-vrmpet3d-dev-dev"]` 与 `dsh.profile.bundles` 里的同名项（先备份一份，运行中的应用会按内存里的树回写这个文件）；
+  ②删 `node_modules/dsh-plugin-vrmpet3d-dev-dev` 联接；③删 `vrmpet3d-dev-dev-desktop/`（设置）与 `vrmpet3d-dev-dev-setup.json`（首启记录）；
+  ④删它自己的浮窗运行时目录 `vrmpet3d-dev-dev-desktop-runtime`（在 DSH 安装目录旁边，约 300 MB，删掉下次启用浮窗会重建）；
   ⑤`pnpm-lock.yaml` 里若有它的 importer 行，一起删（残留会让 pnpm 把它装回来）。重启后 `check-profile --dev` 应当报"未组合"。
   装进来这件事本身不动 lock：profile 的 `pnpm-lock.yaml` 现在还没有这条 `link:` 依赖，下一次插件管理器用 pnpm 装/卸东西时它会被补上
   （`--frozen-lockfile` 只在管理器回滚那条路径上使用）。
 * **验证（AGENTS.md 的窄验证，不是全量）**：`make-dev-package` 22 条 + `--check` 23 条全绿（生成、逆平移残留扫描、24 个 `.js` 过
-  `node --check`、宿主半边在 stub 上激活且 21 条路由全在 `/vrmpet3d-dev/` 下）；`install-desktop-plugin --package` 的 `--dry-run`
-  与真实安装；`client-chunks --check` 3/3；`check-profile --dev --no-http` 6/6；`live-check`（`/vrmpet3d` 10/10）、
-  `live-check --dev`（`/vrmpet3d-dev` 10/10，组合进来之后实测）；文档面：`check-docs` 的**第 1、2 组**（文档引用的路径与命令）
+  `node --check`、宿主半边在 stub 上激活且 21 条路由全在 `/vrmpet3d-dev-dev/` 下）；`install-desktop-plugin --package` 的 `--dry-run`
+  与真实安装；`client-chunks --check` 3/3；`check-profile --dev --no-http` 6/6；`live-check`（`/vrmpet3d-dev` 10/10）、
+  `live-check --dev`（`/vrmpet3d-dev-dev` 10/10，组合进来之后实测）；文档面：`check-docs` 的**第 1、2 组**（文档引用的路径与命令）
   单独跑了一遍，188 条 0 FAIL。**没跑**：完整的 `check-docs`（它会把 `verify-desktop` 的实时半场强行打开——真实置顶窗口——
   按上一次的做法把时机留给操作者）、`verify-all`、以及任何代码套件（这次没动 `lib/`、`desktop/`、`build/probe/`）。
 * **顺带记录/修掉的两处陈旧读数**：(1) `check-plugin-load.mjs` 有 2 条断言还在期待双语化之前的 `desktop/preload.js`
@@ -137,7 +137,7 @@ and it needs committing with the others.
   （`auto` 也算），不是解析结果。
 * **状态提示默认值按语言**：`DEFAULT_STATUS_TEXT` 现在是 state → `{zh, en}`，`statusFor / statusLineFor / statusEntryFor` 多了可选的
   language 参数（不传＝中文，既有断言原义不变）。英文界面里 `{duration}` 写 `1m 1s` 而不是 `1分1秒`。**用户自己敲的那句永不翻译**。
-* **宿主与启动器**：`/vrmpet3d/say` 的 12 条中文拒绝语双语化（语言本来就在请求里，没有新增管线），连拒绝语里的 `思考/正文/分片`
+* **宿主与启动器**：`/vrmpet3d-dev/say` 的 12 条中文拒绝语双语化（语言本来就在请求里，没有新增管线），连拒绝语里的 `思考/正文/分片`
   诊断标签也按语言写；启动器的原生对话框标题与过滤器双语化，页面没传语言时用 `app.getLocale()`。
 * **刻意没做**：启动器对话框还没拿页面自己的 `preferences.language`（`desktop/preload.js` 的 `pickModelFile()` / `pickMotionDir()`
   不带参数，接上要动第三个文件）——只有「显式选中文 + 英文系统」这类组合看得出来。
@@ -209,8 +209,8 @@ and it needs committing with the others.
 
 **第一轮就要取的读数**（停电后重启即可拿）：
 
-* `GET /vrmpet3d/desktop` → `page.state.drawn`、`page.motion.playing` / `clamping` / `face`、`page.frames`（帧计数是否在涨）；
-* `GET /vrmpet3d/state` → `state` 与 `why`（`running` / `pending` / `available`）。
+* `GET /vrmpet3d-dev/desktop` → `page.state.drawn`、`page.motion.playing` / `clamping` / `face`、`page.frames`（帧计数是否在涨）；
+* `GET /vrmpet3d-dev/state` → `state` 与 `why`（`running` / `pending` / `available`）。
 
 要回答的问题是：**工作开始与结束的前后，`page.state.drawn` 有没有离开 `dancing`**，以及应用侧的 `machine.dancing` 是否被清掉。
 
@@ -243,14 +243,14 @@ documented total's 268 comes from rather than from adding a remembered live coun
 
 **An import COPIES, and a first-run guide ships with it.** A model is imported as a FILE and a motion pack as a
 FOLDER; the host copies the bytes into the profile's own state directory
-(`<profile>/vrmpet3d-desktop/models|motions`) and both catalogues read them from there, so the folder they came from
+(`<profile>/vrmpet3d-dev-desktop/models|motions`) and both catalogues read them from there, so the folder they came from
 may move, be renamed or vanish. The panels still LIST a directory an older build imported, and still remove it, but
 no new one can be added — a recorded path was a live dependency on somebody else's folder, which is the defect the
-file import replaced. The guide itself (`/vrmpet3d/setup`, `lib/setup-page.*`) is 欢迎 / 偏好模型 / 桌宠界面 /
+file import replaced. The guide itself (`/vrmpet3d-dev/setup`, `lib/setup-page.*`) is 欢迎 / 偏好模型 / 桌宠界面 /
 AI 碎碎念 / 完成 — 模型动作 is HIDDEN and 桌宠界面 is skipped where no independent pet can exist (dsh web), which is
 why the stepper's entries carry no numbers (operator, 2026-10-13: 「不要在框架上部的…中不要写数字和序号」). The
 in-app pet offers the guide once per plugin ACTIVATION until 完成 writes `completed` in
-`<profile>/vrmpet3d-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
+`<profile>/vrmpet3d-dev-setup.json`, while `prompted` is the host's memory — so a page reload is quiet and a restart
 asks again, exactly as the operator specified.
 
 **The shipped DEFAULTS are his, as of 2026-10-13** (「修改几处默认配置」, and then 「以当前通用设置中的参数为默认，作为初始
@@ -277,15 +277,15 @@ would break the AI 碎碎念 half for the other DSH install shape (account vs AP
 **⚠️ MOTION IDS DO NOT TRAVEL, and the snapshot proved it the hard way.** `motions` and `motionClips` are keyed by
 per-profile ids (`a8`, `a9`, …) minted as `a` + base36 of the clip's index in the discovery order — so ADDING a file
 renumbers everything after it. `dance/Dancing.vrma` landed at index 4, and from that day every id from the old `a4` up
-in the repo's `initial-config/vrmpet3d-settings.json` pointed one file EARLIER: applying that snapshot to this machine
+in the repo's `initial-config/vrmpet3d-dev-settings.json` pointed one file EARLIER: applying that snapshot to this machine
 mapped 出错 and 落地 to `dance/极乐净土.vrma.br`, 离线 to `idle/touch hair2.vrma`, and 完成 to `offline/sleeping.vrma`
 plus two of the three jumps. The name-keyed source of truth is the pack manifest —
-`assets/motions/vrmpet3d-motions.json` `defaults`/`clips`, which was translated correctly and IS what a profile with an
+`assets/motions/vrmpet3d-dev-motions.json` `defaults`/`clips`, which was translated correctly and IS what a profile with an
 empty map falls back to (`motionMapWithDefaults`: a state the stored map does not MENTION takes the declared names). The
 snapshot's two maps are therefore EMPTY again as of 2026-10-14, and any future `capture-config` will keep them that way:
 a stored mapping that pins ids is a trap that re-arms on the next clip added, while the manifest absorbs it.
 **状态与动作 ships his mapping too**: the
-`defaults` block of [assets/motions/vrmpet3d-motions.json](assets/motions/vrmpet3d-motions.json) is his per-state clip
+`defaults` block of [assets/motions/vrmpet3d-dev-motions.json](assets/motions/vrmpet3d-dev-motions.json) is his per-state clip
 list, translated from profile ids to FILE NAMES (resting 14, waiting 3, done 3, error 2, offline 1), and the `clips`
 block carries his 循环/单次 per clip. The per-state 间隔 does not need a block of its own: `DEFAULTS.motionEvery` is his
 `resting {min:20,max:60}`, and only a profile that has STORED an interval (an empty map included, which is how "off" is
@@ -295,7 +295,7 @@ stored) keeps its own.
 动作里面的内容，包括每个动作的表情状态，全部作为默认模板上传」). The manifest gained a `template` block —
 `{ [state]: { '<relative name>': { loop?, expression?, mouth?, gaze? } } }`, written by name for the same reason
 `defaults` is — and the host resolves it against the live catalog (`core.motionClipTemplate`) and serves it as
-`motionClipDefaults` on `/vrmpet3d/motions`, beside `motionDefaults`. Both surfaces hand it to their scene
+`motionClipDefaults` on `/vrmpet3d-dev/motions`, beside `motionDefaults`. Both surfaces hand it to their scene
 (`setMotionClipDefaults`), and every per-clip reader resolves through `core.motionClipFor(…, template)`, which merges
 the profile's own entry FIELD BY FIELD over the template's: a profile that decided the play mode for a clip still
 inherits the template's face, and one that picked a face keeps the template's 凝视.
@@ -529,9 +529,9 @@ including about the fields that decide which report counts. Readings after the f
 在idle和working状态来回跳转的问题」). The instance label added for exactly this caught it in the live log: two `inst` values
 alternating on ONE route (`4q0uof`, then `w5jgw6`) — a leftover widget from an earlier activation still publishing its own
 world. `detachedFromDocument` (the previous half) could not fire for it, because its pet element IS still in the document.
-So the document now says who is newest: every widget bumps `globalThis.__VRMPET3D_PET_SEQ__` WHEN IT IS BUILT (not when the
-module is evaluated — that version took the pet down completely, `/vrmpet3d/state` answering `seq: 0`), stamps its pet
-element with `data-vrmpet3d-seq`, and `supersededByNewerPet` disposes any widget that sees a higher stamp in the document.
+So the document now says who is newest: every widget bumps `globalThis.__VRMPET3D_DEV_PET_SEQ__` WHEN IT IS BUILT (not when the
+module is evaluated — that version took the pet down completely, `/vrmpet3d-dev/state` answering `seq: 0`), stamps its pet
+element with `data-vrmpet3d-dev-seq`, and `supersededByNewerPet` disposes any widget that sees a higher stamp in the document.
 Probe readout: `newerPet: {"before":false,"afterNewer":true,"afterOlder":false}`. One trap paid for on the way: the first
 attempt reached for `isFiniteNumber`, a helper local to another closure, which threw `isFiniteNumber is not defined` on every
 frame (31 probe checks red at once) — `isFinite` is the self-contained spelling.
@@ -543,7 +543,7 @@ numbers settled it in one read: `{"width":110,"scroll":109,"pet":220,"petDrawn":
 cap IS the shared 220 px, and `width ≈ scroll` says the plate had simply shrink-wrapped a short line. What was really behind
 「只有一半」 was the OTHER surface: the floating window's page is loaded when the LAUNCHER starts, so it was still running the
 pre-`60c5285` code with its own pet box (≈254) as the cap — and a 12-character line fits 254 but not 220, one line versus
-two. `disable` → `enable` on `/vrmpet3d/desktop` (the plugin's own route) reloads that page, and both surfaces then wrap at
+two. `disable` → `enable` on `/vrmpet3d-dev/desktop` (the plugin's own route) reloads that page, and both surfaces then wrap at
 the same 220 px. Lesson for the next round: a page-side change needs BOTH surfaces reloaded, and the desktop route's `page`
 block is a stale snapshot on this machine — it cannot be used to verify a window reflow.
 
@@ -575,7 +575,7 @@ turn starting, and the real falling edge).
 BUNDLED model, and the block is a snapshot of ALL TWENTY-TWO of its chains as they RESOLVE (呆毛 0.4/0.2/0.05, the hair
 0.05/0.2/0.2, 耳朵 1/0.2/0.05, the skirt chains 1–1.5/0.2/0.2, 尾巴 0.5/0.5/0.05). Those numbers cannot travel in a
 profile: `preferences.springs` is keyed by the machine's model ID (`m1`), which is positional. So they live in
-`assets/models/vrmpet3d-models.json` as
+`assets/models/vrmpet3d-dev-models.json` as
 `{ springs: { "BlueFatFish.vrm": { "DaiMao": { stiffness, dragForce, gravityPower } } } }` — file name and CHAIN KEY, both
 of which are the model file's own words — and `Scene.applySprings` resolves THREE layers, most specific first: the user's
 own slider, the pack's suggestion (`Scene.setSpringDefaults`), then the model file's authored value. The host does the
@@ -710,7 +710,7 @@ never back-to-back and never sooner than `minGapSeconds`. That window has its ow
 **A HELPER's completion is not the user's completion** (operator, 2026-10-14: 「子代理、子任务完成后不应该汇报完成的状态，
 必须总任务完成了才汇报完成状态」). Measured live before it was fixed, which is why it is written down as a rule rather than a
 hunch: three probe subagents were spawned into a long-lived session and, while the main session kept working,
-`/vrmpet3d/state` reported **`state=working unread=2`** — DSH marks a finished SUBAGENT session `completionUnread` exactly
+`/vrmpet3d-dev/state` reported **`state=working unread=2`** — DSH marks a finished SUBAGENT session `completionUnread` exactly
 like a user session's (that flag is what the green dot is drawn from, bullet above), and the pet counted every in-scope
 session's flag. Two holes, one rule. The dot (`snapshot().unreadCount`) counted helpers; and `observeStoreEdge` — the
 store's falling edge, the ONLY completion path when the RPC boundary stream is not wired — asked `subagent(id)`, which
@@ -741,7 +741,7 @@ everything the app pet does on a CLOCK lived inside that one loop: the 工作中
 window that promotes a finished turn to 任务达成, the hold that clears a line, the 用时 clock, and the state report the
 floating window reads. So a throttled window froze on its last state with one line on screen — while
 `createStateReporter`'s heartbeat (a timer, not a frame) kept re-sending that same stale state, which is why 深度求索中
-looked alive rather than stale. The frame loop is now SPLIT: `VrmPet3DWidget.prototype.pump()` is the half that must never
+looked alive rather than stale. The frame loop is now SPLIT: `VrmPet3DDevWidget.prototype.pump()` is the half that must never
 be throttled (focus poll → `resolve` → speech → the state report → the two texts), `tick()` calls it where that code used
 to sit, and `startBackgroundPump()` drives it from three sources — a 1 s interval that does NOTHING while a frame ran less
 than `PUMP_GRACE_MS` (1500 ms) ago, so an ordinary 60 fps window is bit-for-bit what it was, plus `focus`/`blur` and
@@ -772,7 +772,7 @@ once and is then ACKNOWLEDGED (he is present and focused, 4.2 s later) rather th
 the debt by design, so the lever for that case is the window itself (8 s / 16 s, his call) or option A from the same
 question (hold a shown notice until he looks). Say the word and it is a one-line change.
 
-**The state route now carries WHY** (`/vrmpet3d/state`'s `why` block, added to answer exactly that report): the machine's
+**The state route now carries WHY** (`/vrmpet3d-dev/state`'s `why` block, added to answer exactly that report): the machine's
 INPUTS rather than its answer — `running`/`working`/`waiting`/`unread`, `runningIds` (WHICH sessions were counted, the
 difference between a stale status entry and a real turn), the notice on screen, the one still settling, the interaction, the
 turn clock and whether this surface believes DSH has the user's attention. Sanitised twice — the client caps every string,
@@ -790,7 +790,7 @@ session identity to compare (`expired`). `PetMachine.noteDismissal` records `kin
 next occurrence is a fact rather than an argument. **A page still running the OLD client sends no `why` at all, and that is
 visible from outside too**: the route answers `"why": null`.
 
-**Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
+**Per-clip 碎碎念 and its AI 提示词 live on that SAME entry** (operator, 2026-10-13: 「允许给每个动作单独定义碎碎念，和AI碎碎念提示词（如果当前是AI碎碎念的话）」). `preferences.motionClips[state][motionId]` gained `speech` — the line THAT clip says while it plays HERE — and `prompt`, an extra instruction for the AI one, validated by the same rule as every other line the pet says (trimmed, one line, capped at `SPEECH_LIMITS.lineLength` and `MOTION_LIMITS.promptLength` = 200) and DROPPED when empty, so an emptied box means "no per-clip text" and never "a per-clip text that is empty". They ride on the map that already answers "what does this clip mean in this state" rather than a map of their own, because the question is the same one the expression and the 凝视 switch answer: a clip can be the happy one in 任务达成 and an ordinary loop in 静息态. **The clip that is PLAYING decides**, read as the pair `{id, state}` off `scene.playback`/`scene.pickState` — the same pair `Scene.currentFace` reads — and handed to `SpeechMachine.observe` as its optional `motion` argument, because the core is a pure machine with no scene to ask. A clip's `speech` is a ONE-LINE POOL in front of the state's box, so it WINS through the rule `pickSpeechLine` already had and a clip with nothing written falls through to exactly today's behaviour; a clip's `prompt` is APPENDED host-side to whatever instruction `/vrmpet3d-dev/say` resolved (the state's box, the shipped starter, or a part's own), because a note about HOW to say the line must not replace the subject the line is about. Two consequences worth knowing: a per-clip line written for a 静息态 clip is heard on the IDLE cadence (20–60 s), since 静息态's remark IS the idle event; and with no clip playing — the procedural idle — nothing about the feature is visible at all. The panel grows a 碎碎念 box and an AI 提示词 box on every ticked clip's row, the second shown only while 台词来源 is AI 生成 through the SAME `speechSourceIsAi()` decision that hides the AI block (`speech.aiVisible`), and `motions.clipSpeechRows` / `clipPromptRows` / `clipPromptVisible` / `clipTexts` publish both the counts and the pair-keyed texts so a probe can see them.
 
 **Per-clip 表情/口型 gained 「默认」** (operator, 2026-10-13: 「表情和口型中增加"默认"选项，即没有任何表情或者口型，以模型的初始状态覆盖
 动作中的表情或者口型」). The dropdowns had two answers — an empty string ("follow": the emotion table for the expression, the
@@ -849,7 +849,7 @@ suppresses blinking (`clipDrivesFace`). The probe's `oneShotRules` check drives 
 release's initial configuration goes into git, finished or not (「每一步都要上传到github，包括我还没有构造好的初始配置
 文件，即当前配置」). `node scripts/capture-config.mjs` copies the live profile's plugin config into that folder, `--check`
 compares without writing, and `--catalog` adds the id → file-name map a release needs. The folder is deliberately
-OUTSIDE `files[]`, so his machine's absolute paths never reach a user; `vrmpet3d-setup.json` is refused on purpose,
+OUTSIDE `files[]`, so his machine's absolute paths never reach a user; `vrmpet3d-dev-setup.json` is refused on purpose,
 because shipping the guide's `completed` flag would make every new user skip the guide. What SHIPS is the pack
 manifest's `defaults`, keyed by FILE NAME — the settings store's ids are minted per profile — and the two
 release-time jobs (that translation, and reverting his local-only values) are written out in
@@ -863,7 +863,7 @@ in two places and they are fed by ONE host half:
 * **the in-app pet** — mounted into DSH's `shell.overlay` slot by [lib/client.js](lib/client.js);
 * **the floating window** — an always-on-top, click-through Electron window the launcher
   ([desktop/main.js](desktop/main.js)) starts, whose page is [lib/desktop-page.js](lib/desktop-page.js);
-* **the host half** ([lib/index.js](lib/index.js)) serves both over `/vrmpet3d/*` routes, owns the settings store
+* **the host half** ([lib/index.js](lib/index.js)) serves both over `/vrmpet3d-dev/*` routes, owns the settings store
   ([lib/settings.js](lib/settings.js)) and watches turn boundaries.
 
 **VRM only** since 2026-10-12. A `.pmx`/`.pmd` model and a `.vmd` motion are refused BY NAME — the magic numbers are
@@ -872,7 +872,7 @@ still sniffed so the refusal can say which format it found — and the retired M
 extensions.
 
 The project was renamed from `dsh-plugin-pet3d` in the same pass, so the package id, every route (`/pet3d/*` →
-`/vrmpet3d/*`), every browser global (`__PET3D_*` → `__VRMPET3D_*`), the renderer file (pet3d.js →
+`/vrmpet3d-dev/*`), every browser global (`__PET3D_*` → `__VRMPET3D_DEV_*`), the renderer file (pet3d.js →
 [lib/scene.js](lib/scene.js)) and the docs all moved. **A running install therefore needs §2.**
 
 ## 2. THE INSTALL: DONE ON THIS MACHINE, and one click short of complete
@@ -882,12 +882,12 @@ that cleaned this file). What the profile says now:
 
 | Thing | State right now |
 |---|---|
-| `dependencies["dsh-plugin-vrmpet3d"]` | `link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d` (the folder keeps its old name on purpose) |
-| `dsh.profile.bundles` | `… , dsh-plugin-vrmpet3d` — the OLD package name is gone from both places |
-| `node_modules\dsh-plugin-vrmpet3d` | a junction to this checkout |
+| `dependencies["dsh-plugin-vrmpet3d-dev"]` | `link:F:/SynologyDrive/FatFish-pet/dsh-plugin-pet3d` (the folder keeps its old name on purpose) |
+| `dsh.profile.bundles` | `… , dsh-plugin-vrmpet3d-dev` — the OLD package name is gone from both places |
+| `node_modules\dsh-plugin-vrmpet3d-dev` | a junction to this checkout |
 | `dsh-plugin-fatfish-pet` | dependency + junction still present, **already absent from `bundles`** — left exactly as it was. It registers the SAME `shell.overlay` slot, so the two must never both be enabled |
-| imported model directory | `F:\SynologyDrive\FatFish-pet\Models` → 4 models in the picker (bundled SampleModel + HatsuneMikuNT + a user SampleModel + 蓝色小肥鱼), persisted in `vrmpet3d-model-dirs.json` |
-| state directory | `…\profiles\desktop\vrmpet3d-desktop\` — `vrmpet3d-settings.json` (fresh profile: this profile had no pre-rename settings, so nothing was migrated) and `runtime\` (the Electron borrowed by HARD LINKS, `copied: false`) |
+| imported model directory | `F:\SynologyDrive\FatFish-pet\Models` → 4 models in the picker (bundled SampleModel + HatsuneMikuNT + a user SampleModel + 蓝色小肥鱼), persisted in `vrmpet3d-dev-model-dirs.json` |
+| state directory | `…\profiles\desktop\vrmpet3d-dev-desktop\` — `vrmpet3d-dev-settings.json` (fresh profile: this profile had no pre-rename settings, so nothing was migrated) and `runtime\` (the Electron borrowed by HARD LINKS, `copied: false`) |
 
 **What is already live, without a restart** — DSH's profile watcher composed the new bundle the moment the manifest
 changed:
@@ -895,20 +895,20 @@ changed:
 ```
 check-plugin-load.mjs --profile …   → plugin load preflight: PASSED
 check-profile.mjs     --profile …   → profile wiring: PASSED (9 checks)
-/vrmpet3d/{catalog,motions,state,settings,desktop}  → 200
+/vrmpet3d-dev/{catalog,motions,state,settings,desktop}  → 200
 /pet3d/{catalog,state}                              → 404  (no old half left running)
-/vrmpet3d/desktop → state: running, pid 44588, webgl2: true, ANGLE (NVIDIA RTX 5070 Ti), motion.kind: vrm
+/vrmpet3d-dev/desktop → state: running, pid 44588, webgl2: true, ANGLE (NVIDIA RTX 5070 Ti), motion.kind: vrm
 ```
 
 **THE ONE STEP LEFT: reload the DSH page (Ctrl+R).** The in-app pet's client half is fetched by the shell when the
-page boots, and the bundle appeared after this page was already loaded — `/vrmpet3d/state` still answers
+page boots, and the bundle appeared after this page was already loaded — `/vrmpet3d-dev/state` still answers
 `{"seq":0,"state":null}` because nothing in the page has mounted. The floating window does not need it (it is its own
 page, and it is already up). Then the first live pass in §3.
 
-**Backups and rollback** (all in the profile): `package.json.bak-before-vrmpet3d-2026-10-10T23-41-21` (hand-made,
+**Backups and rollback** (all in the profile): `package.json.bak-before-vrmpet3d-dev-2026-10-10T23-41-21` (hand-made,
 before the install), `package.json.bak-2026-10-10T15-41-21-215Z` (written by the installer) and
 `package.json.bak-bundles-2026-10-10T15-41-37-675Z` (a no-op edit that removed nothing). Roll back by copying the
-first over `package.json` and deleting `node_modules\dsh-plugin-vrmpet3d`, or by removing the bundle through the
+first over `package.json` and deleting `node_modules\dsh-plugin-vrmpet3d-dev`, or by removing the bundle through the
 plugin manager.
 
 ### If this has to be done on ANOTHER machine (or after the old package returns)
@@ -936,10 +936,10 @@ node scripts/check-plugin-load.mjs --profile $profile
 ```
 
 **Nothing is reset by the rename.** Every renamed key has a READ fallback, and the new name is written from the next
-edit on: `pet3d-settings.json` → `vrmpet3d-settings.json`; `pet3d-model-dirs.json` and `pet3d-motion-dirs.json` →
-the same with `vrmpet3d`; a motion directory's `pet3d-motions.json` → `vrmpet3d-motions.json`; the browser key
-`dsh.pet3d.v1` → `dsh.vrmpet3d.v1` ([lib/core.js](lib/core.js)'s `storedPreferences`); and `PET3D_*` environment
-variables → `VRMPET3D_*` ([lib/env.js](lib/env.js) reads both). The old files are left alone — they are the user's
+edit on: `pet3d-settings.json` → `vrmpet3d-dev-settings.json`; `pet3d-model-dirs.json` and `pet3d-motion-dirs.json` →
+the same with `vrmpet3d-dev`; a motion directory's `pet3d-motions.json` → `vrmpet3d-dev-motions.json`; the browser key
+`dsh.pet3d.v1` → `dsh.vrmpet3d-dev.v1` ([lib/core.js](lib/core.js)'s `storedPreferences`); and `PET3D_*` environment
+variables → `VRMPET3D_DEV_*` ([lib/env.js](lib/env.js) reads both). The old files are left alone — they are the user's
 data, not this plugin's.
 
 **The working DIRECTORY is still `…\dsh-plugin-pet3d`.** Renaming it would break the profile's `link:` path, so that
@@ -953,7 +953,7 @@ greeting feature, then another batch of VRMA.
 1. **FINISH TODAY'S INSTALL AND RUN THE FIRST LIVE PASS.** One click of it is the operator's (§2: reload the DSH
    page so the in-app pet's client half mounts); then, once and for all, exercise against the RUNNING app what the
    last four passes only asserted statically: the in-app pet appearing beside the floating window's (调试模式 puts
-   both on screen), the two settings pages over `/vrmpet3d/config` and `/vrmpet3d/global`, model switching between
+   both on screen), the two settings pages over `/vrmpet3d-dev/config` and `/vrmpet3d-dev/global`, model switching between
    the four imported models, a motion assigned to a state, a press on a 部位 (the shipped 胸部/屁股 lines under
    内置短语, and under AI the model answering instead), the status line against a real turn, and the AI 碎碎念 in
    each of the three 台词来源 modes. **Nothing in the last four passes has been seen live yet** (§9), so this is the
@@ -966,7 +966,7 @@ greeting feature, then another batch of VRMA.
      out of the window's published state. A field the page publishes but the launcher does not relay looks exactly
      like a page that never published it. This class of bug has happened twice (`status.scale`, and the motion
      readout's `offered`/`routed`).
-   * **the staleness path** — `/vrmpet3d/state` answers `state: null` once the in-app half's report ages out; a label
+   * **the staleness path** — `/vrmpet3d-dev/state` answers `state: null` once the in-app half's report ages out; a label
      that outlives its report is a defect that was measured before.
    * **the clock and the duration rules** — the turn clock comes from DSH's own running flag rather than from a
      boundary frame, 等待确认's 持续时间 field is refused, and `done`/`error` use the notice hold.
@@ -978,7 +978,7 @@ greeting feature, then another batch of VRMA.
    「碎碎念再给LLM传数据的时候带上时间，增加问候功能：早中午问候，关心主人吃饭了没有，睡觉了没有，说主人辛苦了。」
 
    **The time on the wire is the easy half.** The request is built in ONE place — `speechPromptFor` and the
-   `/vrmpet3d/say` handler in [lib/index.js](lib/index.js) — and both surfaces call that route
+   `/vrmpet3d-dev/say` handler in [lib/index.js](lib/index.js) — and both surfaces call that route
    ([lib/client.js](lib/client.js)'s AI path and [lib/desktop-page.js](lib/desktop-page.js)'s `askPartLine`). So the
    host prepends a line to the INSTRUCTION (the user turn) from its own clock, e.g. 「现在是 2026-10-12 23:41，深夜」:
    enough for 「早/中/晚」 and for 「该睡觉了」, and nothing drawn from the session. Two assertions already pin that
@@ -1042,7 +1042,7 @@ greeting feature, then another batch of VRMA.
    is a **`vrma`** to every reader (the format sets stay disjoint, nothing is sniffed) and the catalogue adds
    `compressed: true` with the FILE's size; if `x.vrma` and `x.vrma.br` sit in one folder, the archive REPLACES the
    plain file so one animation is never offered twice. The **host** unpacks in `createMotionHandler`
-   ([lib/index.js](lib/index.js)) with [lib/brotli.js](lib/brotli.js), so `/vrmpet3d/motion?m=` always answers with
+   ([lib/index.js](lib/index.js)) with [lib/brotli.js](lib/brotli.js), so `/vrmpet3d-dev/motion?m=` always answers with
    plain VRMA bytes, `model/gltf-binary` and the UNPACKED length, and the renderer keeps its one load path. One
    unpacked clip is kept per handler (bounded, so the pack cannot sit in the host's heap), and a clip that cannot be
    unpacked is a **500 with the reason**, never a truncated 200 that would be reported as malformed clip content. A
@@ -1075,8 +1075,8 @@ greeting feature, then another batch of VRMA.
    "stopping a clip does not fully restore the rest pose", attributed to the `E_*` channels being off the humanoid rig
    that `resetAvatarPose` → `humanoid.resetNormalizedPose()` covers. **That attribution was wrong**, and the way it was
    disproven is worth keeping: the probe failed the same two checks on the repository's OWN all-humanoid test clips
-   (`build/fixtures/vrma/vrmpet3d-wave.vrma`, `-rest.vrma`, `-stretch.vrma`, `-happy-hop.vrma`, `-look-around.vrma`,
-   `-weight-shift.vrma`), **none of which contains an `E_*` track at all**, while `vrmpet3d-test.vrma` — which drives
+   (`build/fixtures/vrma/vrmpet3d-dev-wave.vrma`, `-rest.vrma`, `-stretch.vrma`, `-happy-hop.vrma`, `-look-around.vrma`,
+   `-weight-shift.vrma`), **none of which contains an `E_*` track at all**, while `vrmpet3d-dev-test.vrma` — which drives
    only hips and head and **no upper arm** — passed all 61. The shared property that mattered was *driving an upper
    arm*, not the `E_*` channels.
 
@@ -1104,10 +1104,10 @@ greeting feature, then another batch of VRMA.
 
    **And the wiring — DONE 2026-10-12, and it was new code as predicted.** `assets/motions` is now a BUNDLED
    motion source: `buildMotionCatalog` scans it FIRST with `source: 'bundled'`, exactly as `buildCatalog` scans
-   `assets/models`, so the pack is offered out of the box with nothing imported. `/vrmpet3d/motions` reports
+   `assets/models`, so the pack is offered out of the box with nothing imported. `/vrmpet3d-dev/motions` reports
    `bundledDir` (the parallel of the model catalogue's key) and `motionDefaults`; a user directory naming the
    bundle is not scanned twice, and a user clip sharing a bundled file name is still listed, told apart by
-   `source`. Per-clip 循环/单次 comes from this folder's own `vrmpet3d-motions.json`, which now exists and
+   `source`. Per-clip 循环/单次 comes from this folder's own `vrmpet3d-dev-motions.json`, which now exists and
    declares all three clips as loops.
 
    **What is left for the operator, and only this:** the pack's manifest carries an EMPTY `defaults` block —
@@ -1170,7 +1170,7 @@ Two habits that are not optional:
 
 | Path | What |
 |---|---|
-| [lib/index.js](lib/index.js) | the host half: the `/vrmpet3d/*` routes, the model/motion catalogs, the turn hub |
+| [lib/index.js](lib/index.js) | the host half: the `/vrmpet3d-dev/*` routes, the model/motion catalogs, the turn hub |
 | [lib/core.js](lib/core.js) | the rules, in ONE place for both halves: states, speech, parts, cleaning, physics, framing |
 | [lib/scene.js](lib/scene.js) | the renderer: three.js, the VRM loader, SpringBone, gaze, idle motion, authored clips |
 | [lib/client.js](lib/client.js) | the in-app pet: mount into the overlay, gestures, the status line, the speech bubble |
@@ -1186,12 +1186,12 @@ Two habits that are not optional:
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the design in depth: why the split is where it is, the vendors, the traps |
 | [docs/ASSET-CONTRACT.md](docs/ASSET-CONTRACT.md) | what a model/motion file must be, and the RETIRED MMD chapters |
 | [assets/models/](assets/models/) | the TWO bundled models: `BlueFatFish.vrm` (蓝色小肥鱼Deepseek / 木子恶魔 — the default, redistributed with the author's permission) and `SampleModel.vrm` (ヴィータ / VRoid プロジェクト — the fallback, allowed by its own embedded licence); sources and terms in its README |
-| [assets/motions/](assets/motions/) | the bundled `.vrma` pack, scanned as a bundled motion source; its `vrmpet3d-motions.json` declares each clip's 循环/单次 and the (currently empty) default state mapping |
+| [assets/motions/](assets/motions/) | the bundled `.vrma` pack, scanned as a bundled motion source; its `vrmpet3d-dev-motions.json` declares each clip's 循环/单次 and the (currently empty) default state mapping |
 
 ## 7. Environment facts for THIS machine
 
 * the DSH profile is `%USERPROFILE%\.dsh\profiles\desktop`, and the plugin is INSTALLED into it (§2). The running app
-  is at `http://127.0.0.1:19387`, which is also where the floating window's page is served (`/vrmpet3d/window`) — the
+  is at `http://127.0.0.1:19387`, which is also where the floating window's page is served (`/vrmpet3d-dev/window`) — the
   address `check-profile.mjs` and the live probes use;
 * the operator's own VRMs live in `F:\SynologyDrive\FatFish-pet\Models` and are already imported (four models in the
   picker, §2). No motion directory is imported yet — the clips in `assets/motions/` are committed but not imported,
@@ -1199,11 +1199,11 @@ Two habits that are not optional:
 * **the operator's motion pack lives in `assets/motions/`** (`coolIdleGlance.vrma`, `innocentStandIdle.vrma`,
   `idle.vrma` — the last one still UNTRACKED, plus the folder's README) — it ships with the plugin; see §3 item 4.
 * the installed DSH archive is `F:\DeepSeek\Harness\resources\app.asar`; the chunk-delivery suite finds it by
-  itself, and `VRMPET3D_DSH_ASAR` is only needed for an unusual install path;
+  itself, and `VRMPET3D_DEV_DSH_ASAR` is only needed for an unusual install path;
 * the floating window borrows the Electron runtime from that installation by HARD LINKS into
-  `<plugin-parent>/vrmpet3d-desktop-runtime` (same volume required — a synced folder can force a 244 MB copy, and
+  `<plugin-parent>/vrmpet3d-dev-desktop-runtime` (same volume required — a synced folder can force a 244 MB copy, and
   `verify-desktop.mjs` says so when it does);
-* a Chromium-based browser (Edge or Chrome) is needed by the browser suites; `VRMPET3D_BROWSER` overrides the search;
+* a Chromium-based browser (Edge or Chrome) is needed by the browser suites; `VRMPET3D_DEV_BROWSER` overrides the search;
 * **the tree lives on a Synology-synced folder.** That is why writes intermittently fail with `ReplaceFileW EIO` /
   `ERROR_SHARING_VIOLATION`, and why the browser suites occasionally rewrite a 3.8 MB inline page into a file the
   sync client is holding.
@@ -1224,10 +1224,10 @@ Two habits that are not optional:
 5. **A test may not read or write state it does not own.** The suites point the model list, the motion list and the
    settings file at `build/fixtures/`-style scratch paths before they apply the plugin — otherwise a run rewrites
    the operator's real configuration.
-6. **The settings are TWO PAGES on two routes** (`/vrmpet3d/config` = 模型参数, `/vrmpet3d/global` = 通用设置). One
+6. **The settings are TWO PAGES on two routes** (`/vrmpet3d-dev/config` = 模型参数, `/vrmpet3d-dev/global` = 通用设置). One
    script drives both, so a section that does not exist on the current page returns early rather than throwing — and
    the launcher's self-test NAVIGATES the window between them and merges the two readouts key by key. **A THIRD page
-   of the same kind PICKS the model** (`/vrmpet3d/picker`, added 2026-10-13): its content is the guide's ② 偏好模型
+   of the same kind PICKS the model** (`/vrmpet3d-dev/picker`, added 2026-10-13): its content is the guide's ② 偏好模型
    step, both mount the ONE component `lib/model-picker.js`, and either pet's menu opens it with the `picker` action.
    A switch shows a progress bar and LOCKS the picker until the model has arrived (operator, 2026-10-13:
    「增加一个切换进度条，防止用户快速反复切换导致故障」), and both pets re-read the catalog when the store names a model
@@ -1269,7 +1269,7 @@ Two habits that are not optional:
     `scripts/verify-motion.mjs` now measures with `rotationBetween()`. Two habits follow: when a measurement says a pose
     is wrong, print the **dot product** next to the angle (byte-identical quaternions with `dot ≈ |q|²` are the tell),
     and before believing a defect is in the DATA, reproduce it with a fixture that lacks the suspect property — here
-    `build/fixtures/vrma/vrmpet3d-test.vrma` (no upper-arm track) passed 61/61 the whole time.
+    `build/fixtures/vrma/vrmpet3d-dev-test.vrma` (no upper-arm track) passed 61/61 the whole time.
 14. **A checkbox with no `value` attribute is worth the string `'on'`.** That is not a curiosity: it is how the
     状态与动作 picker stored a clip id the operator saw as 「on（不在动作目录中）」, and how one more junk id per ticked
     clip pushed the last tick out of the per-state list until the last clip 「无法选中」. `onMotionToggle` in
@@ -1290,7 +1290,7 @@ Two habits that are not optional:
     state**. `verify-motion.mjs` is the tool that re-checks a clip; nothing runs it automatically. `idle/idle2.vrma`
     and `idle/idle3.vrma` are byte-identical, so one state lists two names for one animation.
 16. **A manifest key is a PATH RELATIVE TO ITS OWN FOLDER, and a wrong key is silent.** `clips` and `defaults` in
-    `assets/motions/vrmpet3d-motions.json` are keyed by the same relative name the catalogue reports — `idle/x.vrma`,
+    `assets/motions/vrmpet3d-dev-motions.json` are keyed by the same relative name the catalogue reports — `idle/x.vrma`,
     not `x.vrma`. When the pack was reorganised into per-state folders, the three committed keys stopped matching
     anything, and because every clip's `loop` was `true` (the default) nothing LOOKED broken: a `loop: false` there
     would simply have been ignored — the "declared one-shot that loops anyway" defect the flag exists to prevent.

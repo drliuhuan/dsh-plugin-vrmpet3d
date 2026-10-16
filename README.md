@@ -4,7 +4,7 @@
 
 自带两款模型和 VRMA 动作包，安装后即可使用。可导入自己的模型，设置动作、表情、视线和物理效果，也可以让宠物说预设台词或使用 AI 生成碎碎念。
 
-[安装与使用](#安装) · [问题反馈](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) · [MIT 许可证](LICENSE)
+[安装与使用](#安装) · [问题反馈](https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/issues) · [MIT 许可证](LICENSE)
 
 [English](#english)
 
@@ -57,10 +57,10 @@ no runtime dependencies · 9 verification suites · 2628 checks · works offline
 1. 在 DSH 插件管理器中添加本仓库；支持 GitHub 包来源时，使用：
 
    ```text
-   github:drliuhuan/dsh-plugin-vrmpet3d#main
+   github:drliuhuan/dsh-plugin-vrmpet3d-dev#main
    ```
 
-2. 也可以[下载 main 分支 ZIP](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/archive/refs/heads/main.zip)，解压后在插件管理器中添加包含 `package.json` 的文件夹，或填写 `link:<插件文件夹的绝对路径>`。
+2. 也可以[下载 main 分支 ZIP](https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/archive/refs/heads/main.zip)，解压后在插件管理器中添加包含 `package.json` 的文件夹，或填写 `link:<插件文件夹的绝对路径>`。
 3. 确认插件已启用，然后重启 DSH。更新插件后也请重启，确保宿主代码和页面代码使用同一版本。
 
 请先停用其他占用同一桌宠显示位置的插件，例如 `dsh-plugin-fatfish-pet`、`dsh-plugin-whale-pet`。卸载时从插件管理器移除本插件。
@@ -118,7 +118,7 @@ no runtime dependencies · 9 verification suites · 2628 checks · works offline
 - **模型不播放动作**：确认使用 VRM 模型，状态下选有动作，并开启模型动作。反馈时请附上完整错误提示。
 - **AI 不说话**：检查台词来源、服务、模型和访问额度；可以先切回内置台词确认气泡显示正常。
 
-请通过 [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) 提交问题，附上 DSH 版本、操作系统、内置/外置显示方式、复现顺序与预期结果。请勿上传 API Key 或私人会话内容。
+请通过 [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/issues) 提交问题，附上 DSH 版本、操作系统、内置/外置显示方式、复现顺序与预期结果。请勿上传 API Key 或私人会话内容。
 
 ## English
 
@@ -126,7 +126,7 @@ Add a 3D desktop pet to **DeepSeek Harness (DSH)**. The pet follows task states 
 
 Two models and a VRMA motion pack are included. You can import your own models, configure motions, expressions, gaze and physics, and let the pet speak preset lines or generate AI chatter.
 
-[Installation and usage](#installation) · [Report an issue](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues) · [MIT license](LICENSE)
+[Installation and usage](#installation) · [Report an issue](https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/issues) · [MIT license](LICENSE)
 
 > This is an early release and is still being improved. 3D rendering uses GPU and memory. When reporting a problem, include your DSH version, display mode and reproduction steps.
 
@@ -171,10 +171,10 @@ Install from this repository's **`main` branch**. The project is not published o
 1. Add this repository in the DSH plugin manager. If it accepts GitHub package sources, use:
 
    ```text
-   github:drliuhuan/dsh-plugin-vrmpet3d#main
+   github:drliuhuan/dsh-plugin-vrmpet3d-dev#main
    ```
 
-2. You can also [download the `main` branch ZIP](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/archive/refs/heads/main.zip), extract it and add the folder containing `package.json` in the plugin manager, or enter `link:<absolute path to the plugin folder>`.
+2. You can also [download the `main` branch ZIP](https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/archive/refs/heads/main.zip), extract it and add the folder containing `package.json` in the plugin manager, or enter `link:<absolute path to the plugin folder>`.
 3. Make sure the plugin is enabled, then restart DSH. Restart after updates as well so the host and page code use the same version.
 
 Disable other plugins that use the same pet display position first, such as `dsh-plugin-fatfish-pet` and `dsh-plugin-whale-pet`. Uninstall this plugin through the plugin manager.
@@ -232,7 +232,7 @@ The pet uses task state, session identifiers and timing information to determine
 - **The model does not move:** Confirm that you are using a VRM model, that a motion is assigned to the current state, and that model motions are enabled. Include the full error message when reporting the issue.
 - **AI is silent:** Check the line source, service, model and usage quota. Switch to built-in lines to confirm that the speech bubble works.
 
-Report issues through [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues). Include your DSH version, operating system, display mode, reproduction steps and expected result. Do not upload API keys or private conversation content.
+Report issues through [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/issues). Include your DSH version, operating system, display mode, reproduction steps and expected result. Do not upload API keys or private conversation content.
 
 
 ## Verification
@@ -273,7 +273,7 @@ the window it makes), so a pass that should not disturb anyone asks for it to be
 
 ```bash
 node scripts/verify-all.mjs --no-window      # the same nine suites; that suite's live half is skipped and says so
-node scripts/verify-desktop.mjs --no-window  # or VRMPET3D_SKIP_DESKTOP=1, for that one suite
+node scripts/verify-desktop.mjs --no-window  # or VRMPET3D_DEV_SKIP_DESKTOP=1, for that one suite
 ```
 
 The desktop suite's Node half still runs, the skip is printed rather than passed silently, and

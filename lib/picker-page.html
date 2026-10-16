@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title data-i18n="title">vrmpet3d · 切换模型</title>
+  <title data-i18n="title">vrmpet3d-dev · 切换模型</title>
   <meta name="color-scheme" content="dark light">
   <!--
-    切换模型 — the model picker's own page (`/vrmpet3d/picker`), opened from either pet's right-click menu.
+    切换模型 — the model picker's own page (`/vrmpet3d-dev/picker`), opened from either pet's right-click menu.
 
     A FOURTH page beside 模型参数, 通用设置 and 初次安装引导, and opened exactly the same way: by the launcher on DSH
     Desktop (a real window, with the preload bridge, so the file dialog is native) and as a browser tab anywhere
@@ -18,7 +18,7 @@
 
     The stylesheet is the shared `pages.css`.
   -->
-  <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
+  <link rel="stylesheet" href="/vrmpet3d-dev/window/lib/pages.css">
 </head>
 <body data-page="picker">
   <!--
@@ -28,7 +28,7 @@
     once it knows better — it is NOT what the language is resolved from (see `core.browserLanguageHints`).
   -->
   <header class="page-header">
-    <div class="eyebrow" data-i18n="eyebrow">VRMPET3D · MODELS</div>
+    <div class="eyebrow" data-i18n="eyebrow">VRMPET3D_DEV · MODELS</div>
     <h1 data-i18n="heading">切换模型</h1>
     <div id="status" role="status" aria-live="polite" data-i18n="statusLoading">正在读取…</div>
   </header>
@@ -54,13 +54,13 @@
       var WORDS = {
         zh: {
           pageError: '页面脚本出错：',
-          stuckMissing: '初始化卡住：model-picker.js 没有加载（检查 /vrmpet3d/window/lib/model-picker.js 是否 404）。',
-          stuckSlow: '初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/models 与 /vrmpet3d/settings）。',
+          stuckMissing: '初始化卡住：model-picker.js 没有加载（检查 /vrmpet3d-dev/window/lib/model-picker.js 是否 404）。',
+          stuckSlow: '初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d-dev/models 与 /vrmpet3d-dev/settings）。',
         },
         en: {
           pageError: 'Script error: ',
-          stuckMissing: 'Stuck on startup: model-picker.js did not load — check whether /vrmpet3d/window/lib/model-picker.js is a 404.',
-          stuckSlow: 'Stuck on startup: the script loaded but never finished — check the window console, and whether the host serves /vrmpet3d/models and /vrmpet3d/settings.',
+          stuckMissing: 'Stuck on startup: model-picker.js did not load — check whether /vrmpet3d-dev/window/lib/model-picker.js is a 404.',
+          stuckSlow: 'Stuck on startup: the script loaded but never finished — check the window console, and whether the host serves /vrmpet3d-dev/models and /vrmpet3d-dev/settings.',
         },
       };
       var language = /^(zh|cn|chinese)/i.test(navigator.language || '') ? 'zh' : 'en';
@@ -74,8 +74,8 @@
         show(t('pageError') + (event.message || event.type) + where);
       }, true);
       window.setTimeout(function () {
-        if (window.__VRMPET3D_PICKER_STATE__) return;
-        if (!window.__VRMPET3D_MODEL_PICKER__) {
+        if (window.__VRMPET3D_DEV_PICKER_STATE__) return;
+        if (!window.__VRMPET3D_DEV_MODEL_PICKER__) {
           show(t('stuckMissing'));
           return;
         }
@@ -83,8 +83,8 @@
       }, 2000);
     })();
   </script>
-  <script src="/vrmpet3d/window/lib/core.js"></script>
-  <script src="/vrmpet3d/window/lib/model-picker.js"></script>
-  <script src="/vrmpet3d/window/lib/picker-page.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/core.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/model-picker.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/picker-page.js"></script>
 </body>
 </html>

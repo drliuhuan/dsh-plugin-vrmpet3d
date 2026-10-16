@@ -341,9 +341,9 @@ body[data-loading="true"] .page-loading { display: flex; }
   width: 26px; height: 26px; border-radius: 50%;
   border: 2px solid color-mix(in srgb, var(--text, #e8eaf0) 26%, transparent);
   border-top-color: var(--accent, #6aa9ff);
-  animation: vrmpet3d-spin .8s linear infinite;
+  animation: vrmpet3d-dev-spin .8s linear infinite;
 }
-@keyframes vrmpet3d-spin { to { transform: rotate(360deg); } }
+@keyframes vrmpet3d-dev-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   /* The text carries the meaning; the spin is decoration. */
   .page-loading .page-loading-spinner { animation-duration: 3s; }

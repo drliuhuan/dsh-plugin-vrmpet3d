@@ -6,20 +6,20 @@ How the pieces fit, and why each boundary sits where it does.
   +----------------------- DSH host process -------------------------+
   |  lib/index.js                                                    |
   |                                                                  |
-  |  session events --> VrmPet3DBoundaryHub --> vrmpet3d service ----------+--+
+  |  session events --> VrmPet3DDevBoundaryHub --> vrmpet3d-dev service ----------+--+
   |                                                                  |  |
-  |  profile config --> buildCatalog(modelDirs)  --> /vrmpet3d/asset ---+--+--+
+  |  profile config --> buildCatalog(modelDirs)  --> /vrmpet3d-dev/asset ---+--+--+
   |   assets/models ---/  (bundled, always scanned)                       |  |
-  |                 \-> buildMotionCatalog(motionDirs) --> /vrmpet3d/motion --+--+
+  |                 \-> buildMotionCatalog(motionDirs) --> /vrmpet3d-dev/motion --+--+
   |   assets/motions --/  (bundled, always scanned)                       |  |
   +------------------------------------------------------------------+  |  |
                                                                         |  |
   +---------------------- DSH browser page --------------------------+   |  |
-  |  GET /vrmpet3d/catalog ---------------------------------------------+---+  |
-  |  GET /vrmpet3d/motions ---------------------------------------------+---+  |
-  |  GET /vrmpet3d/models   (read, add or drop an imported directory) --+---+  |
-  |  GET /vrmpet3d/asset?m=..&p=..  (model + sibling textures) <--------+------+
-  |  GET /vrmpet3d/motion?m=..      (one motion file) <-----------------+------+
+  |  GET /vrmpet3d-dev/catalog ---------------------------------------------+---+  |
+  |  GET /vrmpet3d-dev/motions ---------------------------------------------+---+  |
+  |  GET /vrmpet3d-dev/models   (read, add or drop an imported directory) --+---+  |
+  |  GET /vrmpet3d-dev/asset?m=..&p=..  (model + sibling textures) <--------+------+
+  |  GET /vrmpet3d-dev/motion?m=..      (one motion file) <-----------------+------+
   |                                                                  |
   |  lib/client.js   React slot "shell.overlay"                      |
   |    |-- session --> pet state (PetMachine, SessionAggregate)       |
@@ -58,7 +58,7 @@ plugin-owned browser routes are `/plugins/<id>/client.js` and package-local
 page through a route the plugin registers itself — which is what
 `webServer.register({ kind, path, handler })` is for.
 
-The route is `/vrmpet3d/asset`, and it is allowlisted down to: *the exact file each
+The route is `/vrmpet3d-dev/asset`, and it is allowlisted down to: *the exact file each
 catalog id was scanned from, plus relative paths under that file's directory*. The
 id — path map lives on the server, so the browser never names a path directly. See
 `resolveAssetPath` in `lib/index.js` for the traversal rules and why a
@@ -70,10 +70,10 @@ no benefit.
 
 ### 2b. Why there is a second, writable route
 
-`/vrmpet3d/catalog` is read-only on purpose: it is a projection of the directories the
+`/vrmpet3d-dev/catalog` is read-only on purpose: it is a projection of the directories the
 host already knows about. A user whose models live elsewhere can name extra
 directories in the plugin config, but that means editing YAML and restarting, so
-`/vrmpet3d/models` exists as the small mutable counterpart:
+`/vrmpet3d-dev/models` exists as the small mutable counterpart:
 
 * `GET` returns the imported list, the current model count, and the file the list is
   persisted to;
@@ -82,7 +82,7 @@ directories in the plugin config, but that means editing YAML and restarting, so
   a second request against the rebuild.
 
 The list lives in a plugin-owned file in the profile directory
-(`vrmpet3d-model-dirs.json`), deliberately **not** in the profile's `cordis.patch.yml`:
+(`vrmpet3d-dev-model-dirs.json`), deliberately **not** in the profile's `cordis.patch.yml`:
 that file belongs to the user and to DSH's own config editor, and a plugin that
 rewrote it would fight both. A failed write is reported rather than hidden — the
 import is live for the session either way, and the user should know it will not
@@ -91,12 +91,12 @@ directory that has gone missing is **kept**, so a drive that comes back comes ba
 itself.
 
 **The rename is a read-only migration, not a move.** The current names are tried first and the pre-rename
-ones second: `vrmpet3d-settings.json` / `vrmpet3d-model-dirs.json` / `vrmpet3d-motion-dirs.json` in the
+ones second: `vrmpet3d-dev-settings.json` / `vrmpet3d-dev-model-dirs.json` / `vrmpet3d-dev-motion-dirs.json` in the
 profile directory each fall back once to their `pet3d-*.json` twin, a motion directory's own manifest
-(`vrmpet3d-motions.json`) the same way, and the browser's `dsh.vrmpet3d.v1` storage key falls back to
+(`vrmpet3d-dev-motions.json`) the same way, and the browser's `dsh.vrmpet3d-dev.v1` storage key falls back to
 `dsh.pet3d.v1` on the first read. The old file is then left where it is — it is the user's data, and when to
 delete it is not this plugin's business — and the next write lands under the current name, which is what
-completes the migration. An override (`VRMPET3D_MODEL_DIRS_FILE`, the one the suites use) names a file this
+completes the migration. An override (`VRMPET3D_DEV_MODEL_DIRS_FILE`, the one the suites use) names a file this
 project never wrote under another name, so it deliberately opts out of the fallback.
 
 ### 3. Why the 3D stack is one committed chunk
@@ -169,7 +169,7 @@ be subtly wrong, and keeping them pure lets the core suite's 1316 checks run in 
 under a second under plain Node instead of needing a browser and a GPU.
 
 The same file is loaded in the browser as the `client.core.js` chunk and read off
-`globalThis.__VRMPET3D_CORE__`. One implementation, no mirror to drift.
+`globalThis.__VRMPET3D_DEV_CORE__`. One implementation, no mirror to drift.
 
 ### 5. Why the scene is split off from the plugin
 
@@ -227,7 +227,7 @@ formats this build no longer loads.
 A model that fails to load **reports why** and leaves the stage as it was — `Scene.loadModel` substitutes
 nothing for it (the built-in avatar was removed on 2026-10-10), and the caller puts the reason on screen.
 `usePlaceholder` survives only as a fixture the geometry probes and the browser suite build a model-free
-avatar with, and it throws unless something has defined `globalThis.__VRMPET3D_PLACEHOLDER__` — which the
+avatar with, and it throws unless something has defined `globalThis.__VRMPET3D_DEV_PLACEHOLDER__` — which the
 shipped plugin never does.
 
 ### VRM
@@ -259,7 +259,7 @@ conversion and assembly intact rather than reimplementing them.
 
 The model's sibling textures resolve because `MMDLoader.resourcePath` is set to the
 plugin's own asset route, so `tex/body.png` becomes
-`/vrmpet3d/asset?m=<id>&p=tex%2Fbody.png`.
+`/vrmpet3d-dev/asset?m=<id>&p=tex%2Fbody.png`.
 
 MMD physics was deliberately **not** wired. `@moeru/three-mmd` ships no physics
 engine and expects the host to supply one. A desktop pet wants explicit bone
@@ -403,7 +403,7 @@ negates a tilt about the right axis — `R_y(π)·R_x(θ)·R_y(π)⁻¹= R_x(−
 about the up axis alone, `R_y(π)·R_y(φ)·R_y(π)⁻¹= R_y(φ)`. Hence pitch inverted and yaw did
 not, on exactly the model that is not flipped. The placeholder's case was simpler and worse: it
 never reached the derived axes at all, because it had no rest *quaternion* and took a separate
-`vrmpet3dRestRot` euler branch — so fixing one model's axes did nothing for it. Two branches meant
+`vrmpet3dDevRestRot` euler branch — so fixing one model's axes did nothing for it. Two branches meant
 "general" was only ever true of one of them.
 
 There is now **one algorithm and no per-kind case**:
@@ -453,7 +453,7 @@ that matters is asserted: the application payload is **never** linked — only
 The support files (`icudtl.dat`, the `.pak` files, the snapshot, the DLLs, `locales/`) are
 **hard links**, which is why the runtime costs no disk space and why it has to live on the
 installation's volume. A different volume degrades to copying, and says so in the log. Two
-escapes exist: `VRMPET3D_DESKTOP_HOST_DIR` chooses the location, `VRMPET3D_DESKTOP_RUNTIME` names a
+escapes exist: `VRMPET3D_DEV_DESKTOP_HOST_DIR` chooses the location, `VRMPET3D_DEV_DESKTOP_RUNTIME` names a
 standalone Electron and skips the borrowing entirely.
 
 **The shape of the window**, and the two numbers behind it: it covers the display's **work
@@ -463,11 +463,11 @@ the taskbar is a bug; and it is `alwaysOnTop` at the `screen-saver` level, becau
 level still sits below some full-screen-ish windows.
 
 **The settings windows are pages, and the window around them is a choice.** There are TWO of them since
-2026-10-11, on two host routes: {{bt}}/vrmpet3d/config{{bt}} is 模型参数 (模型 / 表情 / 部位 / 弹簧骨, the sections that are
-about one model) and {{bt}}/vrmpet3d/global{{bt}} is 通用设置 (显示与外观 / 视线 / 鼠标互动与物理 / 状态与动作 / 碎碎念 /
+2026-10-11, on two host routes: {{bt}}/vrmpet3d-dev/config{{bt}} is 模型参数 (模型 / 表情 / 部位 / 弹簧骨, the sections that are
+about one model) and {{bt}}/vrmpet3d-dev/global{{bt}} is 通用设置 (显示与外观 / 视线 / 鼠标互动与物理 / 状态与动作 / 碎碎念 /
 模型导入 / 动作导入). They are separate DOCUMENTS, not one page with half of it hidden: the earlier split kept one file and
 toggled sections with {{bt}}?panel={{bt}}, which left a hidden section's ids in the document and made the two windows
-the same page twice. Both read the model through {{bt}}/vrmpet3d/model-info{{bt}}, write the shared preferences, and
+the same page twice. Both read the model through {{bt}}/vrmpet3d-dev/model-info{{bt}}, write the shared preferences, and
 load the SAME {{bt}}lib/config-page.js{{bt}} and {{bt}}lib/pages.css{{bt}} — one script and one stylesheet, guarded per
 lookup, so a section that is not on the page renders nothing rather than throwing. Neither needs anything from a
 renderer, which is what lets the SAME pages be opened two ways. In DSH Desktop the launcher starts a second,
@@ -475,11 +475,11 @@ ordinary window for them (resizable, focusable, not always-on-top - every proper
 form must not have, which is why the two share the launcher and nothing else). Anywhere else the same pages open
 as browser tabs, and that is a first-class way to use them rather than a fallback.
 
-**A third page of the same kind PICKS the model.** 切换模型 ({{bt}}/vrmpet3d/picker{{bt}}, added 2026-10-13) is opened the
+**A third page of the same kind PICKS the model.** 切换模型 ({{bt}}/vrmpet3d-dev/picker{{bt}}, added 2026-10-13) is opened the
 same two ways and by the same launcher action, and it is a page rather than a panel inside the pet for one reason:
 its content IS the first-run guide's ② 偏好模型 step (「面板中和初次安装向导模型页完全一样」), so one component
 ({{bt}}lib/model-picker.js{{bt}}) sits behind both mounts — a big choose-or-drop target over a grid of the models'
-own thumbnails, served by {{bt}}/vrmpet3d/model-thumbnail?m=<id>{{bt}}.
+own thumbnails, served by {{bt}}/vrmpet3d-dev/model-thumbnail?m=<id>{{bt}}.
 Every switch is covered by a PROGRESS BAR, and the picker refuses input while one is in flight (operator,
 2026-10-13: 「增加一个切换进度条，防止用户快速反复切换导致故障」): a VRM parse is seconds long, so an impatient second
 click would otherwise start a second parse on the same skeleton. The bar ends when a SURFACE reports the model as
@@ -490,7 +490,7 @@ is what made the bar outlive the model), and no longer stamped by the host from 
 that value is the model the window STARTED with, so re-stamping it on every settings poll overwrote the honest
 report with a stale one. A dropped file is a `File` and nothing else,
 so that route has a second way in beside the launcher's dialog: the page uploads the bytes
-({{bt}}POST /vrmpet3d/models?file=<name>{{bt}}) and the host writes them into the same store a path import uses.
+({{bt}}POST /vrmpet3d-dev/models?file=<name>{{bt}}) and the host writes them into the same store a path import uses.
 
 **These settings pages are the ONLY settings surfaces — the pet's right-click is a MENU, not a third one.** Until
 2026-10-12 each pet also grew a settings PANEL of its own (and before that, two hand-rolled ones), which is how
@@ -511,7 +511,7 @@ Two entries are the ones a later pass is most likely to "unify" wrongly, and the
   '关闭独立宠物'功能重复了，移除'切换回窗口内'选项」). The app's pet keeps it, being the only way out of DSH, and a
   surface says it does not offer the row with {{bt}}showSurface: false{{bt}}. The id stays in the shared list so the
   ORDER is still one definition; only its PRESENCE differs. 重启/退出 DeepSeek Harness were the last two entries until the same day, when the operator removed them
-and everything behind them: the `/vrmpet3d/harness` route, the host module that ran {{bt}}ctx.appExit{{bt}} and spawned the
+and everything behind them: the `/vrmpet3d-dev/harness` route, the host module that ran {{bt}}ctx.appExit{{bt}} and spawned the
 detached relauncher, and both surfaces' failure lines.
 
 **重力 is a TOGGLE with two independent keys.** {{bt}}core.DEFAULTS.gravity{{bt}} (the app pet, shipped ON) and
@@ -547,7 +547,7 @@ sentence with a {{bt}}&lt;strong&gt;{{bt}} in it), because a page whose script n
 table and that the two halves of every table hold the same keys. The shipped 状态提示 defaults are per language for the same
 reason ({{bt}}DEFAULT_STATUS_TEXT{{bt}}, keyed state → language): an English interface that still said 「任务达成」 in the pet's
 bubble would be a half-translated one. A line the user typed is ONE line in one language and is never translated, and the AI half
-already answers in the language the surface sends to {{bt}}/vrmpet3d/say{{bt}}.
+already answers in the language the surface sends to {{bt}}/vrmpet3d-dev/say{{bt}}.
 
 **A menu that closes ITSELF has to tell the page.** {{bt}}createMenu{{bt}} closes on an entry click, on Escape and on an
 outside press, and only the host page's own {{bt}}closeMenu(){{bt}} path was ever wired before 2026-10-12: the floating
@@ -612,7 +612,7 @@ face was busy happens on the first clear frame. `blinkState().paused` reports al
 readout a person uses to answer "why is it not blinking".
 
 **Both surfaces play authored motion, and that was not always true.** The app overlay loads a clip for each
-state the user assigned (`/vrmpet3d/motions` for the catalog, `/vrmpet3d/motion?m=<id>` for the bytes, `loadMotion`
+state the user assigned (`/vrmpet3d-dev/motions` for the catalog, `/vrmpet3d-dev/motion?m=<id>` for the bytes, `loadMotion`
 into the scene), and the floating window now runs the same path: filter the catalog by avatar family
 (`vrm` →`.vrma`; the `mmd` →`.vmd` pairing went with MMD support on 2026-10-12), fetch each mapped motion's bytes **once** (they outlive a model switch),
 build a clip **per avatar** (a clip is fitted to a skeleton, so a model switch drops the clips and keeps the
@@ -622,7 +622,7 @@ user actually watches. The page publishes its own account of it (`motion: {kind,
 available, reason}`) because the four ways a motion can do nothing look identical from outside.
 
 **Motion directories are importable, like model directories.** `config.motionDirs` is the declared list;
-`vrmpet3d-motion-dirs.json` (plugin-owned, beside the settings, `VRMPET3D_MOTION_DIRS_FILE` to redirect it in tests)
+`vrmpet3d-dev-motion-dirs.json` (plugin-owned, beside the settings, `VRMPET3D_DEV_MOTION_DIRS_FILE` to redirect it in tests)
 is the imported one, and the two are unioned when the catalog is rebuilt — which happens on **every request**,
 so an import is live on the next fetch instead of on the next DSH start. This exists because the alternative
 was "edit the profile config and restart the whole application to try one file", which is indistinguishable
@@ -631,12 +631,12 @@ from the feature not working.
 **...and the plugin ships a motion pack, scanned first.** `assets/motions` is a bundled root, exactly as
 `assets/models` is for models, so the operator's own clips are offered from the first scan with
 `source: 'bundled'` instead of waiting for anyone to import a directory. `buildMotionCatalog` therefore builds
-`{ root, source }` pairs rather than bare paths, and `/vrmpet3d/motions` reports `bundledDir` beside
-**A fourth page carries the first-run guide** (`/vrmpet3d/setup`, `lib/setup-page.html` + `lib/setup-page.js`; the
+`{ root, source }` pairs rather than bare paths, and `/vrmpet3d-dev/motions` reports `bundledDir` beside
+**A fourth page carries the first-run guide** (`/vrmpet3d-dev/setup`, `lib/setup-page.html` + `lib/setup-page.js`; the
 third of the settings kind is the model picker above), and it
-is the one page the plugin OFFERS rather than waits to be asked for: the in-app pet reads `GET /vrmpet3d/setup-state`
+is the one page the plugin OFFERS rather than waits to be asked for: the in-app pet reads `GET /vrmpet3d-dev/setup-state`
 after its own boot and opens it at most once per activation, with `completed` in the profile
-(`vrmpet3d-setup.json`) and `prompted` in the host's memory. Its two imports go through the same routes the panels
+(`vrmpet3d-dev-setup.json`) and `prompted` in the host's memory. Its two imports go through the same routes the panels
 use and they COPY (`importModelFile` / `importMotionFolder`), which is what makes the folder they came from
 irrelevant afterwards — and since 2026-10-13 its MODEL half is not this page's own markup at all: the step mounts
 `lib/model-picker.js`, the component 切换模型 is built from, so the wizard and the menu cannot drift apart.
@@ -647,7 +647,7 @@ apart by `source`, because a user's file is never hidden.
 
 **...and the folder a clip sits in decides which state's picker offers it.** The pack's manifest carries
 `stateFolders` (`{ "resting": ["idle"], "working": ["working"], … }` — a state may name SEVERAL folders, and a
-bare string is normalised to a one-item list), `/vrmpet3d/motions` reports it, and the page
+bare string is normalised to a one-item list), `/vrmpet3d-dev/motions` reports it, and the page
 offers each state only the clips under its folder. The operator's reasoning is the whole design: 「把对应的动作直接
 解析到指定目录，这样在选择动作的时候就不会出现很长一串」 — one picker listing every clip they have ever authored is
 unusable, and the folders were already the mapping they were keeping in their head. Consequences worth naming:
@@ -665,7 +665,7 @@ unusable, and the folders were already the mapping they were keeping in their he
 
 **A clip may also arrive compressed, as `<name>.vrma.br`, and the HOST unpacks it.** Dance clips are megabytes (the
 operator's first is 8.0 MB), so the pack stores them brotli-compressed and `createMotionHandler` decompresses on the
-way out: the response to `/vrmpet3d/motion?m=` is always a plain VRMA with the GLB media type and the UNPACKED
+way out: the response to `/vrmpet3d-dev/motion?m=` is always a plain VRMA with the GLB media type and the UNPACKED
 length, so the renderer keeps one load path and never learns a clip was packed. `core.motionFormatOfName` looks
 through the suffix, which is why a compressed clip is a `vrma` everywhere the format is asked about (nothing is
 sniffed, and the model/motion extension sets stay disjoint); the catalogue adds `compressed: true` and reports the
@@ -692,7 +692,7 @@ the user's own map. Three rules, each one the fix for a defect in its alternativ
 * **nothing is persisted** — a default written back to the store would be indistinguishable from a choice on the
   next load, which is what makes a default impossible to turn off.
 
-The pack ships its `defaults` block in `assets/motions/vrmpet3d-motions.json`; while it is empty (the state it
+The pack ships its `defaults` block in `assets/motions/vrmpet3d-dev-motions.json`; while it is empty (the state it
 ships in until the operator chooses a mapping) nothing plays without a mapping, and filling it in needs no code
 change. `readMotionDefaults` validates that block rather than trusting it: a state the session machine cannot
 reach, a duplicate, a non-name, or a backslash path is dropped, because this is a file a person hand-edits.
@@ -701,7 +701,7 @@ reach, a duplicate, a non-name, or a backslash path is dropped, because this is 
 name>': { loop?, expression?, mouth?, gaze? } } }` — shipped so a fresh profile's pet is not merely pointed at his
 clips but wears the faces he gave them (2026-10-14: 「…包括每个动作的表情状态，全部作为默认模板上传」). The path is the
 same one `defaults` takes: `readMotionTemplate` validates the block, `core.motionClipTemplate` resolves its names
-against the catalog just built, `/vrmpet3d/motions` sends the result as `motionClipDefaults` beside `motionDefaults`,
+against the catalog just built, `/vrmpet3d-dev/motions` sends the result as `motionClipDefaults` beside `motionDefaults`,
 both surfaces hand it to their scene (`setMotionClipDefaults`), and `core.motionClipFor(…, template)` merges it FIELD
 BY FIELD **under** the profile's own entry — a profile that decided the play mode for a clip still inherits the
 template's face, and one that picked a face keeps the template's 凝视. Two values exist only because a template does, and
@@ -728,7 +728,7 @@ contracts rather than conveniences:
   `setMotionIds` (the pure write both surfaces share) all read the old shape too.
 
 **`loop` is a property of the CLIP in the catalog, and of the PLAYBACK in the renderer.** A motion directory may
-hold a `vrmpet3d-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }` (and, beside it,
+hold a `vrmpet3d-dev-motions.json` declaring `{ "clips": { "<relative name>": { "loop": false } } }` (and, beside it,
 the `defaults` block that now ships the operator's own state→clip mapping); `buildMotionCatalog` reads it once per
 directory and every entry gains `loop` (absent means `true`, which is what every clip did before the flag
 existed).
@@ -765,7 +765,7 @@ disagreed with the gate is how "why is nothing blinking" becomes a mystery. Ever
 bone-only, so nothing about the shipped pack changes.
 
 **A generated VRMA is portable between models when it respects two things.** `scripts/make-vrma-fixtures.mjs`
-emits `vrmpet3d-wave.vrma` as a fixture (2.0 s, 7 channels, 61 keys) and `verify-motion.mjs` plays it on a real
+emits `vrmpet3d-dev-wave.vrma` as a fixture (2.0 s, 7 channels, 61 keys) and `verify-motion.mjs` plays it on a real
 model, which is what makes it a test rather than an example:
 
 * **World-aligned axes.** `VRMHumanoidRig._setupTransforms` builds the normalized rig from the raw bones' world
@@ -796,7 +796,7 @@ flourish on top of the sway, it is the sway.
 a model's expressions, its spring chains and the licence its author chose — including when no pet is
 running, and including when the previous frame was never rendered because the window is closed. So
 the host half parses the GLB (`lib/vrm-info.js`) and serves a compact projection over
-`GET /vrmpet3d/model-info?m=<id>`. Three consequences are deliberate:
+`GET /vrmpet3d-dev/model-info?m=<id>`. Three consequences are deliberate:
 
 * the answer is the file, so a model replaced on disk shows up on the next request — the cache is
   keyed by (path, size, mtime) rather than by id;
@@ -870,7 +870,7 @@ is polled at frame rate instead and pushed to the page, which feeds it to the sa
 
 **The page reuses everything.** `lib/desktop-page.html` loads the *same* `client.vendor.js`,
 `core.js`, `placeholder.js`, `scene.js` and `client.js` the overlay loads, over the plugin's own
-HTTP origin (so the `/vrmpet3d/asset` fetches are same-origin), plus one small glue
+HTTP origin (so the `/vrmpet3d-dev/asset` fetches are same-origin), plus one small glue
 (`lib/desktop-page.js`) that adds what is different: the screen as the frame, the launcher's
 cursor as the pointer, and the rectangle report. It applies position through the same
 `Placement` — throw physics, wall and ceiling bounces, the size range — and draws through the
@@ -881,10 +881,10 @@ first version reimplemented that and never installed an avatar at all, which is 
 run 120 error-free frames painting nothing.
 
 **Failure is reported, never swallowed.** The frame loop is guarded and publishes its own state
-(`window.__VRMPET3D_DESKTOP_STATE__`: frames, last error, placement, rectangle); the launcher
+(`window.__VRMPET3D_DEV_DESKTOP_STATE__`: frames, last error, placement, rectangle); the launcher
 collects the page's console messages and asks for that state when it self-tests; the host half
 reports the child's state — including a copy that had to happen, a runtime that could not be
-built, and **what the page itself reported** — through `GET /vrmpet3d/desktop`, and the 通用设置 page shows
+built, and **what the page itself reported** — through `GET /vrmpet3d-dev/desktop`, and the 通用设置 page shows
 it. A launcher whose parent dies quits on a watchdog, and the host half kills the window when the
 plugin is disposed.
 
@@ -902,7 +902,7 @@ Two independent mistakes had to line up, so both are closed:
   distinguishes **on**, **starting**, and **on but not drawing** with the page's own error text. The
   two halves share that marker deliberately; a suite check keeps the copies identical;
 * a source was served with the **wrong content type**, and the browser refused it silently. The
-  `/vrmpet3d/window/lib` route hard-coded `text/javascript` for every name in its whitelist, so when the
+  `/vrmpet3d-dev/window/lib` route hard-coded `text/javascript` for every name in its whitelist, so when the
   two settings pages began sharing `lib/pages.css` the stylesheet came back as JavaScript: the pages
   loaded, their scripts ran, every request was a 200, and the browser applied none of the CSS — the
   windows were a wall of unstyled text. Nothing in the suite could see it, because the desktop suite
@@ -933,7 +933,7 @@ comment saying which bug they exist for.
 | `clientchunk` | browser | DSH's **own** module system delivering the committed chunks, and the request-shape guards |
 | `vendor` | Node, 20 s | the committed chunk matches a fresh build from the pins |
 | `browser` | browser | vendor chunk, procedural avatar, framing, glTF/VRM loaders (VRM only) |
-| `client` | browser | the widget: mount, drag (handler-driven AND listener-driven), throw, wall and ceiling rebounds, wheel zoom, view orbit, gaze beyond the pet's frame and its reset, size reset, the per-state motion box sets (two clips in one state, the loop/once marker, the one-shot flag reaching the scene, a stale clip kept visible but unpickable), the floating-window switch and its three host answers, all 11 states, dispose, the AI 碎碎念 path (one `POST /vrmpet3d/say` per event across four frames, the fallback line up until the answer lands, the answer in the bubble), and the PRESS path: a wobbling press is a click that moves nothing, a still press held for 0.6 s is a 长按 while it is still down and adds no click, the part is measured with a real raycast against the model (renaming the meshes moves the region from body to eye, and a miss is not a region), a part whose row names an emotion answers before the generic row is fallen through to, a USER part claims a structure the name heuristic would give another region to, and a press says that part's line — locally, and then with the part named in the `POST /vrmpet3d/say` the host answers (a drag says nothing at all). Also drives the desktop page's glue against a fake bridge: drag, throw, zoom limits, orbit, the gaze from the launcher's cursor, the rectangle click-through depends on, and a press on ITS pet saying the part's line in its own bubble. And it boots the REAL 通用设置 document for the per-clip texts the operator asked for (2026-10-13): a 碎碎念 box on every ticked clip's row showing the stored line, an AI 提示词 box beside it that is HIDDEN while 台词来源 is the built-in table and shown the moment the source goes to AI 生成 — the same decision that hides the AI block — the edit reaching the store as a patch through the row's own write path, and the widget's own resolution (`scene.playback`/`scene.pickState` handed to `SpeechMachine.observe`, with both the state's box and the clip given a line so a machine that ignored the clip would answer the pool and fail), a click and a hold drawing from their own shipped pools through `notePress`, and — the fix for a pet that froze in a throttled window (2026-10-14) — the BACKGROUND pump driven on a page whose ticks are all by hand: the drivers installed the way `start()` installs them, the frame clock stamped into the past, a pump required anyway, one more required SYNCHRONOUSLY on a `focus` event, and the page handed back with no interval left running |
+| `client` | browser | the widget: mount, drag (handler-driven AND listener-driven), throw, wall and ceiling rebounds, wheel zoom, view orbit, gaze beyond the pet's frame and its reset, size reset, the per-state motion box sets (two clips in one state, the loop/once marker, the one-shot flag reaching the scene, a stale clip kept visible but unpickable), the floating-window switch and its three host answers, all 11 states, dispose, the AI 碎碎念 path (one `POST /vrmpet3d-dev/say` per event across four frames, the fallback line up until the answer lands, the answer in the bubble), and the PRESS path: a wobbling press is a click that moves nothing, a still press held for 0.6 s is a 长按 while it is still down and adds no click, the part is measured with a real raycast against the model (renaming the meshes moves the region from body to eye, and a miss is not a region), a part whose row names an emotion answers before the generic row is fallen through to, a USER part claims a structure the name heuristic would give another region to, and a press says that part's line — locally, and then with the part named in the `POST /vrmpet3d-dev/say` the host answers (a drag says nothing at all). Also drives the desktop page's glue against a fake bridge: drag, throw, zoom limits, orbit, the gaze from the launcher's cursor, the rectangle click-through depends on, and a press on ITS pet saying the part's line in its own bubble. And it boots the REAL 通用设置 document for the per-clip texts the operator asked for (2026-10-13): a 碎碎念 box on every ticked clip's row showing the stored line, an AI 提示词 box beside it that is HIDDEN while 台词来源 is the built-in table and shown the moment the source goes to AI 生成 — the same decision that hides the AI block — the edit reaching the store as a patch through the row's own write path, and the widget's own resolution (`scene.playback`/`scene.pickState` handed to `SpeechMachine.observe`, with both the state's box and the clip given a line so a machine that ignored the clip would answer the pool and fail), a click and a hold drawing from their own shipped pools through `notePress`, and — the fix for a pet that froze in a throttled window (2026-10-14) — the BACKGROUND pump driven on a page whose ticks are all by hand: the drivers installed the way `start()` installs them, the frame clock stamped into the past, a pump required anyway, one more required SYNCHRONOUSLY on a `focus` event, and the page handed back with no interval left running |
 | `desktop` | Node + a real Electron window | the bare-Electron runtime borrowed from the installation by hard links, the spawn environment (the `ELECTRON_RUN_AS_NODE` trap), the command line, the lifecycle, the right-click menu the REAL window opens (from the shared module, module flag and DOM hit test included), **the right-drag orbit measured with real mouse events (the view must keep turning while the pointer travels away from the pet), the pointer CAPTURE on the secondary press that makes it hold, and the `orbiting` report that stops the launcher making the window click-through mid-drag** — the pointer lock is attempted too but is a bonus, since Windows refuses to focus this deliberately unfocusable window, the settings page's own sections (状态 / 视线 / 大小 / 碎碎念 with its per-state boxes and AI controls / 部位, whose editor is DRIVEN in the real window: 新增部位, a typed structure becoming a chip, the chip's 前缀→精确 toggle and its removal / 模型导入 / 动作导入), and a **real launcher window** asked to prove itself: always on top, transparent, screen-sized, drawing pixels with an alpha channel |
 | `docs` | Node, 8 s | documented paths, commands and check counts match reality |
 
@@ -941,7 +941,7 @@ comment saying which bug they exist for.
 Chromium is available; `clientchunk` also skips when the installed `app.asar` cannot
 be found, because a delivery test against a fake loader would prove nothing. The
 `desktop` suite runs its Node half everywhere and **skips only the live window** when
-there is no installation to borrow an Electron from (set `VRMPET3D_DESKTOP_RUNTIME` to
+there is no installation to borrow an Electron from (set `VRMPET3D_DEV_DESKTOP_RUNTIME` to
 name a standalone one), because the pet is fully usable without the window.
 
 `clientchunk` is the newest and the least obvious. It extracts
@@ -1041,7 +1041,7 @@ document is parsed and does not wait for external `file://` scripts, so a
   loads beside it).
 * **The pet does not survive a page refresh as a running instance** — the plugin
   remounts and reloads the model. That is DSH's plugin lifecycle, not a bug here.
-* **The imported-directory route is driven by the settings page, not by the pet.** `/vrmpet3d/models` is
+* **The imported-directory route is driven by the settings page, not by the pet.** `/vrmpet3d-dev/models` is
   implemented and verified over real HTTP, and 通用设置 → 模型导入 reads and writes it; a user cannot reach it from
   the pet's own controls, which is the point — the pet's right-click menu is about the pet.
 * **`modelScale` is a config-only preference now.** It has no slider any more — it was
@@ -1051,7 +1051,7 @@ document is parsed and does not wait for external `file://` scripts, so a
 * **The view orbit has no on-screen readout.** A long right-drag
   can leave the camera at an odd angle; the pet's own menu has 重置视角 for exactly that
   (camera only), and 通用设置 → 显示与外观 has a 复位视角 button.
-  `VrmPet3DWidget.prototype.reset` — the deleted panel's whole-pet 重置, which cleared every
+  `VrmPet3DDevWidget.prototype.reset` — the deleted panel's whole-pet 重置, which cleared every
   preference — is now unreachable from any surface; it was kept rather than deleted because
   the distinction between it and `resetView` is the decision, and a future entry may want it.
   Nothing surfaces the current yaw or pitch.

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-plugin-vrmpet3d",
+  "name": "dsh-plugin-vrmpet3d-dev",
   "version": "0.1.2",
   "private": true,
   "description": "DeepSeek Harness 的 VRM 3D 桌宠：任务状态联动、独立悬浮窗、模型动作与 AI 碎碎念。",
@@ -57,11 +57,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d.git"
+    "url": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev.git"
   },
-  "homepage": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d#readme",
+  "homepage": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev#readme",
   "bugs": {
-    "url": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d/issues"
+    "url": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d-dev/issues"
   },
   "keywords": [
     "deepseek-harness",

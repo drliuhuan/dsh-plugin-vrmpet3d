@@ -12,18 +12,18 @@
     Both settings pages are written in the two languages by that ONE script and its ONE table, so a key here is shared
     with 通用设置 — `sectionModel` names both this page's heading and its nav entry.
   -->
-  <title data-i18n="titleModel">vrmpet3d · 模型参数</title>
+  <title data-i18n="titleModel">vrmpet3d-dev · 模型参数</title>
   <meta name="color-scheme" content="dark light">
   <!--
     The stylesheet both settings pages share. One file rather than a copy in each page: the two pages render
     the same rows, tables and status lines, and a copy is how the two drift apart.
 
-    The MODEL page (`/vrmpet3d/config`). Its sections are the ones that are about ONE model, in this order:
+    The MODEL page (`/vrmpet3d-dev/config`). Its sections are the ones that are about ONE model, in this order:
     模型 → 表情 → 部位 → 弹簧骨. Everything else (导入, 状态, 碎碎念, 视线, 鼠标互动, 其他) is a section of
-    the 通用设置 page (`/vrmpet3d/global`), which is a SEPARATE page — not a hidden half of this one.
+    the 通用设置 page (`/vrmpet3d-dev/global`), which is a SEPARATE page — not a hidden half of this one.
     `lib/config-page.js` drives both: every DOM lookup in it is guarded, so one script serves two pages.
   -->
-  <link rel="stylesheet" href="/vrmpet3d/window/lib/pages.css">
+  <link rel="stylesheet" href="/vrmpet3d-dev/window/lib/pages.css">
 </head>
 <body data-page="model" data-loading="true">
 <!--
@@ -39,7 +39,7 @@
   <span data-i18n="loading">正在加载设置…</span>
 </div>
 
-  <header class="page-header"><div class="eyebrow">VRMPET3D · SETTINGS</div><h1 data-i18n="headingModel">模型参数</h1><div id="status" role="status" aria-live="polite" data-i18n="reading">正在读取…</div></header>
+  <header class="page-header"><div class="eyebrow">VRMPET3D_DEV · SETTINGS</div><h1 data-i18n="headingModel">模型参数</h1><div id="status" role="status" aria-live="polite" data-i18n="reading">正在读取…</div></header>
   <nav class="section-nav" aria-label="设置分组" data-i18n-aria="navSections"><a href="#settings-0" data-i18n="sectionModel">模型</a><a href="#settings-1" data-i18n="sectionExpression">表情</a><a href="#settings-2" data-i18n="sectionParts">部位</a><a href="#settings-3" data-i18n="sectionSprings">弹簧骨</a></nav>
   <main>
 <section class="settings-section" id="settings-0">
@@ -201,14 +201,14 @@
         ? {
           error: "页面脚本出错：",
           file: "（来自 {name}）",
-          coreMissing: "初始化卡住：core.js 没有加载（检查 /vrmpet3d/window/lib/core.js 是否 404）。",
-          stuck: "初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d/settings）。",
+          coreMissing: "初始化卡住：core.js 没有加载（检查 /vrmpet3d-dev/window/lib/core.js 是否 404）。",
+          stuck: "初始化卡住：脚本已加载但没有完成初始化（看看窗口的控制台，或宿主是否提供 /vrmpet3d-dev/settings）。",
         }
         : {
           error: "Page script error: ",
           file: "(from {name})",
-          coreMissing: "Stuck at startup: core.js did not load (check whether /vrmpet3d/window/lib/core.js is a 404).",
-          stuck: "Stuck at startup: the script loaded but never finished initialising (check the window console, or whether the host serves /vrmpet3d/settings).",
+          coreMissing: "Stuck at startup: core.js did not load (check whether /vrmpet3d-dev/window/lib/core.js is a 404).",
+          stuck: "Stuck at startup: the script loaded but never finished initialising (check the window console, or whether the host serves /vrmpet3d-dev/settings).",
         };
       function show(message) {
         var status = document.getElementById("status");
@@ -219,13 +219,13 @@
           + (event.filename ? " " + WORDS.file.replace("{name}", event.filename) : ""));
       }, true);
       window.setTimeout(function () {
-        if (window.__VRMPET3D_CONFIG_STATE__) return;
-        if (!window.__VRMPET3D_CORE__) { show(WORDS.coreMissing); return; }
+        if (window.__VRMPET3D_DEV_CONFIG_STATE__) return;
+        if (!window.__VRMPET3D_DEV_CORE__) { show(WORDS.coreMissing); return; }
         show(WORDS.stuck);
       }, 2000);
     })();
   </script>
-  <script src="/vrmpet3d/window/lib/core.js"></script>
-  <script src="/vrmpet3d/window/lib/config-page.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/core.js"></script>
+  <script src="/vrmpet3d-dev/window/lib/config-page.js"></script>
 </body>
 </html>

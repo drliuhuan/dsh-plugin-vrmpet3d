@@ -1,0 +1,11 @@
+{
+  "generatedBy": "scripts/make-dev-package.mjs",
+  "from": "dsh-plugin-vrmpet3d",
+  "as": "dsh-plugin-vrmpet3d-dev",
+  "generatedAt": "2026-10-16T10:49:31.292Z",
+  "files": 76,
+  "sourceBranch": "mini-game",
+  "sourceCommit": "9c22a421cd94443e1102a91031d0fca5f933c546",
+  "artifactBranch": "mini-game-dev",
+  "repository": "https://github.com/drliuhuan/dsh-plugin-vrmpet3d"
+}

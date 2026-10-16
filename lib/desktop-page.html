@@ -1,19 +1,19 @@
 <!doctype html>
 <!--
-  The desktop pet's page, served by the plugin's own host route (`/vrmpet3d/window`).
+  The desktop pet's page, served by the plugin's own host route (`/vrmpet3d-dev/window`).
 
   Deliberately served over the plugin's HTTP origin rather than loaded from disk: the pet
-  fetches its model bytes from `/vrmpet3d/asset/<id>`, and a `file://` page would make those
+  fetches its model bytes from `/vrmpet3d-dev/asset/<id>`, and a `file://` page would make those
   requests cross-origin (or refused outright). Same origin means the asset, motion and model
   routes work exactly as they do for the in-app overlay, with no CORS and no special case.
 
   The sources below are the SAME files the overlay loads. They are served from
-  `/vrmpet3d/window/lib/`, a whitelisted prefix that reaches nothing else on disk.
+  `/vrmpet3d-dev/window/lib/`, a whitelisted prefix that reaches nothing else on disk.
 -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>vrmpet3d</title>
+  <title>vrmpet3d-dev</title>
   <style>
     html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
     /* The canvas IS the pet's box, not the window: the model is framed to its canvas, so a
@@ -24,14 +24,14 @@
 </head>
 <body>
 <canvas id="pet"></canvas>
-<script src="/vrmpet3d/window/lib/client.vendor.js"></script>
-<script src="/vrmpet3d/window/lib/core.js"></script>
-<script src="/vrmpet3d/window/lib/scene.js"></script>
-<script src="/vrmpet3d/window/lib/client.js"></script>
+<script src="/vrmpet3d-dev/window/lib/client.vendor.js"></script>
+<script src="/vrmpet3d-dev/window/lib/core.js"></script>
+<script src="/vrmpet3d-dev/window/lib/scene.js"></script>
+<script src="/vrmpet3d-dev/window/lib/client.js"></script>
 <!-- The right-click MENU both pets share: one definition of its entries, their order and their words, so the
      two pets cannot offer different menus. It replaced each surface's own settings panel. -->
-<script src="/vrmpet3d/window/lib/menu.js"></script>
-<script src="/vrmpet3d/window/lib/desktop-page.js"></script>
+<script src="/vrmpet3d-dev/window/lib/menu.js"></script>
+<script src="/vrmpet3d-dev/window/lib/desktop-page.js"></script>
 <script>
 (function () {
   var notes = [];
@@ -54,7 +54,7 @@
   function step(name) {
     try {
       steps.push(name);
-      document.title = 'vrmpet3d: ' + steps.join(' > ');
+      document.title = 'vrmpet3d-dev: ' + steps.join(' > ');
     } catch (_error) {
       // A title that cannot be written must not stop the pet.
     }
@@ -64,10 +64,10 @@
   window.addEventListener('error', function (event) {
     notes.push(String(event.message));
     step('error:' + String(event.message));
-    if (window.vrmpet3dDesktop) window.vrmpet3dDesktop.ready({ ok: false, error: notes.join('; ') });
+    if (window.vrmpet3dDevDesktop) window.vrmpet3dDevDesktop.ready({ ok: false, error: notes.join('; ') });
   });
 
-  var bridge = window.vrmpet3dDesktop;
+  var bridge = window.vrmpet3dDevDesktop;
   if (!bridge) {
     step('no-bridge');
     return;
@@ -86,7 +86,7 @@
     // pixels (220): it resized the buffer every frame, after the render, so the window always
     // composited an empty canvas. The mount lays the element out to the pet's own box.
 
-    var pet = globalThis.__VRMPET3D_DESKTOP__.mount({
+    var pet = globalThis.__VRMPET3D_DEV_DESKTOP__.mount({
       canvas: canvas,
       bridge: bridge,
       modelId: config.modelId,

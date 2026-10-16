@@ -19,7 +19,7 @@ author's intent. So:
   the file, and nothing here re-licenses it for anyone else.
 * The **procedurally generated placeholder** avatar is a **fixture, not a fallback**: `usePlaceholder` in
   `lib/scene.js` builds it for the geometry probes and the browser suite, gated on
-  `globalThis.__VRMPET3D_PLACEHOLDER__`, which nothing in the shipped plugin defines. A model that fails to
+  `globalThis.__VRMPET3D_DEV_PLACEHOLDER__`, which nothing in the shipped plugin defines. A model that fails to
   load reports the failure and leaves the stage exactly as it was — nothing is substituted for it — and a
   catalogue with nothing in it shows no pet and says so. Both of those changed on 2026-10-10, when the
   built-in avatar was removed.
@@ -71,7 +71,7 @@ bytes are read out of the **running** DSH itself, at plugin activation, by `lib/
 `mask:url(data:image/png;base64,…)` declaration inside `dsh-client-ui-chat`'s own client bundle
 (`resources/app.asar/dsh/node_modules/…` for the packaged app, the same member as a real file for a plain
 install), the host parses that declaration, checks for the `acTL`/`fcTL` animation chunks, and serves the bytes
-from `/vrmpet3d/whale`. The rungs after it are the fallback — `assets/whale-tail.apng` (what
+from `/vrmpet3d-dev/whale`. The rungs after it are the fallback — `assets/whale-tail.apng` (what
 `scripts/whale-asset.mjs` pre-seeds for a deployment that cannot read the app), then a copy cached in the
 plugin's own state directory — and if none of them answers, the route returns 404 and both prompts draw the
 static SVG, which is the app's own fallback.
@@ -271,7 +271,7 @@ idle is the default: it loops exactly.
 An authored clip is only as loopable as its author made it. If its last keyframe
 does not match its first, the loop has a seam, and the plugin will not hide that —
 it plays what the file says. A motion directory may declare the exception per clip (a `loop: false` in its
-own `vrmpet3d-motions.json`), and a one-shot hands the pose back to the state's idle rather than freezing in
+own `vrmpet3d-dev-motions.json`), and a one-shot hands the pose back to the state's idle rather than freezing in
 its last frame. *(RETIRED 2026-10-12: this paragraph used to add that "MMD physics stays off even with a
 motion loaded; the library's physics calls are optional, so an unrigged skeleton still animates" — there is
 no MMD clip to load any more.)*
@@ -304,8 +304,8 @@ publicly allows modification. When the two disagree, assume the stricter one.
 Point the plugin at one or more directories and it scans them recursively:
 
 ```yaml
-- id: vrmpet3d
-  name: dsh-plugin-vrmpet3d
+- id: vrmpet3d-dev
+  name: dsh-plugin-vrmpet3d-dev
   config:
     modelDirs:
       - D:/models/vrm

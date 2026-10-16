@@ -7,18 +7,18 @@
 // process, or any other window.
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
+contextBridge.exposeInMainWorld('vrmpet3dDevDesktop', {
   /**
    * Ask for the launch configuration: which model to show, where the asset route lives.
    * Sent as an invoke so the page can await it before mounting anything.
    */
-  config: () => ipcRenderer.invoke('vrmpet3d:config'),
-  focusHost: () => ipcRenderer.send('vrmpet3d:focus-host'),
+  config: () => ipcRenderer.invoke('vrmpet3d-dev:config'),
+  focusHost: () => ipcRenderer.send('vrmpet3d-dev:focus-host'),
 
   /** The global cursor position, pushed by the main process at frame rate. */
   onCursor: (callback) => {
     if (typeof callback !== 'function') return;
-    ipcRenderer.on('vrmpet3d:cursor', (_event, point) => callback(point));
+    ipcRenderer.on('vrmpet3d-dev:cursor', (_event, point) => callback(point));
   },
 
   /**
@@ -26,31 +26,31 @@ contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
    * passing them through. `dragging` keeps the window interactive for the whole gesture
    * rather than only while the cursor happens to be over the pet.
    */
-  reportRect: (rect) => ipcRenderer.send('vrmpet3d:rect', rect),
+  reportRect: (rect) => ipcRenderer.send('vrmpet3d-dev:rect', rect),
 
   /** Announce that the pet is mounted and drawing, with the facts the launcher reports. */
-  ready: (info) => ipcRenderer.send('vrmpet3d:ready', info),
+  ready: (info) => ipcRenderer.send('vrmpet3d-dev:ready', info),
 
   /**
    * Ask for a MODEL FILE, with a NATIVE file picker.
    *
    * A FILE, not a folder, and the operator's reason is the design: 「选择VRM模型所在的文件，并导入到插件的本地配置
    * 中去，不再是选中一个文件夹了，万一文件夹移位了，也会出bug」. The launcher answers with the chosen path — or null
-   * when the user cancelled — and the PAGE hands it to the HOST over `/vrmpet3d/models`, which COPIES it into the
-   * plugin's own storage. The host stays the only writer of that list, and the `VRMPET3D_MODEL_FILES_FILE` /
-   * `VRMPET3D_IMPORT_DIR` overrides the suites rely on are not bypassed.
+   * when the user cancelled — and the PAGE hands it to the HOST over `/vrmpet3d-dev/models`, which COPIES it into the
+   * plugin's own storage. The host stays the only writer of that list, and the `VRMPET3D_DEV_MODEL_FILES_FILE` /
+   * `VRMPET3D_DEV_IMPORT_DIR` overrides the suites rely on are not bypassed.
    */
-  pickModelFile: (language) => ipcRenderer.invoke('vrmpet3d:pick-path', {
+  pickModelFile: (language) => ipcRenderer.invoke('vrmpet3d-dev:pick-path', {
     kind: 'model', language: language === 'zh' || language === 'en' ? language : undefined,
   }),
 
   /**
-   * The same dialog for an imported MOTION folder (`/vrmpet3d/motions`), which stays a DIRECTORY: a motion pack is
+   * The same dialog for an imported MOTION folder (`/vrmpet3d-dev/motions`), which stays a DIRECTORY: a motion pack is
    * a folder of clips filed by state, and the host copies the folder rather than a single file out of it.
    *
    * One channel for both, with `kind` deciding a FILE dialog from a folder one and the title each shows.
    */
-  pickMotionDir: (language) => ipcRenderer.invoke('vrmpet3d:pick-path', {
+  pickMotionDir: (language) => ipcRenderer.invoke('vrmpet3d-dev:pick-path', {
     kind: 'motion', language: language === 'zh' || language === 'en' ? language : undefined,
   }),
 
@@ -64,8 +64,8 @@ contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
    * owns both halves: it focuses the window and requests the lock with Electron's `userGesture` flag, and it
    * exits the lock when the drag ends. The page only READS the result (`pointerlockchange`).
    */
-  orbit: (active) => ipcRenderer.send('vrmpet3d:orbit', active === true),
+  orbit: (active) => ipcRenderer.send('vrmpet3d-dev:orbit', active === true),
 
   /** The one control the page has over its own window. */
-  quit: () => ipcRenderer.send('vrmpet3d:quit'),
+  quit: () => ipcRenderer.send('vrmpet3d-dev:quit'),
 });

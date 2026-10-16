@@ -21,7 +21,7 @@ const WATCHDOG_MS = 2000;
 /**
  * The size the pet's window starts at, before the page has told us where the pet actually is.
  *
- * A placeholder, not a policy: every `vrmpet3d:rect` report re-sizes and re-places the window onto the
+ * A placeholder, not a policy: every `vrmpet3d-dev:rect` report re-sizes and re-places the window onto the
  * pet's OWN rectangle, so this only has to be a sane shape for the first frame. The window used to be
  * the whole work area and nothing about the pet's size was involved — see the note on the window
  * options below for the measurement that ended that.
@@ -35,14 +35,14 @@ const DEFAULT_PET_WINDOW = { width: 240, height: 320 };
  * from the plugin; the `desktop` suite asserts the two copies are identical, so a rename on
  * one side fails a test instead of silently ending the reporting.
  */
-const VRMPET3D_STATUS_PREFIX = 'vrmpet3d-desktop: ';
+const VRMPET3D_DEV_STATUS_PREFIX = 'vrmpet3d-dev-desktop: ';
 
 /**
  * The words THIS process puts on screen itself: the two native dialog titles and the model filter's name.
  *
  * Nothing else here is a string a user reads — every other sentence in this file is a log line or a self-test
  * report — and these three are the exception because Electron, not a page, draws them. The window title is
- * deliberately NOT in this table: it names the launcher's own window (`vrmpet3d - model settings`) and is the same
+ * deliberately NOT in this table: it names the launcher's own window (`vrmpet3d-dev - model settings`) and is the same
  * ASCII wherever the user is, so a translated one would add a second name for a window the user finds by that one.
  *
  * The launcher is a SEPARATE PROCESS with no access to `lib/core.js`, so it keeps its own copy of the repository's
@@ -128,7 +128,7 @@ process.stderr.on('error', () => {});
 /**
  * How long the self-test waits for the page's own verdict before it gives up.
  *
- * Without it a page that never sends `vrmpet3d:ready` leaves the window and this process alive for
+ * Without it a page that never sends `vrmpet3d-dev:ready` leaves the window and this process alive for
  * ever (measured twice on 2026-10-08), which is a stray always-on-top window on the user's screen
  * and a self-test that never writes its report. The `desktop` suite waits 60 s for the file, so
  * this has to fire before that.
@@ -300,7 +300,7 @@ app.whenReady().then(async () => {
     // settings form. Read from the argument rather than from a separate entry point, because the rest of
     // the launcher (the borrowed runtime, the watchdog, the parent-pid handshake) is identical for both.
     const isConfig = options.config === true;
-    const isGame = isConfig && new URL(options.url).pathname === '/vrmpet3d/game';
+    const isGame = isConfig && new URL(options.url).pathname === '/vrmpet3d-dev/game';
 
     /**
      * Arm the self-test's own deadline before anything can hang.
@@ -330,14 +330,14 @@ app.whenReady().then(async () => {
       height: 860,
       minWidth: 560,
       minHeight: 420,
-      title: isGame ? '开饭啦 · 桌宠弹球' : 'vrmpet3d - model settings',
+      title: isGame ? '开饭啦 · 桌宠弹球' : 'vrmpet3d-dev - model settings',
       fullscreen: isGame,
       backgroundColor: '#16171c',
       show: true,
       webPreferences: {
         /**
          * The settings page gets the SAME bridge the pet page has, and it needs it for one thing: the
-         * model-import section asks for a native FILE picker (`vrmpet3d:pick-path`), which no web page can open
+         * model-import section asks for a native FILE picker (`vrmpet3d-dev:pick-path`), which no web page can open
          * for itself. Everything else the page reads over the host's HTTP routes, exactly as before.
          */
         preload: path.join(__dirname, 'preload.js'),
@@ -356,7 +356,7 @@ app.whenReady().then(async () => {
       // to an overlay plane, and a screen-sized layered surface being re-uploaded every frame.
       // All three need a window that covers the screen, so the window no longer does: it is created
       // at a modest default (bottom-right of the work area) and then FOLLOWS the pet's own rectangle,
-      // which the page reports on every `vrmpet3d:rect`.
+      // which the page reports on every `vrmpet3d-dev:rect`.
       // THE PET'S OWN BOX, not the screen — the fix for the freeze.
       //
       // Measured with a local reference window and screen captures: with the ORIGINAL screen-sized window a
@@ -464,7 +464,7 @@ app.whenReady().then(async () => {
       report.checks.transparent = true;
       report.checks.clickThroughAccepted = true;
       // The pet window is the PET'S BOX, not the screen — and it is placed by the page's own report
-      // (`vrmpet3d:rect`), so at this moment it still has its default size. What is asserted here is the
+      // (`vrmpet3d-dev:rect`), so at this moment it still has its default size. What is asserted here is the
       // property that matters and that no longer depends on timing: it does NOT cover the work area.
       const actual = win.getBounds();
       report.checks.petSized = actual.width < bounds.width && actual.height < bounds.height;
@@ -538,7 +538,7 @@ app.whenReady().then(async () => {
     const sendCursor = (cursor) => {
       if (win.isDestroyed() || !cursor) return;
       lastCursor = { x: cursor.x, y: cursor.y };
-      win.webContents.send('vrmpet3d:cursor', cursorMessage(win, cursor, interacting));
+      win.webContents.send('vrmpet3d-dev:cursor', cursorMessage(win, cursor, interacting));
     };
 
     /**
@@ -606,13 +606,13 @@ app.whenReady().then(async () => {
       if (!probing) sendCursor(lastCursor);
     };
 
-    ipcMain.on('vrmpet3d:focus-host', () => { shell.openExternal('dsh://open').catch(() => {}); });
-    ipcMain.handle('vrmpet3d:config', () => ({
+    ipcMain.on('vrmpet3d-dev:focus-host', () => { shell.openExternal('dsh://open').catch(() => {}); });
+    ipcMain.handle('vrmpet3d-dev:config', () => ({
       modelId: options.modelId,
-      assetBase: '/vrmpet3d/asset',
+      assetBase: '/vrmpet3d-dev/asset',
       // The VIRTUAL frame the page places the pet in: still the whole work area, because that is what
       // the placement fractions and the zoom ceiling are measured against. The window is only the part
-      // of it the pet occupies, and `vrmpet3d:cursor` carries that window's origin to the page.
+      // of it the pet occupies, and `vrmpet3d-dev:cursor` carries that window's origin to the page.
       screen: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
       selfTest: Boolean(options.selfTest),
     }));
@@ -621,8 +621,8 @@ app.whenReady().then(async () => {
      *
      * This is the one thing a settings page cannot do for itself — a web page cannot open a native dialog, and
      * this process is the only one with an Electron to open it in. The path goes back to the PAGE, which hands it
-     * to the HOST (`/vrmpet3d/models` or `/vrmpet3d/motions` depending on which section asked); the host stays the only
-     * writer of every import store, and the `VRMPET3D_*_FILE` overrides the suites rely on are not bypassed.
+     * to the HOST (`/vrmpet3d-dev/models` or `/vrmpet3d-dev/motions` depending on which section asked); the host stays the only
+     * writer of every import store, and the `VRMPET3D_DEV_*_FILE` overrides the suites rely on are not bypassed.
      *
      * `kind` decides a FILE dialog from a folder one, and the title each shows. A MODEL is a FILE now (the
      * operator: 「选择VRM模型所在的文件…不再是选中一个文件夹了，万一文件夹移位了，也会出bug」), filtered to the three
@@ -632,7 +632,7 @@ app.whenReady().then(async () => {
      * `defaultPath` is the user's home directory rather than a model directory: the launcher does not know where
      * models or motions live, and guessing would open the dialog somewhere surprising.
      */
-    ipcMain.handle('vrmpet3d:pick-path', async (_event, options) => {
+    ipcMain.handle('vrmpet3d-dev:pick-path', async (_event, options) => {
       const kind = options && typeof options === 'object' && options.kind === 'motion' ? 'motion' : 'model';
       const text = DIALOG_TEXT[dialogLanguage(options)] || DIALOG_TEXT.en;
       try {
@@ -653,7 +653,7 @@ app.whenReady().then(async () => {
         return null;
       }
     });
-    ipcMain.on('vrmpet3d:rect', (_event, rect) => {
+    ipcMain.on('vrmpet3d-dev:rect', (_event, rect) => {
       if (!rect || typeof rect !== 'object') return;
       petRect = {
         left: Number(rect.left) || 0,
@@ -706,7 +706,7 @@ app.whenReady().then(async () => {
       followPet();
       announce();
     });
-    ipcMain.on('vrmpet3d:ready', (_event, info) => {
+    ipcMain.on('vrmpet3d-dev:ready', (_event, info) => {
       report.page = info || null;
       report.checks.pageReady = Boolean(info && info.webgl2);
       // One machine-readable line on stdout, which the host half relays and parses into its
@@ -719,7 +719,7 @@ app.whenReady().then(async () => {
     /**
      * 开始/结束一次视角旋转 —— 页面唯一的请求，启动器负责让它成立。
      *
-     * `true`：允许聚焦并把焦点给窗口，然后回一条 `vrmpet3d:orbit-focus`，页面收到后才请求指针锁
+     * `true`：允许聚焦并把焦点给窗口，然后回一条 `vrmpet3d-dev:orbit-focus`，页面收到后才请求指针锁
      * （请求必须发生在聚焦之后，否则 Chromium 直接拒绝 —— 上面 `pointerLock` 的实测就是这么来的）。
      * `false`：恢复 `focusable: false`、交回焦点、重新置顶，也就是这个窗口平时的样子。
      */
@@ -764,7 +764,7 @@ app.whenReady().then(async () => {
       } catch (_error) { /* the window is going away */ }
     };
 
-    ipcMain.on('vrmpet3d:orbit', (event, active) => {
+    ipcMain.on('vrmpet3d-dev:orbit', (event, active) => {
       if (win.isDestroyed()) return;
       if (active) {
         orbitFocus = true;
@@ -795,7 +795,7 @@ app.whenReady().then(async () => {
       win.setAlwaysOnTop(true, 'screen-saver');
       releaseOrbitLock();
     });
-    ipcMain.on('vrmpet3d:quit', () => app.quit());
+    ipcMain.on('vrmpet3d-dev:quit', () => app.quit());
     win.on('closed', () => app.quit());
 
     // The cursor is read from the OS rather than from page events: a click-through window
@@ -863,7 +863,7 @@ app.whenReady().then(async () => {
      *
      * The pet page drives its own readiness through the preload bridge, which is what the pet self-test
      * waits for. The settings page reads everything it shows over the host's HTTP routes and announces
-     * nothing of its own — the bridge it now has exists for the path picker (`vrmpet3d:pick-path`) — so
+     * nothing of its own — the bridge it now has exists for the path picker (`vrmpet3d-dev:pick-path`) — so
      * waiting for a message it will never send is how the first version of this mode produced no report at
      * all. The delay is for the page's own fetches, and any error it throws in the meantime is already
      * captured through the console relay.
@@ -927,7 +927,7 @@ async function finishSelfTest(win) {
     // What the CANVAS holds, independently of what the window composited. If these two disagree,
     // the fault is compositing; if the canvas is empty as well, nothing was drawn at all.
     try {
-      const raw = await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DESKTOP_SCAN__ ? window.__VRMPET3D_DESKTOP_SCAN__() : null)');
+      const raw = await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DEV_DESKTOP_SCAN__ ? window.__VRMPET3D_DEV_DESKTOP_SCAN__() : null)');
       report.checks.canvasPixels = raw ? JSON.parse(raw) : null;
     } catch (error) {
       report.errors.push('the canvas could not be scanned: ' + error.message);
@@ -943,8 +943,8 @@ async function finishSelfTest(win) {
      */
     try {
       const raw = await win.webContents.executeJavaScript(
-        'JSON.stringify(window.__VRMPET3D_DESKTOP_SNAPSHOT__ ? (function () {'
-        + ' var shot = window.__VRMPET3D_DESKTOP_SNAPSHOT__(); var png = shot && shot.png;'
+        'JSON.stringify(window.__VRMPET3D_DEV_DESKTOP_SNAPSHOT__ ? (function () {'
+        + ' var shot = window.__VRMPET3D_DEV_DESKTOP_SNAPSHOT__(); var png = shot && shot.png;'
         + ' if (shot) { shot.png = null; } return { fact: shot, png: png }; }()) : null)',
       );
       const shot = raw ? JSON.parse(raw) : null;
@@ -967,7 +967,7 @@ async function finishSelfTest(win) {
     for (const label of ['as-loaded', 'only-cloth', 'alpha-test-2', 'force-define']) {
       try {
         const raw = await win.webContents.executeJavaScript(
-          'globalThis.__VRMPET3D_DESKTOP_VARIANT__ ? globalThis.__VRMPET3D_DESKTOP_VARIANT__(' + JSON.stringify(label) + ') : null',
+          'globalThis.__VRMPET3D_DEV_DESKTOP_VARIANT__ ? globalThis.__VRMPET3D_DEV_DESKTOP_VARIANT__(' + JSON.stringify(label) + ') : null',
         );
         const shot = raw ? JSON.parse(raw) : null;
         if (!shot) continue;
@@ -991,7 +991,7 @@ async function finishSelfTest(win) {
       // Two pages, two state objects. The pet page publishes its frames and hit test; the settings page
       // publishes what it rendered (how many expressions and spring chains it found in the model), which
       // is the only way a test can tell "the window opened" from "the window has something in it".
-      const globalName = options.config === true ? '__VRMPET3D_CONFIG_STATE__' : '__VRMPET3D_DESKTOP_STATE__';
+      const globalName = options.config === true ? '__VRMPET3D_DEV_CONFIG_STATE__' : '__VRMPET3D_DEV_DESKTOP_STATE__';
       const readState = async () => {
         const raw = await win.webContents.executeJavaScript(
           'JSON.stringify(globalThis.' + globalName + ' || null)',
@@ -1029,7 +1029,7 @@ async function finishSelfTest(win) {
 /**
  * Read the OTHER settings page, and merge the two readouts into one.
  *
- * The settings window is TWO PAGES since 2026-10-11 (`/vrmpet3d/config` for 模型参数 and `/vrmpet3d/global` for 通用设置,
+ * The settings window is TWO PAGES since 2026-10-11 (`/vrmpet3d-dev/config` for 模型参数 and `/vrmpet3d-dev/global` for 通用设置,
  * operator: "模型参数和通用设置（原总设置）是两个单独的页面"), and a self-test that visited only the page it was
  * launched on would leave half the settings unproven — including every control that lives on the other one. So
  * the window is NAVIGATED to its sibling PAGE (the route, not a query parameter) and read again.
@@ -1058,7 +1058,7 @@ async function readOtherPageState(win, report) {
   /**
    * SWAP THE ROUTE rather than rewriting a string that may not be there.
    *
-   * The launcher's own URLs name the page they open (`/vrmpet3d/config`, `/vrmpet3d/global`), but a self-test
+   * The launcher's own URLs name the page they open (`/vrmpet3d-dev/config`, `/vrmpet3d-dev/global`), but a self-test
    * (and the desktop suite) may open the page directly — so this reads the URL's own path and changes only that.
    * The first version of this replaced a `?panel=` query parameter that a URL without it never had, which
    * silently skipped the second reading and proved nothing; a route swap cannot go missing while the first page
@@ -1067,9 +1067,9 @@ async function readOtherPageState(win, report) {
   const target = (function () {
     try {
       const url = new URL(current);
-      url.pathname = first.page === 'model' ? '/vrmpet3d/global' : '/vrmpet3d/config';
+      url.pathname = first.page === 'model' ? '/vrmpet3d-dev/global' : '/vrmpet3d-dev/config';
       // The model is a 模型参数 parameter: it must not ride along to the page that has no model picker.
-      if (url.pathname === '/vrmpet3d/global') url.searchParams.delete('model');
+      if (url.pathname === '/vrmpet3d-dev/global') url.searchParams.delete('model');
       return url.toString();
     } catch (_error) {
       return current;
@@ -1080,7 +1080,7 @@ async function readOtherPageState(win, report) {
   // The page publishes on its first settings snapshot; a moment here beats reading a half-built DOM.
   await new Promise((resolve) => setTimeout(resolve, 800));
   const raw = await win.webContents.executeJavaScript(
-    'JSON.stringify(globalThis.__VRMPET3D_CONFIG_STATE__ || null)',
+    'JSON.stringify(globalThis.__VRMPET3D_DEV_CONFIG_STATE__ || null)',
   );
   const state = raw ? JSON.parse(raw) : null;
   if (!state) {
@@ -1194,14 +1194,14 @@ async function probeHitTest(win) {
         x: petRect.left + Math.round(petRect.width * fx),
         y: petRect.top + Math.round(petRect.height * fy),
       };
-      win.webContents.send('vrmpet3d:cursor', cursorMessage(win, point, false));
+      win.webContents.send('vrmpet3d-dev:cursor', cursorMessage(win, point, false));
       await new Promise((resolve) => setTimeout(resolve, 140));
       // The page's own numbers for this probe, not only its verdict: "no clicks land on the pet"
       // is indistinguishable from "the readback found a transparent pixel" without them, and the
       // two have different causes.
       let detail = null;
       try {
-        const raw = await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DESKTOP_STATE__ || null)');
+        const raw = await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DEV_DESKTOP_STATE__ || null)');
         const snapshot = raw ? JSON.parse(raw) : null;
         detail = snapshot ? { lastHit: snapshot.lastHit, hitReads: snapshot.hitReads, over: snapshot.over } : null;
       } catch (_error) {
@@ -1210,7 +1210,7 @@ async function probeHitTest(win) {
       answers.push({ at: [fx, fy], over: overPet, detail: detail });
     }
     // Far outside the pet: the top-left of the screen, where nothing is drawn.
-    win.webContents.send('vrmpet3d:cursor', cursorMessage(win, { x: 4, y: 4 }, false));
+    win.webContents.send('vrmpet3d-dev:cursor', cursorMessage(win, { x: 4, y: 4 }, false));
     await new Promise((resolve) => setTimeout(resolve, 140));
     const overFar = overPet;
     const insidePainted = answers.filter((answer) => answer.over).length;
@@ -1226,14 +1226,14 @@ async function probeHitTest(win) {
     let menuBoxRect = null;
     let overMenu = null;
     try {
-      await win.webContents.executeJavaScript('window.__VRMPET3D_DESKTOP_MENU__ && window.__VRMPET3D_DESKTOP_MENU__(true)');
+      await win.webContents.executeJavaScript('window.__VRMPET3D_DEV_DESKTOP_MENU__ && window.__VRMPET3D_DEV_DESKTOP_MENU__(true)');
       await new Promise((resolve) => setTimeout(resolve, 200));
-      const raw = await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DESKTOP_STATE__ || null)');
+      const raw = await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DEV_DESKTOP_STATE__ || null)');
       const snapshot = raw ? JSON.parse(raw) : null;
       const origin = (snapshot && snapshot.screen) || { x: 0, y: 0 };
       const box = snapshot && snapshot.menu ? snapshot.menu.rect : null;
       // The page reports the menu in VIRTUAL frame coordinates; this process needs it in screen
-      // coordinates, the same system every `vrmpet3d:rect` arrives in, because `followPet` sizes the
+      // coordinates, the same system every `vrmpet3d-dev:rect` arrives in, because `followPet` sizes the
       // window to hold it.
       menuBoxRect = box
         ? {
@@ -1244,7 +1244,7 @@ async function probeHitTest(win) {
         }
         : null;
       if (menuBoxRect) {
-        win.webContents.send('vrmpet3d:cursor', cursorMessage(win, {
+        win.webContents.send('vrmpet3d-dev:cursor', cursorMessage(win, {
           x: menuBoxRect.left + Math.round(menuBoxRect.width / 2),
           y: menuBoxRect.top + Math.round(menuBoxRect.height / 2),
         }, false));
@@ -1269,7 +1269,7 @@ async function probeHitTest(win) {
       report.errors.push('the right-click menu could not be probed: ' + error.message);
     } finally {
       try {
-        await win.webContents.executeJavaScript('window.__VRMPET3D_DESKTOP_MENU__ && window.__VRMPET3D_DESKTOP_MENU__(false)');
+        await win.webContents.executeJavaScript('window.__VRMPET3D_DEV_DESKTOP_MENU__ && window.__VRMPET3D_DEV_DESKTOP_MENU__(false)');
       } catch (_error) {
         // Closing it is tidiness; the window is about to exit either way.
       }
@@ -1285,22 +1285,22 @@ async function probeHitTest(win) {
    *
    * 上一版由主进程直接 `executeJavaScript(requestPointerLock, true)`，于是它成功了，而生产里页面自己发的请求
    * 失败 —— 操作者 2026-10-12：「并没有成功，光标没有被锁住」。差别就在那个 `userGesture` 标记，以及请求发出时
-   * 文档是否已经聚焦。所以这次从页面自己的桥接口出发：`vrmpet3dDesktop.orbit(true)` → preload → 本进程的
-   * `vrmpet3d:orbit` 处理（设为可聚焦、聚焦、用 `userGesture` 请求锁）→ 回读 `document.pointerLockElement`，
+   * 文档是否已经聚焦。所以这次从页面自己的桥接口出发：`vrmpet3dDevDesktop.orbit(true)` → preload → 本进程的
+   * `vrmpet3d-dev:orbit` 处理（设为可聚焦、聚焦、用 `userGesture` 请求锁）→ 回读 `document.pointerLockElement`，
    * 再 `orbit(false)` 并确认锁被放开。这就是页面在生产里走的每一个环节。
    */
   try {
     const measured = await win.webContents.executeJavaScript(`(function () {
-      if (!window.vrmpet3dDesktop || typeof window.vrmpet3dDesktop.orbit !== 'function') {
+      if (!window.vrmpet3dDevDesktop || typeof window.vrmpet3dDevDesktop.orbit !== 'function') {
         return Promise.resolve({ noBridge: true });
       }
-      window.vrmpet3dDesktop.orbit(true);
+      window.vrmpet3dDevDesktop.orbit(true);
       return new Promise(function (resolve) {
         setTimeout(function () {
           var canvas = document.querySelector('canvas');
           var locked = document.pointerLockElement === canvas;
           var hasFocus = document.hasFocus();
-          window.vrmpet3dDesktop.orbit(false);
+          window.vrmpet3dDevDesktop.orbit(false);
           setTimeout(function () {
             resolve({
               supported: true,
@@ -1332,7 +1332,7 @@ async function probeHitTest(win) {
    */
   try {
     const view = async () => JSON.parse(
-      (await win.webContents.executeJavaScript('JSON.stringify((window.__VRMPET3D_DESKTOP_STATE__ || {}).view || null)')) || 'null',
+      (await win.webContents.executeJavaScript('JSON.stringify((window.__VRMPET3D_DEV_DESKTOP_STATE__ || {}).view || null)')) || 'null',
     );
     /**
      * `sendInputEvent` 的坐标是**窗口客户区**坐标，不是屏幕坐标 —— 第一版把页面上报的屏幕矩形直接喂了进去，
@@ -1362,7 +1362,7 @@ async function probeHitTest(win) {
     win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(path[path.length - 1].x), y: Math.round(path[path.length - 1].y), button: 'right', clickCount: 1 });
     await new Promise((resolve) => setTimeout(resolve, 80));
     const after = JSON.parse(
-      (await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DESKTOP_STATE__ || null)')) || 'null',
+      (await win.webContents.executeJavaScript('JSON.stringify(window.__VRMPET3D_DEV_DESKTOP_STATE__ || null)')) || 'null',
     );
     const yawMoved = Boolean(before && turned) && Math.abs(turned.yaw - before.yaw) > 1e-6;
     const stoppedAfterRelease = Boolean(after) && after.rect && after.rect.orbiting === false;
@@ -1403,7 +1403,7 @@ async function probeWheel(win) {
     // left the pet (it went red on 2026-10-08 for exactly that reason, with every number correct).
     try {
       await win.webContents.executeJavaScript(
-        'globalThis.__VRMPET3D_DESKTOP_PLACE__ && globalThis.__VRMPET3D_DESKTOP_PLACE__(0.35, 0.35)',
+        'globalThis.__VRMPET3D_DEV_DESKTOP_PLACE__ && globalThis.__VRMPET3D_DEV_DESKTOP_PLACE__(0.35, 0.35)',
       );
       await new Promise((resolve) => setTimeout(resolve, 220));
     } catch (_error) {
@@ -1428,7 +1428,7 @@ async function probeWheel(win) {
         x: petRect.left + Math.round(petRect.width * across),
         y: petRect.top + Math.round(petRect.height * down),
       };
-      win.webContents.send('vrmpet3d:cursor', cursorMessage(win, probe, false));
+      win.webContents.send('vrmpet3d-dev:cursor', cursorMessage(win, probe, false));
       await new Promise((resolve) => setTimeout(resolve, 120));
       const state = await readPageState(win);
       // overModel is the page's own hit test against PAINTED PIXELS, which is exactly the question being
@@ -1439,7 +1439,7 @@ async function probeWheel(win) {
       // Nothing painted anywhere the candidates look: say so rather than reporting a wheel failure.
       throw new Error('no painted point could be found on the pet to aim the wheel at');
     }
-    win.webContents.send('vrmpet3d:cursor', cursorMessage(win, at, false));
+    win.webContents.send('vrmpet3d-dev:cursor', cursorMessage(win, at, false));
     await new Promise((resolve) => setTimeout(resolve, 140));
     const acrossBefore = (at.x - petRect.left) / petRect.width;
     const downBefore = (at.y - petRect.top) / petRect.height;
@@ -1506,7 +1506,7 @@ async function readPageState(win) {
      * …and WHY it might have none, read from the window itself rather than from the page's script.
      *
      * The page's inline glue returns silently when the preload BRIDGE is missing (`if (!bridge) return;`) and never calls
-     * `bridge.ready` when `config()` does not resolve — and both leave `__VRMPET3D_DESKTOP_STATE__` ABSENT: no pet, no error, and a
+     * `bridge.ready` when `config()` does not resolve — and both leave `__VRMPET3D_DEV_DESKTOP_STATE__` ABSENT: no pet, no error, and a
      * status line repeating the last good frames. That is what the operator's window did on 2026-10-15 while a window this session
      * launched by hand worked.
      *
@@ -1517,9 +1517,9 @@ async function readPageState(win) {
      */
     const raw = await win.webContents.executeJavaScript(
       'JSON.stringify({'
-      + 'state: window.__VRMPET3D_DESKTOP_STATE__ || null,'
-      + 'bridge: typeof window.vrmpet3dDesktop === "object" && window.vrmpet3dDesktop !== null,'
-      + 'sources: Boolean(globalThis.__VRMPET3D_DESKTOP__),'
+      + 'state: window.__VRMPET3D_DEV_DESKTOP_STATE__ || null,'
+      + 'bridge: typeof window.vrmpet3dDevDesktop === "object" && window.vrmpet3dDevDesktop !== null,'
+      + 'sources: Boolean(globalThis.__VRMPET3D_DEV_DESKTOP__),'
       + 'title: String(document.title || ""),'
       + '})',
     );
@@ -1582,7 +1582,7 @@ let lastReadyInfo = null;
 /**
  * Tell the host half what the page is doing, on stdout, in one line it can parse.
  *
- * `VRMPET3D_STATUS_PREFIX` is duplicated in `lib/desktop.js`; the pair is asserted by the `desktop`
+ * `VRMPET3D_DEV_STATUS_PREFIX` is duplicated in `lib/desktop.js`; the pair is asserted by the `desktop`
  * suite so the two cannot drift into silence. The payload carries the hit state as well, because
  * "the window is open but every click goes through it" is otherwise indistinguishable from a
  * working pet when read from the host.
@@ -1631,7 +1631,7 @@ function announce(info) {
     rect: petRect,
     // What the page's motion path is doing, and this is not decoration: "the pet is playing a clip" and "the
     // pet is standing in its procedural pose" look identical from outside, and the page's own state is the
-    // only place that knows. Published here so a single `GET /vrmpet3d/desktop` answers it.
+    // only place that knows. Published here so a single `GET /vrmpet3d-dev/desktop` answers it.
     motion: lastPageState && lastPageState.motion
       ? {
         kind: lastPageState.motion.kind,
@@ -1640,7 +1640,7 @@ function announce(info) {
          * How many clips the PAGE's own catalog holds, and whether the route that fills it answered at
          * all. The page publishes both (`lib/desktop-page.js`) and this copy list dropped both, which
          * made the two failures behind "no motion ever plays" indistinguishable from outside: a host
-         * that never served `/vrmpet3d/motions` and a window with no clip mapped to a state both reported
+         * that never served `/vrmpet3d-dev/motions` and a window with no clip mapped to a state both reported
          * `mapped: {}` and `available: []`, and nothing else. Measured on the live window on
          * 2026-10-10: 6 clips in the host catalog, `mapped: {}`, `available: []`.
          *
@@ -1750,7 +1750,7 @@ function announce(info) {
          * Relayed because the page publishes it but this report COPIES a fixed list of fields: without it the
          * correction existed in the page and was invisible from outside, so "the text gesture did nothing" and
          * "it worked and the size is right" could not be told apart without a browser console. Reading it from
-         * `/vrmpet3d/settings` (`preferences.statusScale`) is the fallback on a launcher older than this field.
+         * `/vrmpet3d-dev/settings` (`preferences.statusScale`) is the fallback on a launcher older than this field.
          */
         scale: lastPageState.status.scale === undefined ? null : lastPageState.status.scale,
         /**
@@ -1783,7 +1783,7 @@ function announce(info) {
      *
      * Relayed for the same reason `status` is, and learned the hard way on 2026-10-11: the operator reported
      * "the window still says 深度求索中 after the turn ended", and the answer needed BOTH sides — the host's
-     * `/vrmpet3d/state` (which said `state: null` with a TypeError from the app's pet) and this page's own view
+     * `/vrmpet3d-dev/state` (which said `state: null` with a TypeError from the app's pet) and this page's own view
      * (which was faithfully drawing the last state it had ever received). Without `published` and `error` in
      * this report, those two look identical from outside and the fixed field list made the page's view
      * invisible.
@@ -1813,7 +1813,7 @@ function announce(info) {
       : null,
   };
   try {
-    process.stdout.write(`${VRMPET3D_STATUS_PREFIX}${JSON.stringify(payload)}\n`);
+    process.stdout.write(`${VRMPET3D_DEV_STATUS_PREFIX}${JSON.stringify(payload)}\n`);
   } catch (_error) {
     // A closed stdout must not take the window down with it.
   }

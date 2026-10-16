@@ -20,7 +20,7 @@
  * resolved JSON string.
  */
 (async () => {
-  const state = () => globalThis.__VRMPET3D_CONFIG_STATE__ || {};
+  const state = () => globalThis.__VRMPET3D_DEV_CONFIG_STATE__ || {};
   const row = () => document.querySelector('#motion-list .motion-state[data-state="resting"]');
   const tickBoxes = () => Array.from(row() ? row().querySelectorAll('.picks label.pick input[type=checkbox]') : []);
   const gazeBoxes = () => Array.from(row() ? row().querySelectorAll('label.clip-gaze input[type=checkbox]') : []);
