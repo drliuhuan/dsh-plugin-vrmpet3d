@@ -25,7 +25,7 @@ check('paddle steers the ball with a bounded upward angle', () => {
   const g = new Game(); g.launch(); g.ball.x = 550; g.ball.y = g.paddle.y - 24; g.ball.vx = 0; g.ball.vy = 400;
   const events = g.step(0.025); assert.ok(events.some(e => e.type === 'paddle'));
   assert.ok(g.ball.vy < 0 && g.ball.vx > 0); assert.ok(Math.abs(Math.hypot(g.ball.vx, g.ball.vy) - g.speed()) < 0.001);
-  assert.ok(Math.abs(g.speed() - 422 * 1.02) < 0.001);
+  assert.ok(Math.abs(g.speed() - 422 * 1.015) < 0.001);
 });
 check('top impact eats rice and clears with the empty bowl still intact', () => {
   const g = new Game();

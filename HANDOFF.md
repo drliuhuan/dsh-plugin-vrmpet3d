@@ -228,7 +228,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**Documented baseline: 9 suites, 2628 checks.** The mini-game change has only run the narrow checks recorded in MINI_GAME_HANDOFF.md; this is not a fresh full-suite verdict. `node scripts/check-docs.mjs` re-derives every one of those figures by
+**Documented baseline: 9 suites, 2633 checks.** The mini-game change has only run the narrow checks recorded in MINI_GAME_HANDOFF.md; this is not a fresh full-suite verdict. `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which
@@ -510,7 +510,8 @@ springDefaults[modelId], resolved by the host against the LIVE model id — but 
 pet with the live one (m1), the floating window with its own start-up value, which the launcher's own report shows as
 placeholder. That lookup missed, setSpringDefaults(null) was handed over, and the window fell back to the model file's
 authored 0.2 while the app pet wore the 0.4 he had tuned and shipped — "the built-in pet has no physics" was really "the
-window has the stock hair". The window now resolves the key with esolvedModelId, the same resolver its bubble font already
+window has the stock hair". The window now resolves the key with
+esolvedModelId, the same resolver its bubble font already
 used, so both read one key. Verified live the same session: app why.physics.spring = {"stiff":0.4,"drag":0.2,"grav":0.05,
 "chain":"DaiMao"} and window pageMetrics.spring identical to the digit. Both halves report that sample now — the app in
 why.physics, the window in the metrics action — because the third report of this class of bug is where the arguing

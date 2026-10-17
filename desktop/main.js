@@ -11,6 +11,7 @@
 const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { watchGameVisibility } = require('./game-visibility.cjs');
 
 /** Cursor polling rate. The gaze is smoothed by the idle, so this is about drag latency. */
 const CURSOR_HZ = 60;
@@ -797,6 +798,10 @@ app.whenReady().then(async () => {
     });
     ipcMain.on('vrmpet3d:quit', () => app.quit());
     win.on('closed', () => app.quit());
+    if (!isConfig) {
+      const stopGameVisibility = watchGameVisibility(win, options.url);
+      win.once('closed', stopGameVisibility);
+    }
 
     // The cursor is read from the OS rather than from page events: a click-through window
     // receives no pointer events at all outside the pet, so events cannot drive the gaze,

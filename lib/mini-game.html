@@ -11,6 +11,7 @@
     <div id="playfield">
       <canvas id="arena" aria-label="鼠标移动横杆，左键发射，Esc 暂停"></canvas>
       <canvas id="pet" aria-hidden="true"></canvas>
+      <div id="resume-countdown" hidden role="status" aria-live="polite" aria-atomic="true"><strong id="countdown-number">3</strong><span>准备继续 · Esc 返回暂停</span></div>
     </div>
     <header><div class="brand">吃白饭 <small>PET BREAKOUT</small></div><div></div><div class="controls"><button id="pause">暂停 <kbd>Esc</kbd></button><button id="fullscreen">全屏 ↗</button></div></header>
     <div id="game-hud"><span id="level" aria-live="polite"></span><span id="score" aria-live="polite"></span></div>
@@ -31,8 +32,8 @@
         <input id="spin-speed" type="range" min="0" max="30" step="1" value="7">
         <label for="flight-speed">飞行速度 <output id="flight-speed-value" for="flight-speed">1</output> 倍</label>
         <input id="flight-speed" type="range" min="0.5" max="2" step="0.1" value="1">
-        <label for="paddle-boost">每次撞杆加速 <output id="paddle-boost-value" for="paddle-boost">2</output> %</label>
-        <input id="paddle-boost" type="range" min="0" max="20" step="0.5" value="2">
+        <label for="paddle-boost">每次撞杆加速 <output id="paddle-boost-value" for="paddle-boost">1.5</output> %</label>
+        <input id="paddle-boost" type="range" min="0" max="20" step="0.5" value="1.5">
         <small>尺寸仅影响外观；自转设为 0 可停止旋转。飞行速度会改变游戏速度。</small>
       </fieldset>
     </section>

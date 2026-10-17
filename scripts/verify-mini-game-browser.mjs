@@ -52,7 +52,7 @@ const probe = `<script>
     &&hudBox.bottom<=initialField.top&&levelBox.bottom<=initialField.top&&whites);
   check('every spring joint has zero gravity',avatar.gravity.length>0&&avatar.gravity.every(function(v){return v===0;}));
   check('production defaults match the selected size, spin, flight and boost',state().appearance.size===90&&state().appearance.spin===7
-    &&state().flightSpeed===1&&state().paddleBoost===2);
+    &&state().flightSpeed===1&&state().paddleBoost===1.5);
   check('HUD uses local dot matrix glyphs with accessible labels',document.querySelectorAll('#game-hud canvas').length===2
     &&document.getElementById('level').getAttribute('aria-label')==='LEVEL:1'&&hud.getAttribute('aria-label')==='RICE: 79'
     &&getComputedStyle(hud).fontSize==='0px');
@@ -83,7 +83,11 @@ const probe = `<script>
   check('Escape pauses the game and axial spin',state().paused&&!document.getElementById('overlay').hidden&&state().avatar.angle===pausedAngle);
   check('Escape releases the mouse and restores the cursor',!state().mouseCaptured&&!document.getElementById('game').classList.contains('mouse-captured'));
   document.getElementById('resume').click();
-  check('resume continues the game',!state().paused);
+  check('resume starts a frozen three second countdown',state().paused&&state().countdown===3);
+  await fetch('/test-notice',{method:'POST'}); await wait(1300);
+  check('countdown continues receiving task notifications',state().paused&&state().countdown>0&&state().targets===${targetCount});
+  await wait(2000);
+  check('resume continues after countdown',!state().paused&&state().countdown===0);
   await wait(100);
   await fetch('/test-notice',{method:'POST'}); await wait(1300);
   check('notification priority selects ${noticeKind} glow',document.getElementById('game').classList.contains('signal')
@@ -94,6 +98,11 @@ const probe = `<script>
   check('pause offers all affected sessions in priority order',state().paused&&rows.length===${targetCount});
   rows[0].click(); await wait(150);
   check('selected session opens through the correct surface',${webMode ? "opened.length===1&&new URL(opened[0]).searchParams.get('vrmpet3d-session')==='" + targetId + "'&&state().paused" : "window.__focused===true"});
+  await fetch('/test-update',{method:'POST'}); await wait(1100);
+  rows=document.querySelectorAll('#sessions button');
+  check('paused notifications refresh glow and session jump targets',state().paused&&state().targets===1&&rows.length===1&&rows[0].textContent.includes('updated-sess')&&getComputedStyle(document.getElementById('overlay'),'::before').animationName==='signal');
+  rows[0].click(); await wait(150);
+  check('updated session remains actionable while paused',${webMode ? "opened.length===2&&new URL(opened[1]).searchParams.get('vrmpet3d-session')==='updated-session'" : "window.__focused===true"});
   // Switch to the browser path by reloading with a web-mode fixture in a second run.
   avatar=state().avatar;
   var dot=function(a,b){return a.reduce(function(sum,v,i){return sum+v*b[i];},0);};
@@ -107,6 +116,7 @@ const probe = `<script>
   check('flight speed control scales the moving ball immediately',state().flightSpeed===1.5
     &&Math.abs(Math.hypot(state().ball.vx,state().ball.vy)-speedBefore*1.5)<0.001);
   document.getElementById('resume').click();
+  await wait(3100);
   var stoppedAngle=state().avatar.angle;
   await wait(100);
   check('size applies visually and zero speed stops spin while flight continues',state().appearance.size===100&&state().avatar.angle===stoppedAngle
@@ -156,6 +166,7 @@ const probe = `<script>
   td.getElementById('pause').click();effects(0.05);
   check('pause freezes the breaking animation',JSON.stringify(ts().fragments)===JSON.stringify(fragmentsBefore));
   td.getElementById('resume').click();
+  test.contentWindow.__VRMPET3D_GAME_TEST__.countdown(3000);
   for(var effectFrame=0;effectFrame<15;effectFrame++)effects(0.05);
   var falling=ts().fragments;
   check('fragments rotate and fall under gravity',falling.length>0&&falling[0].y>fragmentsBefore[0].y
@@ -193,7 +204,7 @@ const probe = `<script>
   selector.value='2';selector.dispatchEvent(new Event('change'));
   // Restore the pointer fixture after the intentional rejection check above.
   td.getElementById('arena').requestPointerLock=test.contentWindow.HTMLElement.prototype.requestPointerLock;
-  td.getElementById('resume').click();td.getElementById('test-clear').click();
+  td.getElementById('resume').click();test.contentWindow.__VRMPET3D_GAME_TEST__.countdown(3000);td.getElementById('test-clear').click();
   for(var finishLevel=0;finishLevel<35;finishLevel++)stepTest(0.05);
   check('finishing level two grants one chance and opens completion menu without a third level',ts().level===2&&ts().paused&&ts().phase==='cleared'&&ts().lives===5
     &&td.getElementById('pause-title').textContent==='两关已全部通关'&&td.getElementById('resume').hidden);
@@ -219,7 +230,7 @@ const probe = `<script>
   pd.getElementById('model-size').value='150';pd.getElementById('model-size').dispatchEvent(new Event('input'));
   pd.getElementById('debug-level').value='2';pd.getElementById('debug-level').dispatchEvent(new Event('change'));
   check('production enforces fixed defaults even with older custom settings',ps().appearance.size===90&&ps().appearance.spin===7
-    &&ps().flightSpeed===1&&ps().paddleBoost===2&&ps().level===productionSave.level);
+    &&ps().flightSpeed===1&&ps().paddleBoost===1.5&&ps().level===productionSave.level);
   var reserveBox=pd.getElementById('lives').getBoundingClientRect();
   check('ten chances restore as nine reserve icons fitting outside the arena',ps().lives===10&&pd.getElementById('lives').children.length===9
     &&reserveBox.bottom<=production.contentWindow.innerHeight&&reserveBox.right<=pd.getElementById('arena').getBoundingClientRect().left);
@@ -233,15 +244,16 @@ const probe = `<script>
   ${playPreview ? "document.getElementById('overlay').hidden=true;" : ''}
   ${noticeArg ? "document.getElementById('game').getAnimations({subtree:true}).forEach(function(animation){if(animation.animationName==='signal'){animation.pause();animation.currentTime=840;}});" : ''}
 })().catch(function(error){var out=document.createElement('pre');out.id='game-test-report';out.textContent=JSON.stringify({checks:[{name:'probe completed: '+error.stack,ok:false}],errors:[String(error)]});document.body.appendChild(out);});</script>`;
-let notice = false, navigation = null;
+let notice = false, updated = false, navigation = null;
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   function json(value) { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(value)); }
+  if (url.pathname === '/test-update') { updated = true; return json({ok:true}); }
   if (url.pathname === '/test-notice') { notice = true; return json({ ok: true }); }
-  if (url.pathname === '/vrmpet3d/state') return json(notice ? fixture : { state: 'resting', why: {} });
+  if (url.pathname === '/vrmpet3d/state') return json(updated ? {state:'waiting',why:{waitingSessionIds:['updated-session']}} : notice ? fixture : { state: 'resting', why: {} });
   if (url.pathname === '/vrmpet3d/desktop') {
     let body = ''; req.on('data', chunk => { body += chunk; });
-    req.on('end', () => { navigation = JSON.parse(body); json({ ok: navigation.action === 'game-session' && navigation.sessionId === targetId }); }); return;
+    req.on('end', () => { const message = JSON.parse(body); if(message.action==='game-focus') return json({ok:true}); navigation=message; json({ ok: navigation.action === 'game-session' && [targetId,'updated-session'].includes(navigation.sessionId) }); }); return;
   }
   if (url.pathname === '/vrmpet3d/settings') return json({ preferences: { modelId: 'test-model', physics: false, lookAtPointer: true,
     yaw: 1, viewYaw: 1, springs: { 'test-model': { DaiMao: { stiffness: 9, dragForce: 0.9, gravityPower: 9 } } }, expressions: { weights: { TiePen: 0 } } } });
@@ -267,20 +279,21 @@ const address = await listenOnUsablePort(server);
 const port = typeof address === 'number' ? address : server.address().port;
 try {
   const args = ['--headless=new', '--no-sandbox', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage',
-    '--no-first-run', '--hide-scrollbars', '--window-size=1440,1000', '--virtual-time-budget=30000',
-    '--user-data-dir=' + resolve(build, 'mini-game-browser-profile'),
+    '--no-first-run', '--hide-scrollbars', '--window-size=1440,1000', '--virtual-time-budget=45000',
+    '--user-data-dir=' + resolve(build, 'mini-game-browser-profile', String(process.pid)),
     '--screenshot=' + resolve(build, noticeArg ? 'mini-game-' + noticeKind + '-preview.png' : playPreview ? 'mini-game-play-preview.png' : 'mini-game-preview.png'), '--dump-dom', `http://127.0.0.1:${port}/vrmpet3d/game?debug=1`];
-  let output = '';
+  let output = '', diagnostic = '';
   await new Promise((ok, fail) => {
-    const child = spawn(browser, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn(browser, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const timer = setTimeout(() => { child.kill(); fail(new Error('browser timeout')); }, 60000);
+    child.stderr.on('data', data => { diagnostic=(diagnostic+data).slice(-6000); });
     child.stdout.on('data', data => { output += data; });
     child.on('error', e => { clearTimeout(timer); fail(e); });
     child.on('exit', code => { clearTimeout(timer); code === 0 ? ok() : fail(new Error('browser exited ' + code)); });
   });
   writeFileSync(join(build, 'mini-game-browser.html'), output);
   const match = /<pre id="game-test-report">([\s\S]*?)<\/pre>/.exec(output);
-  if (!match) throw new Error('browser did not finish the game probe');
+  if (!match) throw new Error('browser did not finish the game probe: '+diagnostic);
   const report = JSON.parse(match[1].replaceAll('&quot;', '"').replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>'));
   for (const check of report.checks) console.log((check.ok ? 'PASS ' : 'FAIL ') + check.name);
   if (report.checks.some(c => !c.ok)) { console.log(JSON.stringify(report)); process.exitCode = 1; }

@@ -11,3 +11,9 @@
 #game #game-hud #level,#game #game-hud #score{font-size:0;line-height:0;letter-spacing:0}
 #game-hud canvas{display:block}
 #debug-entry{display:inline-block;margin-top:18px;color:#aac0c5;font-size:12px}
+#resume-countdown{position:absolute;inset:0;display:grid;place-content:center;gap:16px;text-align:center;background:#08111866;color:#efd3a0;pointer-events:none;z-index:2}
+#countdown-number{font:80px/1 monospace;font-weight:500}
+#resume-countdown span{font-size:14px;color:#d3e1e4}
+.panel{position:relative;z-index:1}
+.signal #overlay::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse,transparent 25%,rgba(var(--notice-rgb),.4));animation:signal 2.4s ease-in-out 2}
+@media(prefers-reduced-motion:reduce){.signal #overlay::before{animation:none;opacity:.65}}
