@@ -7,6 +7,16 @@
 // process, or any other window.
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Read-only counters distinguish pixel hits from actual button delivery after hide/show.
+for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'wheel']) {
+  document.addEventListener(type, event => {
+    ipcRenderer.send('vrmpet3d:input-event', {
+      type, button: event.button, trusted: event.isTrusted === true,
+      target: event.target && event.target.tagName || '',
+    });
+  }, true);
+}
+
 contextBridge.exposeInMainWorld('vrmpet3dDesktop', {
   /**
    * Ask for the launch configuration: which model to show, where the asset route lives.
