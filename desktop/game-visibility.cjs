@@ -1,16 +1,16 @@
 // A focused game temporarily hides only a pet window that was visible beforehand.
 const http = require('node:http');
 const https = require('node:https');
-function createVisibilityController(win) {
+function createVisibilityController(win, hooks = {}) {
   let hiddenByGame = false;
   return function apply(active) {
     if (win.isDestroyed()) return;
-    if (active && !hiddenByGame && win.isVisible()) { hiddenByGame = true; win.hide(); }
-    else if (!active && hiddenByGame) { hiddenByGame = false; win.showInactive(); }
+    if (active && !hiddenByGame && win.isVisible()) { hiddenByGame = true; hooks.suspend?.(); win.hide(); }
+    else if (!active && hiddenByGame) { hiddenByGame = false; win.showInactive(); hooks.resume?.(); }
   };
 }
-function watchGameVisibility(win, pageURL, interval = 500) {
-  const apply = createVisibilityController(win);
+function watchGameVisibility(win, pageURL, interval = 500, hooks = {}) {
+  const apply = createVisibilityController(win, hooks);
   const url = new URL('/vrmpet3d/desktop', pageURL);
   const transport = url.protocol === 'https:' ? https : http;
   let request = null, stopped = false;

@@ -11,7 +11,7 @@
 > 当前为早期版本，仍在修复和完善。3D 渲染会占用 GPU 与内存；遇到异常时，请附上 DSH 版本、显示方式和复现步骤反馈。
 
 ```
-no runtime dependencies · 9 verification suites · 2633 checks · works offline
+no runtime dependencies · 9 verification suites · 2637 checks · works offline
 ```
 
 ## 效果展示
@@ -237,7 +237,7 @@ Report issues through [GitHub Issues](https://github.com/drliuhuan/dsh-plugin-vr
 
 ## Verification
 
-**9 verification suites, 2633 checks** — and they live on the **`dev` branch**: this branch carries the plugin
+**9 verification suites, 2637 checks** — and they live on the **`dev` branch**: this branch carries the plugin
 itself, and the suites, the `build/probe` bodies and the working notes are kept beside the development. Fetch `dev`
 before running any of the commands below. The narrow suite for a change is in [AGENTS.md](AGENTS.md); the whole tree is
 one command, and it is the operator's call rather than a reflex:
@@ -249,7 +249,7 @@ node scripts/verify-all.mjs     # runs the nine below, cheapest first
 | Command | Checks |
 |---|---|
 | `node scripts/verify.mjs` | 1316 — state machine, the nine motion states, the session aggregate's completion rules (a helper's stop is not the user's, a completion that gets retracted doubles that session's settle window, and WHY a notice ended is recorded), the shipped 部位 碎碎念 (两个手势 × 中英), 界面语言 (the preference, the resolver and the shared text machinery), and the pack's 状态与动作 template (per-clip 循环/表情/口型/凝视, merged field by field under the profile's own) |
-| `node scripts/verify-model.mjs` | 820 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and its per-clip template, the live-state channel's WHY block (including the last dismissal), the first-run guide's state, and the whale mark's source chain (read out of the running DSH at activation, then the packaged file, then the cached copy, then nothing) |
+| `node scripts/verify-model.mjs` | 824 — model catalog, the import stores, the thumbnail route, the shipped motion mapping and its per-clip template, the live-state channel's WHY block (including the last dismissal), the first-run guide's state, and the whale mark's source chain (read out of the running DSH at activation, then the packaged file, then the cached copy, then nothing) |
 | `node scripts/verify-browser.mjs --page chunk-delivery` | 39 — DSH's own module system delivering the committed chunks |
 | `node scripts/verify-browser.mjs` | 13 — the 3D stack, framing and loaders in a real browser |
 | `node scripts/verify-browser.mjs --page client-test` | 111 — the widget, the menu, the desktop page, the shipped 部位 台词 per gesture, the background pump that keeps a throttled window alive, the pack template through a real scene, the guide, its trigger, the model picker's page (progress bar, lock and the live report that ends it), the one-shot playback rules on a real avatar, a posed model's part hit test, and 通用设置's 状态与动作 rows with their per-clip 碎碎念 and AI 提示词 |

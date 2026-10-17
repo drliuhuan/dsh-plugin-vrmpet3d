@@ -22,7 +22,7 @@ const sandbox = {
   root:{classList:{add:x=>classes.add(x),remove:x=>classes.delete(x)},dataset:{},offsetWidth:100},
   document:{hidden:false,createElement:()=>({}),pointerLockElement:null,exitPointerLock(){this.pointerLockElement=null;}},
   targets:[],seen:new Set(),noticeKey:'',pollTimer:null,statusRequest:null,
-  api:{notices:()=>incoming},AbortController,fetch:async()=>({ok:true,json:async()=>({})}),
+  api:{notices:()=>incoming,levelCount:()=>2},AbortController,fetch:async()=>({ok:true,json:async()=>({})}),
   openTarget:target=>{jumped=target.id;},
 };
 sandbox.captureMouse=()=>{sandbox.document.pointerLockElement=sandbox.canvas;};
@@ -62,5 +62,22 @@ check('focused game hides once and restores pet without taking focus',()=>{
 });
 check('manually hidden or destroyed pet stays hidden',()=>{
   visible=false;apply(true);apply(false);assert.equal(restores,1);destroyed=true;apply(true);apply(false);assert.equal(restores,1);
+});
+check('each game visibility transition resets native mouse interaction exactly once',()=>{
+  let suspended=0,resumed=0,shown=true;
+  const toggle=createVisibilityController({isDestroyed:()=>false,isVisible:()=>shown,hide(){shown=false;},showInactive(){shown=true;}},
+    {suspend(){suspended++;},resume(){resumed++;}});
+  toggle(true);toggle(true);toggle(false);toggle(false);assert.equal(suspended,1);assert.equal(resumed,1);
+});
+check('pet input recovery invalidates native hit-test cache and refreshes cursor without focusing',()=>{
+  const launcher=readFileSync(new URL('../desktop/main.js',import.meta.url),'utf8');
+  const part=launcher.slice(launcher.indexOf('      const resetPetInput ='),launcher.indexOf('      const stopGameVisibility ='));
+  let focusable,unlocks=0,through,sent;
+  const recovery={interacting:true,overPet:true,zoomHoldUntil:999,orbitFocus:true,mouseThrough:true,
+    win:{setFocusable:v=>{focusable=v;}},releaseOrbitLock:()=>unlocks++,setClickThrough:v=>{through=v;assert.equal(recovery.mouseThrough,null);},
+    sendCursor:p=>{sent=p;},screen:{getCursorScreenPoint:()=>({x:25,y:50})}};
+  vm.createContext(recovery);vm.runInContext(part+';resetPetInput();',recovery);
+  assert.equal(recovery.interacting,false);assert.equal(recovery.orbitFocus,false);assert.equal(focusable,false);
+  assert.equal(unlocks,1);assert.equal(through,true);assert.deepEqual(sent,{x:25,y:50});
 });
 console.log(`mini-game lifecycle: ${passed} passed`);

@@ -1897,6 +1897,14 @@ group('8. registered routes and both catalogs over HTTP');
   eq(desktopStatus.status, 200, 'the window control route reports its status');
   eq(desktopStatus.payload.state, 'stopped', 'and nothing is running under test');
   eq(desktopStatus.payload.routes.window, '/vrmpet3d/window', 'and it names the page route');
+  const gamePage = await server.call('/vrmpet3d/game');
+  eq(gamePage.status, 200, 'game page serves immediately while startup level refresh runs in the background');
+  const gameData = /<script id="game-level-data" type="application\/json">([^]*?)<\/script>/.exec(gamePage.body.toString('utf8'));
+  ok(Boolean(gameData), 'game page includes a self-contained level catalog');
+  const injectedLevels = JSON.parse(gameData[1]);
+  eq(injectedLevels.version, 1, 'game page injects the versioned data schema');
+  ok(injectedLevels.levels.length >= 2 && injectedLevels.levels[0].resources.bowls.white.image === null,
+    'level-owned bowl resources are available without extra requests');
   const focus = (clientId, active) => server.call('/vrmpet3d/desktop', 'POST', JSON.stringify({action:'game-focus',clientId,active}));
   eq(JSON.parse((await focus('game-client-one', true)).body).gameFocused, true, 'focused game publishes temporary desktop visibility');
   await focus('game-client-two', true);

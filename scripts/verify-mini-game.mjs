@@ -39,13 +39,13 @@ check('top impact eats rice and clears with the empty bowl still intact', () => 
 });
 check('chances carry across levels and exhausting them restarts the entire run', () => {
   const g = new Game();
-  g.selectLevel(2); g.bricks[0].alive = false; g.bricks[0].hp = 0; g.bricks[0].rice = false;
+  g.selectLevel(2, true); g.bricks[0].alive = false; g.bricks[0].hp = 0; g.bricks[0].rice = false;
   g.launch(); g.ball.y = 780; g.step(0.01);
   assert.equal(g.lives, 2); assert.equal(g.bricks[0].alive, false);
   for (let i = 0; i < 2; i++) { g.launch(); g.ball.y = 780; g.step(0.01); }
   assert.equal(g.level, 1); assert.equal(g.lives, 3);
   assert.equal(g.phase, 'serve'); assert.ok(g.bricks.every(b => b.alive));
-  g.selectLevel(2); g.lives = 1; g.phase = 'cleared'; assert.equal(g.advance(), false); assert.equal(g.level, 2);
+  g.selectLevel(2, true); g.lives = 1; g.phase = 'cleared'; assert.equal(g.advance(), false); assert.equal(g.level, 2);
   g.reset();
   for (let i = 0; i < 3; i++) { g.launch(); g.ball.y = 780; g.step(0.01); }
   assert.equal(g.lives, 3); assert.equal(g.phase, 'serve');
@@ -108,7 +108,7 @@ check('paddle boost compounds, supports zero, survives save and resets on a lost
   g.setPaddleBoost(99); assert.equal(g.paddleBoost, 20); g.setPaddleBoost(NaN); assert.equal(g.paddleBoost, 20);
 });
 check('level two uses approved blue-white bowl layout and migrates old procedural saves', () => {
-  const g = new Game(); g.selectLevel(2); assert.equal(g.bricks.length, 238);
+  const g = new Game(); g.selectLevel(2, true); assert.equal(g.bricks.length, 238);
   assert.equal(g.bricks[0].w, 52); assert.equal(g.bricks[0].h, 26);
   assert.equal(g.remainingRice(), 104); assert.equal(g.bricks.filter(b => b.hp === 1).length, 134);
   assert.ok(g.bricks.filter(b => b.hp).every(b => ['#244c9c', '#f4f5f3'].includes(b.color)));
@@ -175,11 +175,11 @@ check('debug exposes exactly two levels and selection preserves settings without
   const api = context.__VRMPET3D_MINI_GAME__;
   assert.equal(api.DEBUG, false); assert.equal(JSON.stringify(api.LEVELS.map(l => l.id)), '[1,2]');
   const g = new Game(); g.setFlightSpeed(1.5); g.setPaddleBoost(5); g.paused = true;
-  assert.equal(g.selectLevel(2), true); assert.equal(g.remainingRice(), 104); assert.equal(g.lives, 3);
+  assert.equal(g.selectLevel(2, true), true); assert.equal(g.remainingRice(), 104); assert.equal(g.lives, 3);
   assert.equal(g.paused, true); assert.equal(g.flightSpeed, 1.5); assert.equal(g.paddleBoost, 5);
   const restored = new Game(); assert.equal(restored.restore(g.snapshot()), true);
   assert.equal(restored.level, 2); assert.equal(restored.remainingRice(), 104);
-  const before = JSON.stringify(g); assert.equal(g.selectLevel(3), false); assert.equal(JSON.stringify(g), before);
+  const before = JSON.stringify(g); assert.equal(g.selectLevel(3, true), false); assert.equal(JSON.stringify(g), before);
   g.phase = 'cleared'; assert.equal(g.advance(), false); assert.equal(g.level, 2);
   assert.equal(g.selectLevel(1), true); assert.equal(g.remainingRice(), 79);
 });
@@ -195,5 +195,17 @@ check('each clear grants one chance up to ten, saved and never reset by level bu
   g.selectLevel(1); assert.equal(g.lives, 10);
   g.bricks.forEach(b => { b.rice = false; });g.finishLevel();assert.equal(g.lives, 10);
   const bad=g.snapshot();bad.lives=11;assert.equal(restored.restore(bad),false);
+});
+check('production rejects locked levels and clears unlock only the next level', () => {
+  const g=new Game();const before=JSON.stringify(g);assert.equal(g.selectLevel(2),false);assert.equal(JSON.stringify(g),before);
+  g.bricks.forEach(b=>{b.rice=false;});assert.equal(g.finishLevel(),true);assert.equal(g.unlockedLevel,2);
+  assert.equal(g.selectLevel(2),true);assert.equal(g.selectLevel(3),false);
+});
+check('unlocked progress persists through saves, run exhaustion and old-save migration',()=>{
+  const g=new Game();g.bricks.forEach(b=>{b.rice=false;});g.finishLevel();g.advance();
+  const restored=new Game();assert.equal(restored.restore(g.snapshot()),true);assert.equal(restored.unlockedLevel,2);
+  restored.lives=1;restored.paused=false;restored.launch();restored.lose();assert.equal(restored.level,1);assert.equal(restored.unlockedLevel,2);
+  const legacy=g.snapshot();delete legacy.unlockedLevel;assert.equal(restored.restore(legacy),true);assert.equal(restored.unlockedLevel,2);
+  const bad=g.snapshot();bad.unlockedLevel=999;assert.equal(restored.restore(bad),false);
 });
 console.log(`mini-game: ${count} passed`);

@@ -228,7 +228,7 @@ tools, the probes and `AGENTS.md` live on `dev`, where development happens (oper
 `git checkout main && git checkout dev -- lib desktop assets docs README.md HANDOFF.md package.json cordis.patch.yml LICENSE`,
 then commit — a plain merge would bring the tooling back with it.
 
-**Documented baseline: 9 suites, 2633 checks.** The mini-game change has only run the narrow checks recorded in MINI_GAME_HANDOFF.md; this is not a fresh full-suite verdict. `node scripts/check-docs.mjs` re-derives every one of those figures by
+**Documented baseline: 9 suites, 2637 checks.** The mini-game change has only run the narrow checks recorded in MINI_GAME_HANDOFF.md; this is not a fresh full-suite verdict. `node scripts/check-docs.mjs` re-derives every one of those figures by
 running the real suites, and validates the counts quoted here, in [README.md](README.md) and in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — so its verdict is the statement. Running
 `node scripts/verify-all.mjs` is the OPERATOR's call, never a finishing reflex: [AGENTS.md](AGENTS.md) says which

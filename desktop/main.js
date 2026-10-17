@@ -799,7 +799,15 @@ app.whenReady().then(async () => {
     ipcMain.on('vrmpet3d:quit', () => app.quit());
     win.on('closed', () => app.quit());
     if (!isConfig) {
-      const stopGameVisibility = watchGameVisibility(win, options.url);
+      const resetPetInput = () => {
+        interacting = false; overPet = false; zoomHoldUntil = 0; orbitFocus = false;
+        win.setFocusable(false); releaseOrbitLock();
+        // Hide/show can invalidate Windows' native hit-test state while this cache still says it is current.
+        mouseThrough = null;
+        setClickThrough(true);
+        sendCursor(screen.getCursorScreenPoint());
+      };
+      const stopGameVisibility = watchGameVisibility(win, options.url, 500, {suspend:resetPetInput,resume:resetPetInput});
       win.once('closed', stopGameVisibility);
     }
 
