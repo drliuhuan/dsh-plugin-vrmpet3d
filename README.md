@@ -24,6 +24,16 @@ no runtime dependencies · works offline
 
 ![碎碎念与鼠标凝视演示](assets/screenshots/chatter-gaze.gif)
 
+### 吃白饭小游戏
+
+右键进入桌宠弹球，移动鼠标控制横杆、左键发射，吃完米饭即可通关。
+
+![吃白饭小游戏第 2 关截图](assets/screenshots/minigame.png)
+
+实机演示：
+
+![吃白饭小游戏动态演示](assets/screenshots/minigame.gif)
+
 展示模型为 **BlueFatFish / 蓝色小肥鱼Deepseek**，作者 **木子恶魔**，
 [原始发布页](https://www.aplaybox.com/details/model/ayXkRzVflmnd)。**经作者授权随本插件分发，需注明来源与作者。**
 模型版权归原作者，其授权独立于插件代码的 MIT 许可证。模型选择页及首次引导的模型步骤也展示相同署名、授权与来源。
@@ -140,6 +150,16 @@ The composite shows the idle, working, waiting for confirmation and task complet
 Live demo of chatter and mouse gaze:
 
 ![Chatter and mouse gaze demo](assets/screenshots/chatter-gaze.gif)
+
+#### Rice-eating minigame
+
+Open the pet breakout game from the right-click menu. Move the mouse to control the paddle, left-click to launch, and eat all the rice to clear the level.
+
+![Rice-eating minigame level 2 screenshot](assets/screenshots/minigame.png)
+
+Gameplay demo:
+
+![Rice-eating minigame gameplay demo](assets/screenshots/minigame.gif)
 
 The model shown is **BlueFatFish / 蓝色小肥鱼Deepseek**, by **木子恶魔**. See the [original release](https://www.aplaybox.com/details/model/ayXkRzVflmnd). **The author authorized distribution with this plugin, provided the source and author are credited.** The model remains the author's work and is covered separately from the plugin's MIT license. The same attribution, authorization and source are shown in the model picker and the first-run guide.
 
