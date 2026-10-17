@@ -11,7 +11,7 @@
 const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { watchGameVisibility } = require('./game-visibility.cjs');
+const { watchGameVisibility, refreshInputRegion } = require('./game-visibility.cjs');
 
 /** Cursor polling rate. The gaze is smoothed by the idle, so this is about drag latency. */
 const CURSOR_HZ = 60;
@@ -252,6 +252,19 @@ function writeSelfTest(code) {
   app.exit(code);
 }
 
+// A second game launch focuses the existing game instead of opening another process on its profile.
+const gameMode = options.config === true && new URL(options.url).pathname === '/vrmpet3d/game';
+let activeGameWindow = null;
+function focusGameWindow() {
+  if (!activeGameWindow || activeGameWindow.isDestroyed()) return;
+  if (activeGameWindow.isMinimized()) activeGameWindow.restore();
+  activeGameWindow.show(); activeGameWindow.focus();
+}
+if (gameMode) {
+  if (!app.requestSingleInstanceLock()) app.exit(0);
+  else app.on('second-instance', focusGameWindow);
+}
+
 /** The pet's rectangle on screen, as last reported by the page; null until it mounts. */
 let petRect = null;
 /** The right-click menu's rectangle in screen coordinates, while it is open. DOM, so the window holds it. */
@@ -270,6 +283,7 @@ let speechRect = null;
 let lastCursor = null;
 /** Whether the cursor is on a pixel the page actually painted — the page's own verdict. */
 let overPet = false;
+const inputDiagnostics = { through: true, recoveries: 0, regions: 0, events: {}, lastEvent: null };
 let interacting = false;
 /** True while the self-test drives the page with synthetic cursors. */
 let probing = false;
@@ -431,7 +445,7 @@ app.whenReady().then(async () => {
 
     const setClickThrough = (through) => {
       if (win.isDestroyed() || mouseThrough === through) return;
-      mouseThrough = through;
+      mouseThrough = through; inputDiagnostics.through = through;
       if (through) win.setIgnoreMouseEvents(true, { forward: true });
       else win.setIgnoreMouseEvents(false);
       keepOnTop();
@@ -654,6 +668,12 @@ app.whenReady().then(async () => {
         return null;
       }
     });
+    ipcMain.on('vrmpet3d:input-event', (event, value) => {
+      if (event.sender !== win.webContents || !value || !['pointerdown','pointerup','mousedown','mouseup','wheel'].includes(value.type)) return;
+      inputDiagnostics.events[value.type] = (inputDiagnostics.events[value.type] || 0) + 1;
+      inputDiagnostics.lastEvent = {type:value.type,button:Number.isInteger(value.button) ? value.button : null,
+        target:typeof value.target === 'string' ? value.target.slice(0,32) : '',trusted:value.trusted === true};
+    });
     ipcMain.on('vrmpet3d:rect', (_event, rect) => {
       if (!rect || typeof rect !== 'object') return;
       petRect = {
@@ -802,13 +822,26 @@ app.whenReady().then(async () => {
       const resetPetInput = () => {
         interacting = false; overPet = false; zoomHoldUntil = 0; orbitFocus = false;
         win.setFocusable(false); releaseOrbitLock();
-        // Hide/show can invalidate Windows' native hit-test state while this cache still says it is current.
-        mouseThrough = null;
+        // Recreate Electron's native forwarding hook; repeating `true` alone can reuse the stale hook after hide/show.
+        win.setIgnoreMouseEvents(false);
+        mouseThrough = false;
         setClickThrough(true);
+        inputDiagnostics.recoveries++;
         sendCursor(screen.getCursorScreenPoint());
       };
-      const stopGameVisibility = watchGameVisibility(win, options.url, 500, {suspend:resetPetInput,resume:resetPetInput});
+      const stopGameVisibility = watchGameVisibility(win, options.url, 500, {
+        suspend: resetPetInput,
+        resume: () => {
+          resetPetInput();
+          refreshInputRegion(win); inputDiagnostics.regions++;
+        },
+      });
       win.once('closed', stopGameVisibility);
+    }
+
+    if (isGame) {
+      activeGameWindow = win;
+      win.once('closed', () => { activeGameWindow = null; });
     }
 
     // The cursor is read from the OS rather than from page events: a click-through window
@@ -1639,6 +1672,14 @@ function announce(info) {
      * from the page state, so a page that never published reports `null` rather than a stale number.
      */
     frames: lastPageState && typeof lastPageState.frames === 'number' ? lastPageState.frames : null,
+    input: {
+      through: inputDiagnostics.through, recoveries: inputDiagnostics.recoveries,
+      regions: inputDiagnostics.regions, events: inputDiagnostics.events, lastEvent: inputDiagnostics.lastEvent,
+      cursor: lastCursor, pageCursor: lastPageState && lastPageState.cursor || null,
+      lastHit: lastPageState && lastPageState.lastHit || null,
+      hitReads: lastPageState && lastPageState.hitReads || 0,
+      hit: lastPageState && lastPageState.hit || null,
+    },
     over: overPet,
     interacting: interacting,
     rect: petRect,

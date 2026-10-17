@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { createVisibilityController } = require('../desktop/game-visibility.cjs');
+const { createVisibilityController, refreshInputRegion } = require('../desktop/game-visibility.cjs');
 const source = readFileSync(new URL('../lib/mini-game-page.js', import.meta.url), 'utf8');
 let passed = 0;
 function check(name, test) { test(); passed++; console.log('PASS ' + name); }
@@ -69,15 +69,65 @@ check('each game visibility transition resets native mouse interaction exactly o
     {suspend(){suspended++;},resume(){resumed++;}});
   toggle(true);toggle(true);toggle(false);toggle(false);assert.equal(suspended,1);assert.equal(resumed,1);
 });
-check('pet input recovery invalidates native hit-test cache and refreshes cursor without focusing',()=>{
+check('pet input recovery cycles native forwarding off and on, refreshing cursor without focusing',()=>{
   const launcher=readFileSync(new URL('../desktop/main.js',import.meta.url),'utf8');
   const part=launcher.slice(launcher.indexOf('      const resetPetInput ='),launcher.indexOf('      const stopGameVisibility ='));
-  let focusable,unlocks=0,through,sent;
-  const recovery={interacting:true,overPet:true,zoomHoldUntil:999,orbitFocus:true,mouseThrough:true,
-    win:{setFocusable:v=>{focusable=v;}},releaseOrbitLock:()=>unlocks++,setClickThrough:v=>{through=v;assert.equal(recovery.mouseThrough,null);},
+  let focusable,unlocks=0,through,sent,nativeCalls=[];
+  const recovery={inputDiagnostics:{recoveries:0},interacting:true,overPet:true,zoomHoldUntil:999,orbitFocus:true,mouseThrough:true,
+    win:{setFocusable:v=>{focusable=v;},setIgnoreMouseEvents:v=>nativeCalls.push(v)},releaseOrbitLock:()=>unlocks++,setClickThrough:v=>{through=v;assert.equal(recovery.mouseThrough,false);nativeCalls.push(v);},
     sendCursor:p=>{sent=p;},screen:{getCursorScreenPoint:()=>({x:25,y:50})}};
   vm.createContext(recovery);vm.runInContext(part+';resetPetInput();',recovery);
   assert.equal(recovery.interacting,false);assert.equal(recovery.orbitFocus,false);assert.equal(focusable,false);
   assert.equal(unlocks,1);assert.equal(through,true);assert.deepEqual(sent,{x:25,y:50});
+  assert.deepEqual(nativeCalls,[false,true]);assert.equal(recovery.inputDiagnostics.recoveries,1);
+});
+check('restoring rebuilds the input surface over a frame without changing pet size or position',()=>{
+  const original={x:120,y:230,width:297,height:405};let bounds={...original},scheduled,delay;const calls=[];
+  const win={isDestroyed:()=>false,isVisible:()=>true,getBounds:()=>({...bounds}),setBounds(value){bounds={...value};calls.push({...value});}};
+  refreshInputRegion(win,(fn,ms)=>{scheduled=fn;delay=ms;});
+  assert.equal(calls.length,1);assert.equal(bounds.width,298);assert.equal(delay,32);scheduled();assert.deepEqual(bounds,original);
+});
+check('input surface recovery never reverts a drag or another window layout',()=>{
+  let bounds={x:120,y:230,width:297,height:405},scheduled;
+  const win={isDestroyed:()=>false,isVisible:()=>true,getBounds:()=>({...bounds}),setBounds(value){bounds={...value};}};
+  refreshInputRegion(win,fn=>scheduled=fn);bounds={x:500,y:600,width:297,height:405};scheduled();assert.equal(bounds.x,500);assert.equal(bounds.y,600);
+});
+check('input surface recovery skips hidden and destroyed windows',()=>{
+  for(const destroyed of [false,true]){
+    refreshInputRegion({isDestroyed:()=>destroyed,isVisible:()=>false,getBounds(){assert.fail('must not resize');}});
+  }
+});
+const exitCode=source.slice(source.indexOf("  $('exit').onclick = function () {"),source.indexOf('  if (testMode) {',source.indexOf("  $('exit').onclick = function () {")));
+{
+  const order=[];let finishRelease;
+  const exitElement={};
+  const closing={gameWindowFocused:true,focusTimer:123,$:()=>exitElement,pause:()=>order.push('pause'),save:()=>true,
+    clearInterval:()=>order.push('stop-heartbeat'),reportGameFocus:(active)=>{assert.equal(active,false);order.push('release');return new Promise(r=>finishRelease=r);},
+    bridge:{quit:()=>order.push('native-quit')},Promise,setTimeout:()=>0,window:{close:()=>assert.fail('must use native quit')}};
+  vm.createContext(closing);vm.runInContext(exitCode,closing);exitElement.onclick();assert.equal(order.includes('native-quit'),false);
+  finishRelease();await new Promise(resolve=>setImmediate(resolve));
+  check('game exit releases focus and stops heartbeats before quitting the native game process',()=>{
+    assert.deepEqual(order,['pause','stop-heartbeat','release','native-quit']);assert.equal(closing.gameWindowFocused,false);
+  });
+}
+const launcher=readFileSync(new URL('../desktop/main.js',import.meta.url),'utf8');
+const singleCode=launcher.slice(launcher.indexOf('// A second game launch'),launcher.indexOf("/** The pet's rectangle on screen"));
+check('repeated native game launch exits the duplicate instead of creating a conflicting window',()=>{
+  let exitCode,registered=false;
+  vm.runInNewContext(singleCode,{options:{config:true,url:'http://localhost/vrmpet3d/game'},URL,
+    app:{requestSingleInstanceLock:()=>false,exit:code=>exitCode=code,on:()=>registered=true}});
+  assert.equal(exitCode,0);assert.equal(registered,false);
+});
+check('a repeated game request restores and focuses the original game window',()=>{
+  let callback;const actions=[];
+  const single={options:{config:true,url:'http://localhost/vrmpet3d/game'},URL,
+    app:{requestSingleInstanceLock:()=>true,on:(event,fn)=>{assert.equal(event,'second-instance');callback=fn;}},
+    game:{isDestroyed:()=>false,isMinimized:()=>true,restore:()=>actions.push('restore'),show:()=>actions.push('show'),focus:()=>actions.push('focus')}};
+  vm.createContext(single);vm.runInContext(singleCode+';activeGameWindow=game;',single);callback();
+  assert.deepEqual(actions,['restore','show','focus']);
+});
+check('pet and settings launchers do not take the game single-instance lock',()=>{
+  for(const options of [{config:false,url:'http://localhost/vrmpet3d/window'},{config:true,url:'http://localhost/vrmpet3d/config'}])
+    vm.runInNewContext(singleCode,{options,URL,app:{requestSingleInstanceLock:()=>assert.fail('game lock used outside game')}});
 });
 console.log(`mini-game lifecycle: ${passed} passed`);
