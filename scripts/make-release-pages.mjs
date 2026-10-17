@@ -48,6 +48,19 @@ const DEBUG_BLOCK = `    <!--
 
 const MARKER = '调试模式';
 
+// The shipped game never accepts debug/test query flags and never creates a debug link.
+function releaseGamePage() {
+  const source = readFileSync(join(ROOT, 'lib', 'mini-game-page.js'), 'utf8');
+  const start = source.indexOf('  var debugURL =');
+  const last = "  $('overlay').querySelector('.panel').appendChild(debugLink);";
+  const end = source.indexOf(last, start);
+  if (start < 0 || end < 0) throw new Error('game debug entry block changed; update the release transform');
+  return (source.slice(0, start) + source.slice(end + last.length))
+    .replace("var testMode = new URLSearchParams(location.search).get('test') === '1';", 'var testMode = false;')
+    .replace("var debugMode = testMode || new URLSearchParams(location.search).get('debug') === '1';", 'var debugMode = false;');
+}
+
+
 if (check) {
   const path = join(target, PAGE);
   if (!existsSync(path)) {
@@ -60,6 +73,11 @@ if (check) {
     console.error(`  ✗ 发布树仍然显示调试模式（${path}）—— 运行 node scripts/make-release-pages.mjs ${target}`);
     process.exit(1);
   }
+  const game = readFileSync(join(target, 'lib', 'mini-game-page.js'), 'utf8');
+  if (game.replace(/\r\n?/g, '\n') !== releaseGamePage().replace(/\r\n?/g, '\n')) {
+    console.error('小游戏正式版未更新或仍可启用 debug/test'); process.exit(1);
+  }
+  console.log('  ✓ 小游戏 debug/test 已关闭，入口已移除');
   console.log('  ✓ 通用设置里没有调试模式');
   process.exit(0);
 }
@@ -74,3 +92,6 @@ const out = join(target, PAGE);
 writeFileSync(out, stripped, 'utf8');
 console.log(`  写入 ${out}`);
 console.log(`  去掉了 ${DEBUG_BLOCK.split('\n').length - 1} 行；剩余出现次数：${(stripped.match(new RegExp(MARKER, 'g')) || []).length}（应为 0）`);
+
+writeFileSync(join(target, 'lib', 'mini-game-page.js'), releaseGamePage(), 'utf8');
+console.log('  小游戏：关闭 debug/test 查询参数，移除 Debug 入口');

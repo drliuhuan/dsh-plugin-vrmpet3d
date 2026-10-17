@@ -1,3 +1,5 @@
+2026-10-17 · 0.1.3 发布：dev 同步 ds-ball 已人工确认的小游戏、动态关卡、桌宠输入恢复与重复打开/退出修复。main 只同步运行文件与面向用户的 README；发布变换强制小游戏 testMode/debugMode=false、移除 Debug 入口，并移除通用设置双宠调试行。保留正式模式关卡解锁限制；GitHub 动态关卡源仍为 ds-ball。只跑局部验证与发布树检查，不据此声明全量验证通过。
+
 # HANDOFF.md — resuming work on dsh-plugin-vrmpet3d
 
 Last updated: 2026-10-12. **This file is STATE, not history.** The pass-by-pass log that used to fill ~6600 lines is

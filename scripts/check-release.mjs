@@ -42,6 +42,7 @@ const FORBIDDEN = [
   ['build', '探针与一次性工具'],
   ['docs', '设计文档与资产契约'],
   ['HANDOFF.md', '开发交接笔记'],
+  ['MINI_GAME_HANDOFF.md', '小游戏开发交接笔记'],
   ['AGENTS.md', '工作规则'],
   ['tools', 'asar 提取器'],
   ['vendor', '3D 栈构建输入'],
@@ -157,6 +158,17 @@ if (existsSync(globalPage)) {
     failures.push('通用设置里仍显示调试模式（运行 node scripts/make-release-pages.mjs）');
   }
   notes.push('通用设置：无调试模式');
+}
+
+// The production game must ignore URL toggles, not merely hide its debug link.
+const gamePage = join(tree, 'lib', 'mini-game-page.js');
+if (existsSync(gamePage)) {
+  const source = readFileSync(gamePage, 'utf8');
+  if (!source.includes('var testMode = false;') || !source.includes('var debugMode = false;')
+    || source.includes("get('debug')") || source.includes("get('test')") || source.includes("debugLink")) {
+    failures.push('小游戏仍有 debug/test 入口或查询开关（运行 make-release-pages）');
+  }
+  notes.push('小游戏：debug/test 已关闭；默认关卡解锁限制保留');
 }
 
 // ---- 6. initial-config 里不该有本机事实 --------------------------------------
