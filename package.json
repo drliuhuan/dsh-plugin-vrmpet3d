@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-vrmpet3d",
-  "version": "0.1.3",
+  "version": "0.1.3-fix.3",
   "private": true,
   "description": "DeepSeek Harness 的 VRM 3D 桌宠：任务状态联动、独立悬浮窗、模型动作与 AI 碎碎念。",
   "type": "module",
@@ -19,10 +19,8 @@
     "assets",
     "!assets/whale-tail.apng",
     "!assets/screenshots",
-    "docs",
     "cordis.patch.yml",
     "README.md",
-    "HANDOFF.md",
     "LICENSE"
   ],
   "scripts": {

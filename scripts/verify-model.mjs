@@ -579,7 +579,8 @@ group('4. asset route');
   ok(response.body.equals(modelBytes), 'the bytes are unmodified');
   eq(response.headers['content-type'], 'model/gltf-binary', 'a VRM is served with the glTF media type');
   eq(response.headers['access-control-allow-origin'], '*', 'the route is readable by the page');
-  ok(/no-store/.test(response.headers['cache-control']), 'the response is not cached');
+  ok(/private/.test(response.headers['cache-control']) && /no-cache/.test(response.headers['cache-control']),
+    'the model is cached privately and revalidated before reuse');
 
   /**
    * And the BUNDLED models are served too — that is what "随插件分发" has to mean end to end.

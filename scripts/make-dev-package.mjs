@@ -96,8 +96,8 @@ const MARKER = '.dev-package.json';
  * npm's glob syntax would be more code than the list, and the list is what a reviewer can check
  * against the manifest in one glance.
  */
-const COPY_FILES = ['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'HANDOFF.md'];
-const COPY_DIRS = ['lib', 'desktop', 'docs', 'assets'];
+const COPY_FILES = ['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md'];
+const COPY_DIRS = ['lib', 'desktop', 'assets'];
 const COPY_EXCLUDE = new Set([
   'assets/screenshots',      // `!assets/screenshots` — marketplace media
   'assets/whale-tail.apng',  // `!assets/whale-tail.apng` — extracted from DSH, never redistributed
