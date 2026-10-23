@@ -2903,7 +2903,7 @@ group('6g. the state channel: a heartbeat, and what a stale report answers');
   const reporter = core.createStateReporter({
     fetchImpl: (url, options) => {
       posts.push(JSON.parse(options.body));
-      return Promise.resolve({ ok: true });
+      return Promise.resolve({ ok: true, json: async () => ({ seq: posts.length }) });
     },
     setIntervalImpl: (fn, ms) => { tick = { fn, ms }; return tick; },
     clearIntervalImpl: (handle) => { if (handle === tick) tick = null; },
