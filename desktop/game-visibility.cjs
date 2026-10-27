@@ -1,6 +1,4 @@
 // A focused game temporarily hides only a pet window that was visible beforehand.
-const http = require('node:http');
-const https = require('node:https');
 // A transparent window can paint and report pixel hits after showInactive while
 // Chromium still uses the pre-hide input surface. A real bounds transition (the
 // same transition wheel zoom causes) rebuilds that surface without changing the pet.
@@ -27,24 +25,41 @@ function createVisibilityController(win, hooks = {}) {
 function watchGameVisibility(win, pageURL, interval = 500, hooks = {}) {
   const apply = createVisibilityController(win, hooks);
   const url = new URL('/vrmpet3d/desktop', pageURL);
-  const transport = url.protocol === 'https:' ? https : http;
+  // The page and this poll must use the SAME Chromium session (cookies/proxy/TLS).
+  // Node's http.get never inherited the window's authentication cookies.
+  const session = win.webContents.session;
   let request = null, stopped = false;
-  function poll() {
+  async function poll() {
     if (stopped || request || win.isDestroyed()) return;
-    request = transport.get(url, { timeout: 1500 }, response => {
-      let body = '', failed = response.statusCode !== 200;
-      response.on('data', chunk => { body += chunk; if (body.length > 16384) { failed = true; response.destroy(); } });
-      response.on('end', () => {
-        if (stopped) return;
-        try { apply(!failed && JSON.parse(body).gameFocused === true); } catch (_) { apply(false); }
+    const controller = new AbortController();
+    request = controller;
+    const deadline = setTimeout(() => controller.abort(), 1500);
+    deadline.unref?.();
+    try {
+      const response = await session.fetch(url.href, {
+        credentials: 'include', redirect: 'error', cache: 'no-store', signal: controller.signal,
       });
-      response.on('error', () => { if (!stopped) apply(false); });
-    });
-    request.on('timeout', () => request.destroy());
-    request.on('error', () => { if (!stopped) apply(false); });
-    request.on('close', () => { request = null; });
+      if (!response.ok || response.redirected || !/^application\/json\b/i.test(response.headers.get('content-type') || '')) {
+        await response.body?.cancel();
+        throw new Error('game status is not authenticated JSON');
+      }
+      const reader = response.body.getReader();
+      let size = 0;
+      const chunks = [];
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > 16384) { await reader.cancel(); throw new Error('game status exceeds limit'); }
+          chunks.push(Buffer.from(value));
+        }
+      } finally { reader.releaseLock(); }
+      if (!stopped) apply(JSON.parse(Buffer.concat(chunks).toString('utf8')).gameFocused === true);
+    } catch (_) { if (!stopped) apply(false); }
+    finally { clearTimeout(deadline); if (request === controller) request = null; }
   }
   const timer = setInterval(poll, interval); timer.unref(); poll();
-  return function stop() { stopped = true; clearInterval(timer); if (request) request.destroy(); apply(false); };
+  return function stop() { stopped = true; clearInterval(timer); if (request) request.abort(); apply(false); };
 }
 module.exports = { createVisibilityController, watchGameVisibility, refreshInputRegion };
